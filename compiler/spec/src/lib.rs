@@ -11,6 +11,8 @@ pub const SPEC_PATH: &str = "spec/quince-spec.md";
 pub const RETIRED_PATH: &str = "spec/retired-rules.txt";
 /// The allowed first segments of rule IDs, relative to the repo root.
 pub const TOPICS_PATH: &str = "spec/rule-topics.txt";
+/// The grammar extracted from the spec's appendices, relative to the repo root.
+pub const GRAMMAR_PATH: &str = "spec/grammar.ebnf";
 
 /// A problem found in a spec file, with its 1-based line.
 #[derive(Debug, Clone, PartialEq, Eq)]

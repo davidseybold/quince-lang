@@ -14,8 +14,8 @@ How to build and check this repo. `CLAUDE.md` holds the working rules and the de
 | `cargo run -p quince_cli -- --version` | Runs the `quince` binary. Only `--version` works so far. |
 | `cargo xtask spec-rules` | Checks the rule-ID tags in `spec/quince-spec.md`: format, placement, topics, uniqueness, retired IDs. |
 | `cargo xtask spec-rules --strip` | Prints the spec with every tag removed, so you can diff the wording without the tags. |
-| `cargo xtask spec-grammar` | Checks that `spec/grammar.ebnf` matches the spec's grammar appendices and that every name it uses is defined. |
-| `cargo xtask spec-grammar --write` | Regenerates `spec/grammar.ebnf` from the spec. Run it after the spec's grammar changes. Never edit the file by hand. |
+| `cargo xtask spec-grammar` | Checks that `spec/grammar.ebnf` matches the spec's grammar appendices, that every name it uses is defined and every production is used, and that no production reuses a retired name. Errors give the spec line to fix. |
+| `cargo xtask spec-grammar --write` | Regenerates `spec/grammar.ebnf` from the spec. Run it after the spec's grammar changes. Only the file's header (its terminal list) is edited by hand. |
 
 The toolchain is pinned in `rust-toolchain.toml`, and rustup installs it the first time you run `cargo` in the repo.
 

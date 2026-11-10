@@ -34,6 +34,7 @@ Each group is one layer of the M0 stack (design.md, decision 7) and ends with `c
 - [x] 4.1 Implement `xtask spec-grammar` agreement check and `--write`, with unit tests for mismatch, regenerate and missing heading
 - [x] 4.2 Implement the closure check (undefined names, duplicate productions), with unit tests for each
 - [x] 4.3 Generate `spec/grammar.ebnf` with its terminal header, wire the check into `xtask ci`, and verify it passes on the real spec
+- [x] 4.4 Review fixes: errors give spec lines, a second code block under a heading fails, unused productions and retired production names fail, the diff has hunk headers, and `--write` is a tested pure function that only treats a missing file as "no header". Verify with unit tests and `--write` leaving the file unchanged
 
 ## 5. Diagnostics skeleton (`m0/diagnostics`)
 
