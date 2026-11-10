@@ -2,6 +2,7 @@
 //!
 //! The formats are defined in `openspec/changes/m0-repo-harness/specs/spec-rule-ids/spec.md`.
 
+pub mod grammar;
 pub mod rules;
 
 /// The language spec, relative to the repo root.

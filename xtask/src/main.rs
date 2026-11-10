@@ -1,6 +1,7 @@
 //! Repo automation. `cargo xtask ci` runs every fast check; see AGENTS.md.
 
 mod ci;
+mod spec_grammar;
 mod spec_rules;
 
 use std::path::{Path, PathBuf};
@@ -13,6 +14,8 @@ commands:
   ci                    run every check and print a summary
   spec-rules            check the rule-ID tags in spec/quince-spec.md
   spec-rules --strip    print the spec with every rule-ID tag removed
+  spec-grammar          check spec/grammar.ebnf against the spec's grammar appendices
+  spec-grammar --write  regenerate spec/grammar.ebnf from the spec
 ";
 
 fn main() -> ExitCode {
@@ -23,6 +26,8 @@ fn main() -> ExitCode {
         ["ci"] => ci::run(&root),
         ["spec-rules"] => exit(spec_rules::check(&root)),
         ["spec-rules", "--strip"] => exit(spec_rules::strip(&root)),
+        ["spec-grammar"] => exit(spec_grammar::check(&root)),
+        ["spec-grammar", "--write"] => exit(spec_grammar::write(&root)),
         ["help" | "--help" | "-h"] => {
             print!("{USAGE}");
             ExitCode::SUCCESS

@@ -31,9 +31,9 @@ Each group is one layer of the M0 stack (design.md, decision 7) and ends with `c
 
 ## 4. Grammar extraction (`m0/grammar`)
 
-- [ ] 4.1 Implement `xtask spec-grammar` agreement check and `--write`, with unit tests for mismatch, regenerate and missing heading
-- [ ] 4.2 Implement the closure check (undefined names, duplicate productions), with unit tests for each
-- [ ] 4.3 Generate `spec/grammar.ebnf` with its terminal header, wire the check into `xtask ci`, and verify it passes on the real spec
+- [x] 4.1 Implement `xtask spec-grammar` agreement check and `--write`, with unit tests for mismatch, regenerate and missing heading
+- [x] 4.2 Implement the closure check (undefined names, duplicate productions), with unit tests for each
+- [x] 4.3 Generate `spec/grammar.ebnf` with its terminal header, wire the check into `xtask ci`, and verify it passes on the real spec
 
 ## 5. Diagnostics skeleton (`m0/diagnostics`)
 

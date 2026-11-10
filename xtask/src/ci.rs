@@ -48,6 +48,10 @@ pub fn steps() -> Vec<Step> {
             name: "spec-rules",
             run: crate::spec_rules::check,
         },
+        Step {
+            name: "spec-grammar",
+            run: crate::spec_grammar::check,
+        },
     ]
 }
 
