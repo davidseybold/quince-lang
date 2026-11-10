@@ -22,11 +22,12 @@ Each group is one layer of the M0 stack (design.md, decision 7) and ends with `c
 
 ## 3. Rule IDs in the spec (`m0/rule-ids`)
 
-- [ ] 3.1 Implement `xtask spec-rules`: parse tags, check format, uniqueness, code-block and heading placement, and retired IDs. Verify with unit tests covering each failure in the spec-rule-ids scenarios
-- [ ] 3.2 Implement `--strip`, and verify that stripping a tagged sample gives back its untagged source
+- [x] 3.1 Implement `xtask spec-rules`: parse tags, check format, uniqueness, code-block and heading placement, and retired IDs. Verify with unit tests covering each failure in the spec-rule-ids scenarios
+- [x] 3.2 Implement `--strip`, and verify that stripping a tagged sample gives back its untagged source
 - [x] 3.3 Show David a tagged sample of one section and get approval (done before 3.4)
-- [ ] 3.4 Tag every normative sentence in `spec/quince-spec.md`, verify `cargo xtask spec-rules --strip` equals spec v0.4 byte for byte, and add `spec/retired-rules.txt` (empty)
-- [ ] 3.5 Wire `spec-rules` into `xtask ci` and verify `cargo xtask ci` passes
+- [x] 3.4 Tag every normative sentence in `spec/quince-spec.md`, verify `cargo xtask spec-rules --strip` equals spec v0.4 byte for byte, and add `spec/retired-rules.txt` (empty)
+- [x] 3.5 Wire `spec-rules` into `xtask ci` and verify `cargo xtask ci` passes
+- [x] 3.6 Review fixes: tags glued to punctuation are errors, an unclosed backtick is literal, `spec/rule-topics.txt` is checked, `grammar` is reserved, eight topics renamed, problems in all three files reported together, and indexing in code blocks (`counter[user.id]`) isn't mistaken for a tag. Verify with unit tests and an unchanged strip output
 
 ## 4. Grammar extraction (`m0/grammar`)
 

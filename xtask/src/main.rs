@@ -1,6 +1,7 @@
 //! Repo automation. `cargo xtask ci` runs every fast check; see AGENTS.md.
 
 mod ci;
+mod spec_rules;
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -9,19 +10,19 @@ const USAGE: &str = "\
 usage: cargo xtask <command>
 
 commands:
-  ci    run every check (fmt, clippy, test) and print a summary
+  ci                    run every check and print a summary
+  spec-rules            check the rule-ID tags in spec/quince-spec.md
+  spec-rules --strip    print the spec with every rule-ID tag removed
 ";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let root = workspace_root();
-    match args
-        .iter()
-        .map(String::as_str)
-        .collect::<Vec<_>>()
-        .as_slice()
-    {
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    match args.as_slice() {
         ["ci"] => ci::run(&root),
+        ["spec-rules"] => exit(spec_rules::check(&root)),
+        ["spec-rules", "--strip"] => exit(spec_rules::strip(&root)),
         ["help" | "--help" | "-h"] => {
             print!("{USAGE}");
             ExitCode::SUCCESS
@@ -29,6 +30,17 @@ fn main() -> ExitCode {
         _ => {
             eprint!("{USAGE}");
             ExitCode::from(2)
+        }
+    }
+}
+
+/// Exit status for a single step run on its own.
+fn exit(result: Result<(), String>) -> ExitCode {
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(why) => {
+            eprintln!("error: {why}");
+            ExitCode::FAILURE
         }
     }
 }

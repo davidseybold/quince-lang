@@ -1,0 +1,112 @@
+# Rule-ID topics: the first segment of every r[...] tag in spec/quince-spec.md.
+#
+# One topic per line, followed by the subject it covers. Reuse a topic before adding one, so
+# the same subject never gets two names. `cargo xtask spec-rules` fails on a tag whose topic
+# isn't listed here, and on a listed topic that no tag uses. Topics are never renamed once
+# their IDs are merged. `grammar` is reserved for IDs derived from grammar productions.
+
+alias       Type aliases (`type Name = T`)
+arg         Function arguments: labels, defaults, passing
+assign      Assignment statements
+attr        Attributes (`@name`)
+auto        Automatically derived `Eq` and `Hash`
+background  Long-lived background tasks (fire and forget)
+bind        Bindings: `let`, `var`, shadowing
+block       Blocks and their values
+build       Compilation model and backend
+callback    C callbacks into Quince
+cancel      Task cancellation
+cap         Runtime capabilities that back effects
+cbind       `quince bind`: generating C bindings
+cbuf        C buffers in generated bindings
+chan        Channels
+cli         `quince` commands
+closure     Closures and what they capture
+cmem        Memory across the C boundary
+comment     Comments
+conc        Structured concurrency and concurrent blocks
+const       Constants
+contract    Contracts: `requires`, `ensures`, invariants
+cresource   C resources and handles in generated bindings
+cstring     C strings in generated bindings
+ctype       C types and their Quince mappings
+dbg         The `dbg()` debugging helper
+debug       Debugging and debug info
+dep         Dependencies in the manifest
+diag        Structured diagnostics
+doc         Doc comments and executable examples
+dtest       Deterministic testing
+edition     Editions
+effect      Effects: declaring, inferring and checking
+effvar      Effect variables (`uses E`)
+enum        Enums (algebraic data types)
+err         Expected failures with `Result` and `Option`
+excl        Features deliberately excluded
+fanout      Fan-out over a collection
+ffi         Calling C and foreign blocks
+ffitest     Testing foreign code
+fmt         Formatting rules enforced by `quince fmt`
+fn-value    Functions as values
+generic     Generics and type parameters
+handler     Effect handlers
+hash        Content addressing of definitions
+if          `if` expressions
+iface       Interfaces and `impl`
+import      Imports
+incr        Incremental compilation
+index       Indexing and slicing
+infer       Type inference
+is          Pattern tests with `is`
+iter        Iterators
+itest       Integration tests
+jump        `return`, `break` and `continue` as expressions
+lex         Lexical structure and syntax
+link        Linking
+lit         Literals
+lock        The lockfile
+loop        Loops
+main        The `main` function and process exit
+manifest    The `quince.toml` manifest
+map         Maps
+match       `match` and exhaustiveness
+mem         Memory management and reference counting
+method      Methods
+mod         Modules
+mut         Mutation and `var`
+mvs         Minimal version selection
+name        Naming conventions
+never       The `Never` type
+newtype     Newtypes
+num         Numeric types and arithmetic
+op          Operators and precedence
+panic       Panics (bugs)
+pat         Patterns
+perf        Performance targets
+pkg         Packages and project layout
+pool        `Pool` and pooled resources
+prelude     The prelude's types and methods
+profile     Build profiles
+prop        Property tests
+publish     Publishing packages
+query       `quince query`
+range       Ranges
+ref         Reference types
+ret         `return`
+select      Waiting on several channels with `select`
+semver      Enforced semantic versioning
+share       Shared state between tasks
+std         What the standard library leaves out
+struct      Structs
+target      Compilation targets
+test        Unit tests and test handlers
+timeout     Timeouts
+trust       Trusting native dependencies
+try         The `?` operator
+tuple       Tuples
+type        The type system and built-in types
+type-arg    Type arguments and construction
+update      `quince update` and dependency versions
+user-op     Operators on user types
+verify      Static verification
+wire        Serialization (`Encode` and `Decode`)
+with        `with` handler blocks
