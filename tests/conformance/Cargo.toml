@@ -1,0 +1,16 @@
+[package]
+name = "quince_conformance"
+description = "Runs the .qnc conformance fixtures and reports spec coverage by rule ID."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+quince_diagnostics = { path = "../../compiler/diagnostics" }
+quince_spec = { path = "../../compiler/spec" }
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

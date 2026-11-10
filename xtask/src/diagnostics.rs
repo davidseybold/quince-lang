@@ -1,12 +1,12 @@
 //! `cargo xtask diagnostics`: every registered code has explain text and a conformance test,
 //! and every explain file belongs to a registered code.
 
+use quince_conformance::FIXTURE_DIR;
 use quince_diagnostics::REGISTRY;
 use std::collections::BTreeSet;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 pub const EXPLAIN_DIR: &str = "compiler/diagnostics/explain";
-pub const FIXTURE_DIR: &str = "tests/conformance/testdata";
 
 pub fn check(root: &Path) -> Result<(), String> {
     let explain_files = explain_codes(&root.join(EXPLAIN_DIR))?;
@@ -90,50 +90,15 @@ fn explain_codes(dir: &Path) -> Result<BTreeSet<String>, String> {
     Ok(codes)
 }
 
-/// Every code named by a `//~` expectation in a fixture. A missing fixture folder means none.
+/// Every code named by a `//~` expectation in a fixture, read with the runner's own parser.
 fn fixture_codes(root: &Path) -> Result<BTreeSet<String>, String> {
     let mut codes = BTreeSet::new();
-    for path in qnc_files(&root.join(FIXTURE_DIR))? {
-        let text = std::fs::read_to_string(&path)
-            .map_err(|e| format!("can't read {}: {e}", path.display()))?;
-        codes.extend(expected_codes(&text));
+    let files = quince_conformance::discover(root).map_err(|errors| errors.join("\n"))?;
+    for file in files {
+        let (expectations, _) = quince_conformance::fixture::expectations(&file.source);
+        codes.extend(expectations.into_iter().map(|e| e.code.to_string()));
     }
     Ok(codes)
-}
-
-/// The code after each `//~` or `//~^...` marker.
-fn expected_codes(text: &str) -> Vec<String> {
-    text.match_indices("//~")
-        .filter_map(|(i, marker)| {
-            text[i + marker.len()..]
-                .trim_start_matches('^')
-                .split_whitespace()
-                .next()
-                .map(str::to_string)
-        })
-        .collect()
-}
-
-fn qnc_files(dir: &Path) -> Result<Vec<PathBuf>, String> {
-    let mut files = Vec::new();
-    if !dir.exists() {
-        return Ok(files);
-    }
-    let mut stack = vec![dir.to_path_buf()];
-    while let Some(current) = stack.pop() {
-        let entries = std::fs::read_dir(&current)
-            .map_err(|e| format!("can't read {}: {e}", current.display()))?;
-        for entry in entries {
-            let path = entry.map_err(|e| e.to_string())?.path();
-            if path.is_dir() {
-                stack.push(path);
-            } else if path.extension().is_some_and(|ext| ext == "qnc") {
-                files.push(path);
-            }
-        }
-    }
-    files.sort();
-    Ok(files)
 }
 
 #[cfg(test)]
@@ -194,11 +159,5 @@ mod tests {
                 "compiler/diagnostics/explain/E0999.md: no registry row in compiler/diagnostics/src/registry.rs"
             ]
         );
-    }
-
-    #[test]
-    fn finds_expected_codes() {
-        let text = "let x = 1 //~ E0100\n//~^^ W0003 unused\n// plain comment\n";
-        assert_eq!(expected_codes(text), ["E0100", "W0003"]);
     }
 }

@@ -56,6 +56,10 @@ pub fn steps() -> Vec<Step> {
             name: "diagnostics",
             run: crate::diagnostics::check,
         },
+        Step {
+            name: "conformance",
+            run: crate::conformance::check,
+        },
     ]
 }
 
