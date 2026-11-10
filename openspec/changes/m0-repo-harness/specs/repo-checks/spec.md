@@ -28,8 +28,15 @@ Each check SHALL also be available as its own subcommand (`cargo xtask spec-rule
 - **THEN** only the grammar check runs, with the same result it has inside `ci`
 
 ### Requirement: CI runs the same command
-The GitHub Actions workflow SHALL run `cargo xtask ci` on every pull request with the pinned toolchain.
+The GitHub Actions workflow SHALL run `cargo xtask ci` with the pinned toolchain on every pull request, whatever its base branch, and on every push to `main`. Its token SHALL be read-only.
 
 #### Scenario: Pull request opened
-- **WHEN** a pull request is opened against `main`
+- **WHEN** a pull request is opened, including one based on another branch of a stack
 - **THEN** the workflow runs `cargo xtask ci` and reports its result as a check
+
+### Requirement: Files keep their bytes
+Git SHALL NOT convert line endings in this repo, so the strip and grammar checks compare the same bytes on every platform, and fixtures can contain CRLF on purpose.
+
+#### Scenario: Checkout with autocrlf
+- **WHEN** the repo is cloned with `core.autocrlf=true`
+- **THEN** every file keeps the line endings it was committed with

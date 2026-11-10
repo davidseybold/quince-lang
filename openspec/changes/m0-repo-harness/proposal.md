@@ -8,8 +8,8 @@ Nothing can be built against the spec yet: there is no workspace, no single chec
 
 - **Cargo workspace** at the repo root with every crate from `docs/repo-plan.md` as an empty `quince_*` crate under `compiler/`, plus `runtime/`. A pinned Rust toolchain. No crate links LLVM yet.
 - **`cargo xtask ci`**: one command that runs every fast check: `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`, and the repo checks below. GitHub Actions runs the same command.
-- **`AGENTS.md`**: how to build, test and bless, and a map of the repo.
-- **Stable rule IDs in the spec.** Every normative sentence in `spec/quince-spec.md` gets an ID such as `r[bind.shadow.same-scope]`. The tags are pure insertions: removing them gives back the v0.4 text byte for byte. Grammar productions get derived IDs (`grammar.fn_decl`) without tags. A check enforces format and uniqueness, and that retired IDs are never reused.
+- **`AGENTS.md`**: how to build and test, and a map of the repo.
+- **Stable rule IDs in the spec.** Every normative sentence in `spec/quince-spec.md` gets an ID such as `r[bind.shadow.same-scope]`. The tags are pure insertions: removing them gives back the v0.4 text byte for byte. Grammar productions get derived IDs (`grammar.fn_decl`) without tags. A check enforces format, placement, a fixed list of topics, and uniqueness, and that retired IDs are never reused.
 - **`spec/grammar.ebnf`**, extracted from the two grammar appendices. A check fails when it no longer matches the spec text, or when a production references a name that is neither defined nor a declared token.
 - **Diagnostics crate skeleton** (`quince_diagnostics`): an error-code registry, the JSON diagnostic types and a JSON Schema for them, and a check that every registered code has `explain` text and at least one conformance test.
 - **Conformance runner**: finds `.qnc` files in `testdata/` folders under `tests/conformance/`, reads their rule citations and inline expectations (`//~ E0412`), runs them through a compiler interface (no implementation yet), and writes a coverage report by rule ID.
@@ -31,9 +31,10 @@ None. This is the first change.
 
 ## Impact
 
-- **New top-level folders:** `compiler/`, `runtime/`, `std/` (placeholder), `tests/conformance/`, `xtask/`, `.github/workflows/`.
-- **`spec/quince-spec.md`** gains rule-ID tags. No wording changes. Each one goes past David first, as a sample and then as the full pass.
+- **New top-level folders:** `compiler/` (including `compiler/spec`, a crate the repo plan doesn't list; see design.md decision 1), `runtime/`, `std/` (placeholder), `tests/conformance/`, `xtask/`, `.github/workflows/`.
+- **`spec/quince-spec.md`** gains rule-ID tags, which change no wording. They went past David first as a sample, then as the full pass.
+- **Spec wording changes (approved by David):** section 8's edit form becomes `{ start, end, text }` with an optional `file`, and the header moves to Draft v0.5 (diagnostics layer).
 - **New `spec/grammar.ebnf`.**
-- **Toolchain:** Rust via rustup, pinned in `rust-toolchain.toml`. Rust is not installed on the dev machine yet.
+- **Toolchain:** Rust via rustup, pinned in `rust-toolchain.toml` (1.99.1).
 - **Dependencies (approved by David, 2026-11-10):** `serde` and `serde_json` in `quince_diagnostics` and the runner. Nothing else. The JSON Schema is validated by a test against a hand-written schema file, not by a schema crate.
 - **Delivery:** a `gh stack` of about six PRs, each under ~500 changed lines except the rule-ID pass on the spec (see design.md).

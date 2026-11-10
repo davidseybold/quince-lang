@@ -8,6 +8,7 @@ Each group is one layer of the M0 stack (design.md, decision 7) and ends with `c
 - [x] 1.2 Write proposal, design, specs and tasks for `m0-repo-harness` and verify `openspec validate m0-repo-harness --strict` passes
 - [x] 1.3 Add `.gitignore` (`target/`, `.claude/worktrees/`) and verify `git status` in the main checkout no longer lists worktrees
 - [x] 1.4 Get David's approval of the proposal and of the pending decisions in design.md (rule-ID scheme, code format, edit forms, dependencies, Rust install)
+- [x] 1.5 Address the design review: the edit `file` field, edit and position semantics, fixture header, modes and expectation rules, topic list and renames, grammar ID stability, `.gitattributes`. Verify `openspec validate m0-repo-harness --strict` passes
 
 ## 2. Workspace and `xtask ci` (`m0/workspace`)
 
@@ -49,5 +50,5 @@ Each group is one layer of the M0 stack (design.md, decision 7) and ends with `c
 
 ## Workflow follow-up
 
-- Submit the stack with `gh stack submit --auto` (drafts), and run the PR review loop when David asks for a review.
+- Submit the stack with `gh stack submit --auto` (drafts). Run the design-reviewer and pr-reviewer loops before asking David for a review.
 - Archive the change after the stack merges, which creates the first `openspec/specs/` entries.
