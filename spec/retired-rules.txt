@@ -1,0 +1,3 @@
+# Rule IDs that were retired from spec/quince-spec.md. An ID listed here can never be used
+# again (openspec spec-rule-ids). When a rule's meaning changes, retire its old ID here and give
+# the new rule a new ID. One ID per line.

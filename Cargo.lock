@@ -47,6 +47,10 @@ name = "quince_runtime"
 version = "0.0.0"
 
 [[package]]
+name = "quince_spec"
+version = "0.0.0"
+
+[[package]]
 name = "quince_syntax"
 version = "0.0.0"
 
@@ -57,3 +61,6 @@ version = "0.0.0"
 [[package]]
 name = "xtask"
 version = "0.0.0"
+dependencies = [
+ "quince_spec",
+]

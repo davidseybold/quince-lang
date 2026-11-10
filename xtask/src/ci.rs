@@ -44,6 +44,10 @@ pub fn steps() -> Vec<Step> {
             name: "test",
             run: |root| cargo(root, &["test", "--workspace"]),
         },
+        Step {
+            name: "spec-rules",
+            run: crate::spec_rules::check,
+        },
     ]
 }
 

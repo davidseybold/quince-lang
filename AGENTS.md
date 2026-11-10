@@ -12,8 +12,14 @@ How to build and check this repo. `CLAUDE.md` holds the working rules and the de
 | `cargo fmt --all` | Formats Rust code. `ci` runs it with `--check`. |
 | `cargo clippy --workspace --all-targets -- -D warnings` | Lints Rust code with warnings treated as errors, as `ci` does. |
 | `cargo run -p quince_cli -- --version` | Runs the `quince` binary. Only `--version` works so far. |
+| `cargo xtask spec-rules` | Checks the rule-ID tags in `spec/quince-spec.md`: format, placement, uniqueness, retired IDs. |
+| `cargo xtask spec-rules --strip` | Prints the spec with every tag removed, so you can diff the wording without the tags. |
 
 The toolchain is pinned in `rust-toolchain.toml`, and rustup installs it the first time you run `cargo` in the repo.
+
+## Rule IDs
+
+Every normative sentence in the spec carries a tag such as `r[bind.shadow.same-scope]`, written directly before the sentences it covers. Conformance tests cite these IDs. The first segment names a topic, not a section. An ID is never renamed or reused: when a rule's meaning changes, its old ID goes in `spec/retired-rules.txt` and the rule gets a new one. Grammar productions have implicit IDs, `grammar.<production>`.
 
 ## Map
 
