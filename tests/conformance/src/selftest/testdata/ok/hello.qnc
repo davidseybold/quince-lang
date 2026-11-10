@@ -1,0 +1,5 @@
+// rule: main.signature
+// mode: run
+fn main() {
+  print("hi")
+}

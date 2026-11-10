@@ -51,6 +51,7 @@ Each group is one layer of the M0 stack (design.md, decision 7) and ends with `c
 - [x] 6.3 Make a missing backend fail loudly, and verify with a self-test
 - [x] 6.4 Implement the rule-ID loader (spec tags plus `grammar.*`) and the coverage report (JSON plus per-section summary), and verify a failing fixture doesn't count as coverage
 - [x] 6.5 Wire `conformance` into `xtask ci` and verify the M0 exit: CI is green on the empty suite, and `target/conformance/coverage.json` lists every rule ID as uncovered
+- [x] 6.6 Review fixes: blank lines stay in the header, and directives after code, misspelled directives and repeats are errors. Add `parse` mode, several codes per `//~`, the end-of-input rule, a build-failure result for run fixtures, "no `.stdout`" meaning no output, read errors and orphan `.stdout` files as errors, and a retired-rule message. Add self-test fixtures for discovery and a test that loads the real spec
 
 ## Workflow follow-up
 

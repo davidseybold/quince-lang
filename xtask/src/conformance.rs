@@ -7,13 +7,8 @@ use std::path::Path;
 pub const REPORT_PATH: &str = "target/conformance/coverage.json";
 
 pub fn check(root: &Path) -> Result<(), String> {
-    let (rules, sections) = load_rules(root).map_err(|errors| {
-        for error in &errors {
-            eprintln!("{error}");
-        }
-        format!("can't load rule IDs ({} problem(s))", errors.len())
-    })?;
-    let files = discover(root)?;
+    let rules = load_rules(root).map_err(|errors| report("can't load rule IDs", &errors))?;
+    let files = discover(root).map_err(|errors| report("can't read the fixtures", &errors))?;
     // M1 replaces NoBackend with the parser, so check fixtures start passing.
     let results: Vec<_> = files
         .iter()
@@ -27,14 +22,14 @@ pub fn check(root: &Path) -> Result<(), String> {
         }
     }
 
-    let report = coverage::build(&rules, &sections, &results);
-    let json = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?;
+    let coverage = coverage::build(&rules.ids, &rules.sections, &results);
+    let json = serde_json::to_string_pretty(&coverage).map_err(|e| e.to_string())?;
     let path = root.join(REPORT_PATH);
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| format!("can't create {}: {e}", dir.display()))?;
     }
     std::fs::write(&path, json + "\n").map_err(|e| format!("can't write {REPORT_PATH}: {e}"))?;
-    eprint!("{}", coverage::summary(&report));
+    eprint!("{}", coverage::summary(&coverage));
     eprintln!(
         "{} fixture(s): {} passed, {} failed. Report: {REPORT_PATH}",
         results.len(),
@@ -46,4 +41,12 @@ pub fn check(root: &Path) -> Result<(), String> {
     } else {
         Err(format!("{} conformance fixture(s) failed", failed.len()))
     }
+}
+
+/// Prints every error and returns the one-line step summary.
+fn report(what: &str, errors: &[String]) -> String {
+    for error in errors {
+        eprintln!("{error}");
+    }
+    format!("{what} ({} problem(s))", errors.len())
 }

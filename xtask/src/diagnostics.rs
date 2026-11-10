@@ -93,7 +93,8 @@ fn explain_codes(dir: &Path) -> Result<BTreeSet<String>, String> {
 /// Every code named by a `//~` expectation in a fixture, read with the runner's own parser.
 fn fixture_codes(root: &Path) -> Result<BTreeSet<String>, String> {
     let mut codes = BTreeSet::new();
-    for file in quince_conformance::discover(root)? {
+    let files = quince_conformance::discover(root).map_err(|errors| errors.join("\n"))?;
+    for file in files {
         let (expectations, _) = quince_conformance::fixture::expectations(&file.source);
         codes.extend(expectations.into_iter().map(|e| e.code.to_string()));
     }

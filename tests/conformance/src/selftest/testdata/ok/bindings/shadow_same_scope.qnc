@@ -1,0 +1,7 @@
+// rule: bind.shadow.same-scope
+// A self-test fixture for discovery. The runner's own tests read it; `cargo xtask conformance`
+// never runs it, because it isn't under tests/conformance/testdata/.
+fn f() {
+  let x = 1
+  let x = 2 //~ E0100
+}
