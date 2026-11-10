@@ -1,0 +1,16 @@
+[workspace]
+resolver = "3"
+members = ["compiler/*", "runtime", "xtask"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.99"
+publish = false
+
+[workspace.lints.rust]
+# The runtime will opt in with `#![allow(unsafe_code)]` where it needs it.
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }

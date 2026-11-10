@@ -1,0 +1,10 @@
+[package]
+name = "quince_effects"
+description = "Effect inference and checking, static contract rules and task-boundary rules for Quince."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

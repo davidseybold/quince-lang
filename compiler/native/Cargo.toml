@@ -1,0 +1,10 @@
+[package]
+name = "quince_native"
+description = "Builds [native] C sources, links binaries and cross-compiles."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

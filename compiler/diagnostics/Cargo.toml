@@ -1,0 +1,10 @@
+[package]
+name = "quince_diagnostics"
+description = "Error-code registry, JSON diagnostic format, fixes and explain text for Quince."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

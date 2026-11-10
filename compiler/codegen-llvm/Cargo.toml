@@ -1,0 +1,10 @@
+[package]
+name = "quince_codegen_llvm"
+description = "LLVM code generation from Quince IR. With quince_bind, the only crate that links LLVM."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

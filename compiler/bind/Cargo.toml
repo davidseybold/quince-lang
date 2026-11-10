@@ -1,0 +1,10 @@
+[package]
+name = "quince_bind"
+description = "quince bind: C headers to foreign blocks, through libclang."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
