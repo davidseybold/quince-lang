@@ -332,7 +332,7 @@ lex        reference/lexical.md           Lexical structure
   - Every relative link in a Markdown file under `spec/`, and every link from `std/API.md` into `spec/`, names an existing file.
   - A `#fragment` must name a heading in that file, under GitHub's anchor rules as github-slugger implements them, with unit tests on the spec's awkward headings.
   - External links aren't fetched.
-- **Leftover check.** From the reference layer on, `spec-links` also fails on prose in the Markdown files under `spec/` that matches `section [0-9]`, `§ ?[0-9]`, `[Aa]ppendix`, `\(see [A-Z]`, or a parenthesized "below" or "above". Headings, link destinations and `grammar.ebnf` aren't checked, so the `legacy` file's "Appendix" headings and the interim links to them pass until layer 10 deletes the file.
+- **Leftover check.** From the reference layer on, `spec-links` also fails on prose in the Markdown files under `spec/` that matches `section [0-9]`, `§ ?[0-9]`, `[Aa]ppendix`, `\(see [A-Z]`, or a parenthesized "below" or "above". Headings, link destinations and `grammar.ebnf` aren't checked, so the `legacy` file's "Appendix" headings and the interim links to them pass until layer 10 deletes the file. From layer 10 on, headings are checked too.
 - **Interim headings.** Layer 7 adds a `### Prelude names` heading above the names table in `quince-spec.md` (a `headings.tsv` row), so `r[prelude.only]`'s link to `#prelude-names` resolves from the start. The same layer updates the `grammar.ebnf` header and `DEFAULT_HEADER` wording to stop calling the grammar "the two grammar appendices".
 
 ### 8. Proving nothing changed: `cargo xtask spec-compare`
@@ -516,5 +516,5 @@ One `gh stack`, a PR per layer (decision 11). Tick each box as it lands on its b
 - [ ] 7. `references`: scan; `refs.tsv` with final targets; `rewordings.tsv`; removals not tied to a move; `### Prelude names` interim heading; `grammar.ebnf` header and `DEFAULT_HEADER` wording; leftover check on (prose only)
 - [ ] 8. `move-core`: chapters 1 to 9; `headings.tsv` rows; flagged units listed in the PR
 - [ ] 9. `move-semantics`: chapters 10 to 17; flagged units listed
-- [ ] 10. `move-tooling`: chapters 18 to 20; `docs/design-principles.md`; Pipeline to `docs/repo-plan.md`; `quince-spec.md` and `legacy` deleted; final-target check; diagnostics example test path
+- [ ] 10. `move-tooling`: chapters 18 to 20; `docs/design-principles.md`; Pipeline to `docs/repo-plan.md`; `quince-spec.md` and `legacy` deleted; final-target check; diagnostics example test path; leftover check extended to headings
 - [ ] 11. `cleanup`: `docs/repo-plan.md`, `docs/milestones.md` (chapters, v0.4, M9 notes); `spec-compare` and baseline deleted; status "done"
