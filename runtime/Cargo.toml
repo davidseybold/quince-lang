@@ -1,0 +1,13 @@
+[package]
+name = "quince_runtime"
+description = "The Quince runtime: scheduler, reference counting, cycle collector, foreign-call pool and deterministic test scheduler."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[lints]
+workspace = true

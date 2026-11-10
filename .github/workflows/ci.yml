@@ -1,0 +1,21 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# The workflow only reads the repo.
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # rustup reads rust-toolchain.toml, so this installs the pinned version.
+      - name: Install the pinned toolchain
+        run: rustup toolchain install
+      - name: cargo xtask ci
+        run: cargo xtask ci

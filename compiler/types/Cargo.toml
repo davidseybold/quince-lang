@@ -1,0 +1,10 @@
+[package]
+name = "quince_types"
+description = "Name resolution, type checking, patterns and exhaustiveness for Quince."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

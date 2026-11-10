@@ -1,0 +1,10 @@
+[package]
+name = "quince_ir"
+description = "Quince IR: monomorphization, explicit contract checks and reference-count insertion."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
