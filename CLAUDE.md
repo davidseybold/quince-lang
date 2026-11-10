@@ -27,7 +27,8 @@ Quince is a statically typed, reference-counted, effect-tracked language for ser
 
 ## How work is done
 
-- **The spec says what; OpenSpec says how.** Implementation details (CLI behavior, JSON formats, pipeline, runtime, packages) live in `openspec/specs/`. Every unit of work is an OpenSpec change in `openspec/changes/` with a proposal, design and tasks, and it cites the spec rule IDs it implements.
+- **The core loop is spec rule → conformance test → code.** For each rule ID you implement, first write `.qnc` conformance tests from the spec text alone, then implement until they pass. If you can't write a test for a rule, the rule is ambiguous: stop and ask.
+- **OpenSpec, kept light.** The language spec says what Quince means. `openspec/specs/` holds only implementation decisions the language spec doesn't cover (JSON diagnostics schema, CST design, pipeline, runtime internals, package formats), and never restates the language spec. Open one OpenSpec change per milestone chunk (for example "M1: lexer"), with a design and a task list kept current so the next session can resume from it. Bug fixes and small tasks don't need a change. Revisit after M1 whether OpenSpec is earning its keep.
 - **Don't edit `spec/` on your own.** If the spec is ambiguous, contradictory or missing something, stop and ask David, and propose wording. A change to the language edits the spec in the same PR as the code and tests.
 - Every spec rule gets a stable ID, and every conformance test cites one. Every error code has `explain` text and a test.
 - Before finishing any change, run `cargo xtask ci` (once M0 creates it) and keep it green. Never skip or delete a test to get green.
