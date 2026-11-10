@@ -178,7 +178,7 @@ All 105 current topics are placed exactly once: 104 in the tables above, and `st
 | `r[prelude.effect-ops]`, `r[prelude.effect-ops-no-import]`, `r[prelude.state-no-ops]`: how built-in effect operations are named and handled | Effects |
 | **(approved by David, 2026-11-10)** The built-in effect declarations (`effect Console { … }`, `effect Fs { … }`, and the rest: about 75 lines). `r[handler.receiver]`, `r[effect.interface]` and `r[prelude.effect-ops]` say a handler implements each operation of an effect, so the fixed built-in effects' operation sets are part of the language. | Effects |
 | **(approved by David, 2026-11-10)** The declarations of `FailurePolicy` and `ScopeFailed` (needed by `r[background.policy]`, `r[background.result]` and `r[background.scope-failed]`), `TimedOut` (`r[timeout.result]`) and `ChannelClosed` (`r[chan.send]`) | Concurrency |
-| The declarations of `FsError` and `NetError`. `r[cap.violation]` returns `FsError.PermissionDenied` and `NetError.PermissionDenied`, and `r[test.default-fakes]` relies on `NetError.Refused`. The other types the effect declarations name (`Metadata`, `Outbound`, `Inbound`, `Listener`, `ProcessError`, `ProcessOutput`) are named only, so they move, a deliberate dependency like `list-index`'s. | Effects |
+| **(approved by David, 2026-11-10)** The declarations of `FsError` and `NetError`, the error enums that the `Fs` and `Net` operations return. `r[cap.violation]` returns `FsError.PermissionDenied` and `NetError.PermissionDenied`, and `r[test.default-fakes]` relies on `NetError.Refused`. The other types the effect declarations name (`Metadata`, `Outbound`, `Inbound`, `Listener`, `ProcessError`, `ProcessOutput`) are named only, so they move, a deliberate dependency like `list-index`'s. | Effects |
 | The untagged notes after the effect declarations: a manifest limit returns `FsError.PermissionDenied`, and which operations are cancellation points | Effects |
 | `r[prelude.broken-pipe]`: a write to closed standard output ends the program with code 0 | Program execution |
 
@@ -487,8 +487,6 @@ Nothing outside the repo consumes the spec, and no fixture cites an ID.
 ## Open questions
 
 None. David settled the chapter list, the tooling chapters, the ID scheme, moved rules, the Prelude split and its borderline rules, the rewordings, and the version (2026-11-10).
-
-One call applied by the doc's own keep rule, for David to confirm in review: the `FsError` and `NetError` declarations stay in Effects, because kept rules name their variants (decision 2).
 
 ## Tasks
 
