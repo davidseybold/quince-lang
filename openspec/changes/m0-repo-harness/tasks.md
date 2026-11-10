@@ -16,7 +16,7 @@ Each group is one layer of the M0 stack (design.md, decision 7) and ends with `c
 - [x] 2.2 Create the root `Cargo.toml` workspace and every crate under `compiler/` plus `runtime/`, each with a one-line crate doc, and verify `cargo build --workspace` succeeds without LLVM
 - [x] 2.3 Make `quince_cli` build a `quince` binary that prints its version, and verify `cargo run -p quince_cli -- --version`
 - [x] 2.4 Create `xtask` with the `.cargo/config.toml` alias and the `ci` runner for fmt, clippy and test. Run every step, print a summary table, and exit non-zero on any failure. Verify with a unit test of the summary logic and by running `cargo xtask ci` on the clean tree
-- [ ] 2.5 Add `.github/workflows/ci.yml` running `cargo xtask ci` on pull requests, and verify it passes on the layer's PR
+- [x] 2.5 Add `.github/workflows/ci.yml` running `cargo xtask ci` on pull requests, and verify it passes on the layer's PR
 - [x] 2.6 Write `AGENTS.md` (build, test, bless, repo map) and verify every command in it runs as written
 
 ## 3. Rule IDs in the spec (`m0/rule-ids`)
