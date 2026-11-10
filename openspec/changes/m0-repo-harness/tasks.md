@@ -7,7 +7,7 @@ Each group is one layer of the M0 stack (design.md, decision 7) and ends with `c
 - [x] 1.1 Run `openspec init --tools claude` and verify `openspec/config.yaml` and `.claude/skills/openspec-*` exist
 - [x] 1.2 Write proposal, design, specs and tasks for `m0-repo-harness` and verify `openspec validate m0-repo-harness --strict` passes
 - [x] 1.3 Add `.gitignore` (`target/`, `.claude/worktrees/`) and verify `git status` in the main checkout no longer lists worktrees
-- [ ] 1.4 Get David's approval of the proposal and of the pending decisions in design.md (rule-ID scheme, code format, edit forms, dependencies, Rust install)
+- [x] 1.4 Get David's approval of the proposal and of the pending decisions in design.md (rule-ID scheme, code format, edit forms, dependencies, Rust install)
 
 ## 2. Workspace and `xtask ci` (`m0/workspace`)
 
@@ -22,7 +22,7 @@ Each group is one layer of the M0 stack (design.md, decision 7) and ends with `c
 
 - [ ] 3.1 Implement `xtask spec-rules`: parse tags, check format, uniqueness, code-block and heading placement, and retired IDs. Verify with unit tests covering each failure in the spec-rule-ids scenarios
 - [ ] 3.2 Implement `--strip`, and verify that stripping a tagged sample gives back its untagged source
-- [ ] 3.3 Show David a tagged sample of one section and get approval (done before 3.4)
+- [x] 3.3 Show David a tagged sample of one section and get approval (done before 3.4)
 - [ ] 3.4 Tag every normative sentence in `spec/quince-spec.md`, verify `cargo xtask spec-rules --strip` equals spec v0.4 byte for byte, and add `spec/retired-rules.txt` (empty)
 - [ ] 3.5 Wire `spec-rules` into `xtask ci` and verify `cargo xtask ci` passes
 
