@@ -116,12 +116,12 @@ let jobs = Channel<Job>.new(16)
 let user = User(id: UserId(1), email:, name: "Ada", created_at: now)
 ```
 
-- r[targ.angle] After a name or path in an expression, `<` starts type arguments when the tokens up to its matching `>` parse as types and that `>` is directly followed by `(` or `.`. Otherwise `<` is less-than. Type names are always `PascalCase`, so in `f(a < b, c > (d))` neither `b` nor `c` can be a type, and the call has two comparison arguments.
+- r[type-arg.angle] After a name or path in an expression, `<` starts type arguments when the tokens up to its matching `>` parse as types and that `>` is directly followed by `(` or `.`. Otherwise `<` is less-than. Type names are always `PascalCase`, so in `f(a < b, c > (d))` neither `b` nor `c` can be a type, and the call has two comparison arguments.
 - r[op.compare.no-chain] Comparison operators don't chain: `a < b > c` is a syntax error, and the suggested fix is `a < b && b < c`. So `json.decode<Order>(body)` has only one reading.
 - r[lex.no-shift-token] The lexer never makes `>>` one token, so `List<List<Int>>` closes without a space.
-- r[targ.optional] Type arguments are optional wherever inference finds them (section 3, Inference rules).
-- r[targ.construct] A `PascalCase` name followed by `(` builds a value: a struct (`User(id:, name: "Ada")`), a newtype (`UserId(1)`) or, through its enum's name, a variant (`Shape.Rect(width: 2.0, height: 3.0)`). Functions are `snake_case`, so this is never a function call.
-- r[targ.no-brace-construct] Braces never build a value of a user type: `{` starts a block or a map literal. So a struct value can appear in an `if`, `while`, `for`, `match` or `with` head without parentheses: `if p == Point(x: 0, y: 0) { ... }`.
+- r[type-arg.optional] Type arguments are optional wherever inference finds them (section 3, Inference rules).
+- r[type-arg.construct] A `PascalCase` name followed by `(` builds a value: a struct (`User(id:, name: "Ada")`), a newtype (`UserId(1)`) or, through its enum's name, a variant (`Shape.Rect(width: 2.0, height: 3.0)`). Functions are `snake_case`, so this is never a function call.
+- r[type-arg.no-brace-construct] Braces never build a value of a user type: `{` starts a block or a map literal. So a struct value can appear in an `if`, `while`, `for`, `match` or `with` head without parentheses: `if p == Point(x: 0, y: 0) { ... }`.
 
 ### Operators and precedence
 
@@ -186,7 +186,7 @@ r[block.expr-stmt] `if`, `match`, closures and the keyword forms (`concurrent`, 
 * r[jump.expr] `return`, `break` and `continue` are expressions, so they can stand in a match arm (`None => return,`). r[never.block] A block whose last statement or expression can't complete normally can't complete normally itself, and neither can a `while true` with no `break` aimed at it. Such a block has type `Never`, so a function returning `Summary` may end in a `while true` loop that it leaves only through `return`.
 * r[assign.stmt] Assignment is a statement: `place = expr`, or `place op= expr` with `+=` `-=` `*=` `/=` `%=`, meaning `place = place op expr`. r[assign.place] A place is a `var` binding, a field path from one, or an index into one (`xs[i] = v`). r[assign.no-chain] There is no `x = y = z`, no assignment inside a condition, and no `++` or `--`.
 * r[closure.syntax] A closure is `fn(params) -> T uses E { body }`. r[closure.infer] Parameter types, the return type and `uses` can be left out when the expected type gives them: `fn(n) { n + 1 }`. r[closure.no-expected] With no expected type, the parameter types are written, and the return type and the effects are inferred from the body: `Callback.local(fn(sent: CInt, total: CInt) { done.set(sent.to_int64()) })` needs no `uses`. r[closure.underscore] An unused parameter of a closure or function may be named `_`.
-* r[fnval.named] A named function, or an associated function such as `Url.parse`, can be passed where a function type is expected: `lines.map(parse_user)`. Its type carries its effects. r[fnval.no-method] A method is passed through a closure, `fn(u) { u.display() }`, so a function value never hides which receiver it holds. r[fnval.variant] An enum variant with a payload is a function from its fields, in declaration order, so `map_err(AppError.Serve)` passes the variant as a function.
+* r[fn-value.named] A named function, or an associated function such as `Url.parse`, can be passed where a function type is expected: `lines.map(parse_user)`. Its type carries its effects. r[fn-value.no-method] A method is passed through a closure, `fn(u) { u.display() }`, so a function value never hides which receiver it holds. r[fn-value.variant] An enum variant with a payload is a function from its fields, in declaration order, so `map_err(AppError.Serve)` passes the variant as a function.
 
 ### Formatting rules (enforced by `quince` `fmt`)
 
@@ -224,27 +224,27 @@ r[attr.placement] An attribute goes on its own line directly above the declarati
 
 ## 3. Type system
 
-r[ty.nominal] Quince's type system is static, sound, and nominal, with full type annotations required at every declaration boundary and inference allowed only inside function bodies. r[ty.no-any] There is no `any` type and no unchecked cast.
+r[type.nominal] Quince's type system is static, sound, and nominal, with full type annotations required at every declaration boundary and inference allowed only inside function bodies. r[type.no-any] There is no `any` type and no unchecked cast.
 
 ### Built-in types
 
 | Type | Description |
 | --- | --- |
-| `Int`, `Int8`...`Int64`, `UInt8`...`UInt64` | r[ty.int] Integers; overflow is a panic (see section 4), and checked\_add etc. return Option. r[ty.int-alias] Int is another name for Int64, not a separate type. r[ty.no-uint] There is no plain UInt; use UInt64 |
-| `Float`, `Float32` | r[ty.float] IEEE 754 floats; Float is another name for Float64. r[ty.float.total-order] Arithmetic follows IEEE, but Eq, Ord and Hash use a total order (NaN equals NaN, and -0.0 sorts before 0.0), so floats can be map keys and always sort the same way |
-| `Bool` | r[ty.bool] `true` / `false` |
-| `String` | r[ty.string] Immutable UTF-8 text. r[ty.string.no-index] There is no s\[i\]; .bytes() and .chars() say which unit you mean |
-| `Bytes` | r[ty.bytes] Immutable byte sequence |
-| `List<T>`, `Map<K, V>`, `Set<T>` | r[ty.collections] Values: passing or assigning never shares a mutable alias (see Mutation below) |
-| `Option<T>` | r[ty.option] `Some(value)` or `None` |
-| `Result<T, E>` | r[ty.result] `Ok(value)` or `Err(error)` |
-| `Unit` | r[ty.unit] The empty value, written `()` |
-| `Never` | r[ty.never] The type of an expression that never produces a value: return, break, continue, unreachable, todo and Process.exit. It has no values and fits wherever any type is expected (see Inference rules) |
-| Char | r[ty.char] One Unicode scalar value; .chars() yields them |
-| Tuples | r[ty.tuple] Fixed-size groups such as (Int, String), written (1, "a") and taken apart with let (n, s) = t or match, or read by position with t.0 and t.1 |
-| Function types | r[ty.fn] fn(A) -> B, with uses E for effects (section 5) |
-| Duration, Timestamp, Url, Regex | r[ty.tagged] The values of the tagged literals dur, ts, url and re (section 2) |
-| Range\<T> | r[ty.range] The value of a..b or a..=b, over one integer type (section 2, Ranges) |
+| `Int`, `Int8`...`Int64`, `UInt8`...`UInt64` | r[type.int] Integers; overflow is a panic (see section 4), and checked\_add etc. return Option. r[type.int-alias] Int is another name for Int64, not a separate type. r[type.no-uint] There is no plain UInt; use UInt64 |
+| `Float`, `Float32` | r[type.float] IEEE 754 floats; Float is another name for Float64. r[type.float.total-order] Arithmetic follows IEEE, but Eq, Ord and Hash use a total order (NaN equals NaN, and -0.0 sorts before 0.0), so floats can be map keys and always sort the same way |
+| `Bool` | r[type.bool] `true` / `false` |
+| `String` | r[type.string] Immutable UTF-8 text. r[type.string.no-index] There is no s\[i\]; .bytes() and .chars() say which unit you mean |
+| `Bytes` | r[type.bytes] Immutable byte sequence |
+| `List<T>`, `Map<K, V>`, `Set<T>` | r[type.collections] Values: passing or assigning never shares a mutable alias (see Mutation below) |
+| `Option<T>` | r[type.option] `Some(value)` or `None` |
+| `Result<T, E>` | r[type.result] `Ok(value)` or `Err(error)` |
+| `Unit` | r[type.unit] The empty value, written `()` |
+| `Never` | r[type.never] The type of an expression that never produces a value: return, break, continue, unreachable, todo and Process.exit. It has no values and fits wherever any type is expected (see Inference rules) |
+| Char | r[type.char] One Unicode scalar value; .chars() yields them |
+| Tuples | r[type.tuple] Fixed-size groups such as (Int, String), written (1, "a") and taken apart with let (n, s) = t or match, or read by position with t.0 and t.1 |
+| Function types | r[type.fn] fn(A) -> B, with uses E for effects (section 5) |
+| Duration, Timestamp, Url, Regex | r[type.tagged] The values of the tagged literals dur, ts, url and re (section 2) |
+| Range\<T> | r[type.range] The value of a..b or a..=b, over one integer type (section 2, Ranges) |
 
 r[num.div-round] Integer division `/` and remainder `%` round toward zero, so `-7 / 2` is `-3` and `-7 % 2` is `-1`. r[num.conversions] Conversions between numeric types are explicit methods: widening ones (`n.to_int64()`) always succeed, narrowing ones (`n.to_int32()`) return `Option`, and `f.to_int()` returns `None` for NaN, infinities and out-of-range values.
 
@@ -335,8 +335,8 @@ fn record_hit(stats: Ref<Stats>, path: String) -> Stats uses State {
 
 ### Generics
 
-- r[gen.bounds] Type parameters with interface bounds: `fn max<T: Ord>(a: T, b: T) -> T`.
-- r[gen.multi-bounds] Several bounds are joined with `+`: `fn show_sorted<T: Ord + Display>(xs: List<T>) -> String`. r[gen.assoc-binding] A bound can fix an interface's associated type, as in Rust: `fn sum<I: Iterator<Item = Int>>(var it: I) -> Int` or `fn total<T: Add<T, Output = T>>(xs: List<T>) -> T`.
+- r[generic.bounds] Type parameters with interface bounds: `fn max<T: Ord>(a: T, b: T) -> T`.
+- r[generic.multi-bounds] Several bounds are joined with `+`: `fn show_sorted<T: Ord + Display>(xs: List<T>) -> String`. r[generic.assoc-binding] A bound can fix an interface's associated type, as in Rust: `fn sum<I: Iterator<Item = Int>>(var it: I) -> Int` or `fn total<T: Add<T, Output = T>>(xs: List<T>) -> T`.
 - r[iface.type-params] Interfaces may take type parameters: `interface From<T> { fn from(value: T) -> Self }`, and effect parameters (section 5): `interface Iterator<uses E>`.
 - r[iface.assoc-types] Interfaces may declare associated types, which each implementation fixes:
 
@@ -349,7 +349,7 @@ pub interface Iterator<uses E> {
 
 - r[iter.next-var-self] `next` takes `var self`, so it advances the iterator it is called on (see Mutation above). r[iter.for-copy] `for x in it` iterates over a copy of `it`, so `it` doesn't need to be `var` and is unchanged after the loop. That holds when the iterator's source is a value, such as a list or a range. r[iter.shared-source] An iterator over an effect or a reference type, such as `Fs.read_lines` or `Channel.iter()`, shares its source, so every copy pulls from the same stream.
 - r[tuple.derived] The compiler provides Eq, Ord, Hash, Encode, Decode and test generators for tuples of any size, so the standard library needs no per-size implementations.
-- r[gen.excluded] Deliberately excluded: higher-kinded types (keeps type errors readable), variadic generics (`concurrent` and tuples are handled by the compiler instead), and specialization (which implementation runs must never depend on code elsewhere).
+- r[generic.excluded] Deliberately excluded: higher-kinded types (keeps type errors readable), variadic generics (`concurrent` and tuples are handled by the compiler instead), and specialization (which implementation runs must never depend on code elsewhere).
 - Type arguments can be written at a call site, as in `json.decode<Order>(body)` or `Channel<Job>.``new(16)`, and are optional wherever inference finds them (section 2, Type arguments and construction).
 
 ### Interfaces
@@ -377,7 +377,7 @@ impl Display for User {
 
 ### Operators on user types
 
-r[opuser.interfaces] Arithmetic operators on user types come from six prelude interfaces, and each operator always calls the same one: `+` calls `Add`, `-` calls `Sub`, `*` calls `Mul`, `/` calls `Div`, `%` calls `Rem`, and unary `-` calls `Neg`. r[opuser.builtin-impls] The built-in numeric types implement them, and a user type opts in with an ordinary `impl`:
+r[user-op.interfaces] Arithmetic operators on user types come from six prelude interfaces, and each operator always calls the same one: `+` calls `Add`, `-` calls `Sub`, `*` calls `Mul`, `/` calls `Div`, `%` calls `Rem`, and unary `-` calls `Neg`. r[user-op.builtin-impls] The built-in numeric types implement them, and a user type opts in with an ordinary `impl`:
 
 ```
 pub interface Sub<R> {
@@ -396,12 +396,12 @@ impl Mul<Int> for Money {
 }
 ```
 
-- **Pure.** r[opuser.pure] The operator interfaces take no effect parameter, like `Eq` and `Ord`, so an operator can't do I/O or touch shared state. It can still panic, as `Int` overflow does.
-- **Comparison.** r[opuser.compare] `==` and `!=` always come from `Eq`, and `<`, `<=`, `>` and `>=` from `Ord`. r[opuser.ne] There are no separate comparison interfaces, and `a != b` always means `!(a == b)`.
-- **The left operand picks the impl.** r[opuser.left-picks] `R` is the right operand's type, so `impl Mul<Int> for Money` allows `amount * 3` and nothing else. r[opuser.swap-fix] `3 * amount` and `amount * amount` are compile errors, and for the first one the suggested fix swaps the operands. r[opuser.output] `Output` lets an operator return another type, as `Timestamp - Timestamp` returns `Duration`.
-- **A fixed set.** r[opuser.fixed] No other operator can be overloaded. `&&`, `||`, `!`, `?`, the bitwise operators, ranges, field access and calls keep their built-in meaning, and a program can't define new operators.
-- **Compound assignment.** r[opuser.compound] `a += b` always means `a = a + b`, and the same holds for every other operator, so there is nothing more to implement.
-- **Tooling.** r[opuser.query] The query API reports which impl an operator expression calls, so a tool can go from `a - b` straight to its body.
+- **Pure.** r[user-op.pure] The operator interfaces take no effect parameter, like `Eq` and `Ord`, so an operator can't do I/O or touch shared state. It can still panic, as `Int` overflow does.
+- **Comparison.** r[user-op.compare] `==` and `!=` always come from `Eq`, and `<`, `<=`, `>` and `>=` from `Ord`. r[user-op.ne] There are no separate comparison interfaces, and `a != b` always means `!(a == b)`.
+- **The left operand picks the impl.** r[user-op.left-picks] `R` is the right operand's type, so `impl Mul<Int> for Money` allows `amount * 3` and nothing else. r[user-op.swap-fix] `3 * amount` and `amount * amount` are compile errors, and for the first one the suggested fix swaps the operands. r[user-op.output] `Output` lets an operator return another type, as `Timestamp - Timestamp` returns `Duration`.
+- **A fixed set.** r[user-op.fixed] No other operator can be overloaded. `&&`, `||`, `!`, `?`, the bitwise operators, ranges, field access and calls keep their built-in meaning, and a program can't define new operators.
+- **Compound assignment.** r[user-op.compound] `a += b` always means `a = a + b`, and the same holds for every other operator, so there is nothing more to implement.
+- **Tooling.** r[user-op.query] The query API reports which impl an operator expression calls, so a tool can go from `a - b` straight to its body.
 
 ### Automatic equality and hashing
 
@@ -971,14 +971,14 @@ fn handle(req: Request, bg: TaskScope) -> Response uses Net {
 }
 ```
 
-- r[bg.taskscope-param] Only a function that takes a `TaskScope` parameter can start work that outlives it, so this is visible in the signature.
-- r[bg.spawn-in] `spawn in bg expr` starts `expr` as a task in the scope `bg`. It follows the same rule as `spawn` inside `concurrent`: the whole expression is evaluated in the new task. r[bg.spawn-type] The form has type `Unit`, and `expr` must be `Unit` or `Result<Unit, E>` where `E` implements `Display`, so no task's result is silently thrown away. r[bg.scope-value] The scope can be any `TaskScope` value, such as `self.bg`. `spawn` is a keyword, so a `TaskScope` has no `spawn` method.
-- r[bg.policy] The scope's owner sets the failure policy with `on_error`, which takes a `FailurePolicy`: `FailurePolicy.LogAndContinue`, `FailurePolicy.Restart(max: n)`, or `FailurePolicy.FailScope` (the default). r[bg.log-policy] `LogAndContinue` writes through the `Log` effect, so the enclosing function needs `uses Log`. r[bg.log-import] `Log` comes from std.log, and this is the one place the language names a std effect, so code that uses this policy imports it: `import std.log.{Log}`.
-- r[bg.failure] A failure is a task that panics or returns `Err`. r[bg.policy-semantics] Under `LogAndContinue` the failure is logged and the scope carries on. Under `Restart(max: n)` the task is started again, up to n times. The count is per spawned task. Under `FailScope`, or once the restarts run out, the scope cancels its remaining tasks and fails.
-- r[bg.result] A `background` block evaluates to `Result<T, ScopeFailed>`, where `T` is the body's value. r[bg.scope-failed] `ScopeFailed` names the spawn site of the task that failed and holds its panic message or the `Display` text of its error. Cancellation is never a failure (see Cancellation).
-- r[bg.exit] When a `background` block exits, it cancels remaining tasks and waits for them, giving clean shutdown.
-- r[bg.owned] A task with no owning scope is impossible by construction. r[bg.no-escape] A `background` block's value can't contain a `TaskScope` (a compile error that names the field path), and spawning into a scope whose block has already exited panics, naming the spawn site and the `background` line. r[bg.store] Storing a scope in a handler or a struct for the block's lifetime is fine.
-- r[bg.handlers] A spawned task keeps the handlers that were in effect where it was spawned, even after it outlives that `with` block. If a test runs ` with Net = fake {  ``handle(req, bg:)` `}` and `handle` spawns analytics work into `bg`, that work uses the fake. A handler therefore lives as long as the longest task that captured it.
+- r[background.taskscope-param] Only a function that takes a `TaskScope` parameter can start work that outlives it, so this is visible in the signature.
+- r[background.spawn-in] `spawn in bg expr` starts `expr` as a task in the scope `bg`. It follows the same rule as `spawn` inside `concurrent`: the whole expression is evaluated in the new task. r[background.spawn-type] The form has type `Unit`, and `expr` must be `Unit` or `Result<Unit, E>` where `E` implements `Display`, so no task's result is silently thrown away. r[background.scope-value] The scope can be any `TaskScope` value, such as `self.bg`. `spawn` is a keyword, so a `TaskScope` has no `spawn` method.
+- r[background.policy] The scope's owner sets the failure policy with `on_error`, which takes a `FailurePolicy`: `FailurePolicy.LogAndContinue`, `FailurePolicy.Restart(max: n)`, or `FailurePolicy.FailScope` (the default). r[background.log-policy] `LogAndContinue` writes through the `Log` effect, so the enclosing function needs `uses Log`. r[background.log-import] `Log` comes from std.log, and this is the one place the language names a std effect, so code that uses this policy imports it: `import std.log.{Log}`.
+- r[background.failure] A failure is a task that panics or returns `Err`. r[background.policy-semantics] Under `LogAndContinue` the failure is logged and the scope carries on. Under `Restart(max: n)` the task is started again, up to n times. The count is per spawned task. Under `FailScope`, or once the restarts run out, the scope cancels its remaining tasks and fails.
+- r[background.result] A `background` block evaluates to `Result<T, ScopeFailed>`, where `T` is the body's value. r[background.scope-failed] `ScopeFailed` names the spawn site of the task that failed and holds its panic message or the `Display` text of its error. Cancellation is never a failure (see Cancellation).
+- r[background.exit] When a `background` block exits, it cancels remaining tasks and waits for them, giving clean shutdown.
+- r[background.owned] A task with no owning scope is impossible by construction. r[background.no-escape] A `background` block's value can't contain a `TaskScope` (a compile error that names the field path), and spawning into a scope whose block has already exited panics, naming the spawn site and the `background` line. r[background.store] Storing a scope in a handler or a struct for the block's lifetime is fine.
+- r[background.handlers] A spawned task keeps the handlers that were in effect where it was spawned, even after it outlives that `with` block. If a test runs ` with Net = fake {  ``handle(req, bg:)` `}` and `handle` spawns analytics work into `bg`, that work uses the fake. A handler therefore lives as long as the longest task that captured it.
 
 ### Cancellation
 
@@ -1137,7 +1137,7 @@ impl Db {
 - r[ffi.multi-block] A package may have several `foreign` blocks for one library, each with its own effects, for example a pure block for one-shot functions and a `uses State` block for a stream. r[ffi.namespace] They share one namespace, so a type declared in one is visible in the others. r[ffi.attr-consistent] A library attribute such as `@pinned` must appear on every block for that library or on none.
 - r[ffi.not-pub] Raw declarations use C types (`CInt`, `CString`, `Ptr<T>`) and cannot be `pub`. The package that declares them must wrap them in a safe API using `Result` and ordinary Quince types. r[ffi.resource-not-pub] A Resource\<T> whose T is a foreign type can't appear in a pub signature either; hold it in a field of a struct, as Db does.
 - r[ffi.type] `type name` inside a `foreign` block declares an opaque C type. r[ffi.cleanup] `@cleanup(fn, limit: dur)` above it names the C function that releases it and the cleanup time limit, 10 seconds when left out. r[ffi.cleanup-signature] The cleanup function must be declared in a foreign block of the same package and take exactly one parameter, Ptr\<T>. r[ffi.cleanup-return] It may return any C type, and res.close() returns that value; a wrong signature is a compile error on the @cleanup line.
-- r[res.adopt] `Resource.adopt(p)` turns a `Ptr<T>` into a `Resource<T>`, and works only for a type with `@cleanup`. r[res.ptr] `res.ptr()` lends the raw pointer for one call. r[res.ptr-arg-only] Like buf.ptr() and bytes.lend(), it may only be written as an argument of a foreign call; binding it to a name is a compile error. r[res.close] res.close() runs the cleanup now and returns the cleanup function's result, res.is\_closed() tells whether cleanup has run, and res.keep(x) moves a Callback, CBuf or CString into the resource, which releases it right after the C cleanup runs, so the end of the local scope no longer releases it.
+- r[cresource.adopt] `Resource.adopt(p)` turns a `Ptr<T>` into a `Resource<T>`, and works only for a type with `@cleanup`. r[cresource.ptr] `res.ptr()` lends the raw pointer for one call. r[cresource.ptr-arg-only] Like buf.ptr() and bytes.lend(), it may only be written as an argument of a foreign call; binding it to a name is a compile error. r[cresource.close] res.close() runs the cleanup now and returns the cleanup function's result, res.is\_closed() tells whether cleanup has run, and res.keep(x) moves a Callback, CBuf or CString into the resource, which releases it right after the C cleanup runs, so the end of the local scope no longer releases it.
 - r[cbuf.def] `CBuf<T>` is C-allocated memory with identity (a reference type, section 3), and is the only way to pass an out-parameter, so Quince memory never escapes to C. r[cbuf.api] CBuf.new\<T>() holds one value and CBuf.alloc\<T>(n) an array; buf.get(), buf.set(v) and buf.ptr() reach it, and CBuf.from\_bytes(b) and buf.to\_bytes(n) copy UInt8 buffers. r[cstring.convert] `CString.try_from(s)` converts text for C (`None` when it holds a NUL byte), and `cstr.to_string()` converts it back as a `Result`, since C strings may not be UTF-8.
 - r[ffi.lend] `bytes.lend()` lends a `Bytes` value in place for one call, as a `ConstPtr<UInt8>`. r[ffi.lend-const] `quince` `bind` emits `ConstPtr<T>` for a `const T*` parameter, and only such a parameter accepts a lent pointer, so C can't write into Quince memory. r[ffi.no-string-lend] A `String` is never lent, since C strings need a trailing NUL byte; `CString.try_from` copies it.
 - r[ffi.ownership] A foreign function that returns a `CString` must say who owns it. r[ffi.borrowed] `@borrowed` means C keeps it: Quince never frees it, and it must be converted with `to_string()` before the next call into that library. r[ffi.owned] `@owned(free_fn)` means Quince frees it with `free_fn` when it is dropped. r[ffi.ownership-required] Leaving both out is a compile error, and `quince` `bind` leaves them out because a header can't say. r[ffi.ownership-ptr] The same rule covers a returned `Ptr<T>` whose `T` has no `@cleanup`. r[cstring.owned] A `CString` made by `CString.try_from` is always owned by Quince.
@@ -1214,7 +1214,7 @@ let changes = ffi.with_resource(Resource.adopt(out.get()), fn(db) {
 - r[cmem.scope-release] A value that owns C memory (a `Resource`, `CBuf`, `Callback` or `CString`, or a value holding one) is never released before the end of the scope that holds it, even after its last use, because C may still hold its pointer. r[cmem.drop-order] On every exit (normal, `?`, panic, cancellation), locals are released in reverse order of creation, and the fields of a dropped struct in declaration order. r[cmem.keep] To tie a callback to the handle C stores it in, use `res.keep(cb)`. The same is how to hand C memory it keeps, such as a string it stores: a `CString` passed directly is lent for that call only, so keep it on the resource with `res.keep(cstr)`.
 - r[cmem.cleanup-limit] Cleanup is shielded from cancellation and has a time limit, 10 seconds unless the resource's declaration sets another. Past the limit the cleanup is cancelled, and the C-level release still runs (section 9, Cancellation).
 
-**Sharing resources between tasks.** r[res.crossing] A `Resource<T>` can't cross a task boundary unless its foreign type is marked `@shareable`, a promise that the C handle is safe to use from several threads. r[pool.def] For the usual case, a handle that isn't, the standard library's `Pool<T, Err, uses E>` holds up to `max` of them and hands each one to a single task at a time:
+**Sharing resources between tasks.** r[cresource.crossing] A `Resource<T>` can't cross a task boundary unless its foreign type is marked `@shareable`, a promise that the C handle is safe to use from several threads. r[pool.def] For the usual case, a handle that isn't, the standard library's `Pool<T, Err, uses E>` holds up to `max` of them and hands each one to a single task at a time:
 
 ```
 let pool = Pool.new(20, healthy: fn(conn) { conn.is_open() }, fn() { pg.connect(url) })
@@ -1226,10 +1226,10 @@ let rows = pool.checkout(fn(conn) { conn.query("SELECT 1", params: []) })??
 
 ### Callbacks
 
-r[cb.def] C code may call back into Quince functions passed to it as a Callback\<F>: a resource that keeps the closure alive until it is released, so C can store it beyond one call, as event loops and sqlite hooks do. r[cb.effects] `F` carries the callback's effects like any function type, as in `Callback<fn(CInt, CInt) uses State>`, and they must be among those declared on its `foreign` block. r[cb.no-poly] So a `pub` wrapper fixes a callback's effects, and can't take an effect-polymorphic callback. r[cb.handlers] A callback runs with the effect handlers that were in effect at the call that registered it, so a test that registers one under a fake gets the fake on every later call. r[cb.param] A foreign parameter typed `Callback<fn(...)>` receives a C function pointer plus its context, which `quince` `bind` sets up from the header. r[cb.release] `cb.unregister()` or the end of its scope releases it, unless `res.keep(cb)` has moved it into a resource, whose cleanup then releases it.
+r[callback.def] C code may call back into Quince functions passed to it as a Callback\<F>: a resource that keeps the closure alive until it is released, so C can store it beyond one call, as event loops and sqlite hooks do. r[callback.effects] `F` carries the callback's effects like any function type, as in `Callback<fn(CInt, CInt) uses State>`, and they must be among those declared on its `foreign` block. r[callback.no-poly] So a `pub` wrapper fixes a callback's effects, and can't take an effect-polymorphic callback. r[callback.handlers] A callback runs with the effect handlers that were in effect at the call that registered it, so a test that registers one under a fake gets the fake on every later call. r[callback.param] A foreign parameter typed `Callback<fn(...)>` receives a C function pointer plus its context, which `quince` `bind` sets up from the header. r[callback.release] `cb.unregister()` or the end of its scope releases it, unless `res.keep(cb)` has moved it into a resource, whose cleanup then releases it.
 
-- r[cb.new] `Callback.new(f)` is for C that may call at any time, from any thread. r[cb.new-crossing] The closure's captures must be able to cross a task boundary, as for `spawn`, and each call runs as a short task in the scope that registered it. r[cb.new-threads] The runtime registers each calling thread on first use.
-- r[cb.local] `Callback.local(f)` is for C that calls back only during a call the task itself is making, such as progress reports, sort comparators and row callbacks. r[cb.local-ref] The closure may capture a `Ref`, and it runs as part of the task that created it. r[cb.local-abort] A call from anywhere else aborts the process with a message naming the callback.
+- r[callback.new] `Callback.new(f)` is for C that may call at any time, from any thread. r[callback.new-crossing] The closure's captures must be able to cross a task boundary, as for `spawn`, and each call runs as a short task in the scope that registered it. r[callback.new-threads] The runtime registers each calling thread on first use.
+- r[callback.local] `Callback.local(f)` is for C that calls back only during a call the task itself is making, such as progress reports, sort comparators and row callbacks. r[callback.local-ref] The closure may capture a `Ref`, and it runs as part of the task that created it. r[callback.local-abort] A call from anywhere else aborts the process with a message naming the callback.
 
 ```
 // C: int minz_stream_set_progress(minz_stream *stream, minz_progress_fn on_progress, void *user);

@@ -1,10 +1,16 @@
 //! Rule tags: `r[<id>]`, written directly before the sentence or sentences a rule covers.
 //!
 //! A tag is `r[` at the start of a line or after whitespace, outside code blocks and inline
-//! code spans, closed by `]` and followed by one space. Tags never appear in headings.
+//! code spans, closed by `]` and followed by one space. Tags never appear in headings. Text
+//! shaped like a tag anywhere else is an error, so a misplaced tag can't silently drop out of
+//! coverage. A backtick run with no closing run on the same line is literal text, as in
+//! CommonMark.
 
 use crate::SpecError;
 use std::collections::{HashMap, HashSet};
+
+/// The topic reserved for IDs derived from grammar productions, such as `grammar.fn_decl`.
+pub const GRAMMAR_TOPIC: &str = "grammar";
 
 /// One tagged rule in the spec.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -16,11 +22,28 @@ pub struct Rule {
     pub section: String,
 }
 
+/// The topics listed in `spec/rule-topics.txt`, each with its 1-based line in that file.
+pub type Topics = HashMap<String, usize>;
+
 /// An ID is 2 to 4 dot-separated segments, each lowercase letters and digits joined by
 /// single hyphens: `bind.shadow.same-scope`.
 pub fn is_valid_id(id: &str) -> bool {
     let segments: Vec<&str> = id.split('.').collect();
     (2..=4).contains(&segments.len()) && segments.iter().all(|s| is_valid_segment(s))
+}
+
+/// `grammar.<production>`, where the production name is a grammar identifier such as
+/// `fn_decl`.
+pub fn is_grammar_id(id: &str) -> bool {
+    id.strip_prefix("grammar.").is_some_and(|name| {
+        name.starts_with(|c: char| c.is_ascii_alphabetic())
+            && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
+    })
+}
+
+/// The first segment of an ID.
+pub fn topic(id: &str) -> &str {
+    id.split('.').next().unwrap_or(id)
 }
 
 fn is_valid_segment(segment: &str) -> bool {
@@ -32,31 +55,49 @@ fn is_valid_segment(segment: &str) -> bool {
     })
 }
 
-/// Parses every tag in the spec and checks format, placement and uniqueness. Returns every
-/// rule, or every problem found.
-pub fn check(spec: &str, retired: &HashSet<String>) -> Result<Vec<Rule>, Vec<SpecError>> {
+/// Parses every tag in the spec and checks format, placement, topics and uniqueness. Returns
+/// every rule, or every problem found.
+pub fn check(
+    spec: &str,
+    retired: &HashSet<String>,
+    topics: &Topics,
+) -> Result<Vec<Rule>, Vec<SpecError>> {
     let (rules, mut errors) = parse(spec);
     let mut first_line: HashMap<&str, usize> = HashMap::new();
     for rule in &rules {
-        if let Some(first) = first_line.get(rule.id.as_str()) {
+        let mut error = |message: String| {
             errors.push(SpecError {
                 line: rule.line,
-                message: format!(
-                    "duplicate rule ID `{}`; it is first used on line {first}",
-                    rule.id
-                ),
-            });
+                message,
+            })
+        };
+        if let Some(first) = first_line.get(rule.id.as_str()) {
+            error(format!(
+                "duplicate rule ID `{}`; it is first used on line {first}",
+                rule.id
+            ));
         } else {
             first_line.insert(&rule.id, rule.line);
         }
         if retired.contains(&rule.id) {
-            errors.push(SpecError {
-                line: rule.line,
-                message: format!(
-                    "rule ID `{}` is retired (spec/retired-rules.txt) and can't be reused; pick a new ID",
-                    rule.id
-                ),
-            });
+            error(format!(
+                "rule ID `{}` is retired (spec/retired-rules.txt) and can't be reused; pick a new ID",
+                rule.id
+            ));
+        }
+        let topic = topic(&rule.id);
+        if topic == GRAMMAR_TOPIC {
+            error(format!(
+                "rule ID `{}` uses the reserved topic `grammar`, which belongs to IDs derived \
+                 from grammar productions; pick another topic",
+                rule.id
+            ));
+        } else if !topics.contains_key(topic) {
+            error(format!(
+                "rule ID `{}` has the topic `{topic}`, which spec/rule-topics.txt doesn't list; \
+                 reuse a listed topic, or add this one there with the subject it covers",
+                rule.id
+            ));
         }
     }
     if errors.is_empty() {
@@ -67,29 +108,80 @@ pub fn check(spec: &str, retired: &HashSet<String>) -> Result<Vec<Rule>, Vec<Spe
     }
 }
 
+/// Listed topics that no rule uses, as errors on their lines in `spec/rule-topics.txt`.
+pub fn unused_topics(rules: &[Rule], topics: &Topics) -> Vec<SpecError> {
+    let used: HashSet<&str> = rules.iter().map(|rule| topic(&rule.id)).collect();
+    let mut errors: Vec<SpecError> = topics
+        .iter()
+        .filter(|(topic, _)| !used.contains(topic.as_str()))
+        .map(|(topic, &line)| SpecError {
+            line,
+            message: format!("topic `{topic}` is listed, but no rule tag uses it; remove it"),
+        })
+        .collect();
+    errors.sort_by_key(|e| e.line);
+    errors
+}
+
 /// Parses `spec/retired-rules.txt`: one ID per line; blank lines and `#` comments are ignored.
-pub fn parse_retired(text: &str) -> Result<HashSet<String>, Vec<SpecError>> {
+/// Grammar IDs such as `grammar.old_arg` are allowed. Returns the valid IDs and an error for
+/// each invalid line.
+pub fn parse_retired(text: &str) -> (HashSet<String>, Vec<SpecError>) {
     let mut ids = HashSet::new();
     let mut errors = Vec::new();
-    for (index, line) in text.lines().enumerate() {
-        let entry = line.trim();
-        if entry.is_empty() || entry.starts_with('#') {
-            continue;
-        }
-        if is_valid_id(entry) {
+    for (line, entry) in entries(text) {
+        if is_valid_id(entry) || is_grammar_id(entry) {
             ids.insert(entry.to_string());
         } else {
             errors.push(SpecError {
-                line: index + 1,
+                line,
                 message: format!("`{entry}` is not a valid rule ID"),
             });
         }
     }
-    if errors.is_empty() {
-        Ok(ids)
-    } else {
-        Err(errors)
+    (ids, errors)
+}
+
+/// Parses `spec/rule-topics.txt`: a topic and the subject it covers on each line; blank lines
+/// and `#` comments are ignored. Returns the valid topics and an error for each bad line.
+pub fn parse_topics(text: &str) -> (Topics, Vec<SpecError>) {
+    let mut topics = Topics::new();
+    let mut errors = Vec::new();
+    for (line, entry) in entries(text) {
+        let (topic, subject) = entry
+            .split_once(char::is_whitespace)
+            .map_or((entry, ""), |(topic, subject)| (topic, subject.trim()));
+        let problem = if !is_valid_segment(topic) {
+            Some(format!(
+                "`{topic}` is not a valid topic: use lowercase letters and digits joined by single hyphens"
+            ))
+        } else if topic == GRAMMAR_TOPIC {
+            Some("`grammar` is reserved for IDs derived from grammar productions".to_string())
+        } else if subject.is_empty() {
+            Some(format!(
+                "topic `{topic}` needs the subject it covers after it, such as `bind  Bindings`"
+            ))
+        } else if let Some(first) = topics.get(topic) {
+            Some(format!(
+                "topic `{topic}` is listed twice; it is first listed on line {first}"
+            ))
+        } else {
+            topics.insert(topic.to_string(), line);
+            None
+        };
+        if let Some(message) = problem {
+            errors.push(SpecError { line, message });
+        }
     }
+    (topics, errors)
+}
+
+/// The non-blank, non-comment lines of a list file, trimmed, with their 1-based line numbers.
+fn entries(text: &str) -> impl Iterator<Item = (usize, &str)> {
+    text.lines()
+        .enumerate()
+        .map(|(index, line)| (index + 1, line.trim()))
+        .filter(|(_, entry)| !entry.is_empty() && !entry.starts_with('#'))
 }
 
 /// The spec with every tag and the space after it removed.
@@ -106,7 +198,7 @@ pub fn strip(spec: &str) -> String {
         }
         let mut copied_to = 0;
         for tag in find_tags(chunk, true) {
-            if !tag.terminated || !is_valid_id(&tag.id) {
+            if tag.glued || !tag.terminated || !is_valid_id(&tag.id) {
                 continue;
             }
             out.push_str(&chunk[copied_to..tag.start]);
@@ -121,7 +213,8 @@ pub fn strip(spec: &str) -> String {
     out
 }
 
-/// Finds every tag and reports misplaced or malformed ones, without the uniqueness check.
+/// Finds every tag and reports misplaced or malformed ones, without the uniqueness and topic
+/// checks.
 pub fn parse(spec: &str) -> (Vec<Rule>, Vec<SpecError>) {
     let mut rules = Vec::new();
     let mut errors = Vec::new();
@@ -157,7 +250,13 @@ pub fn parse(spec: &str) -> (Vec<Rule>, Vec<SpecError>) {
         }
         let is_heading = trimmed.starts_with('#');
         for tag in find_tags(line, true) {
-            if !tag.terminated {
+            if tag.glued {
+                error(format!(
+                    "rule tag `r[{}]` must start a line or follow a space; move it out of any \
+                     markup or punctuation, directly before the sentence it covers",
+                    tag.id
+                ));
+            } else if !tag.terminated {
                 error("unterminated rule tag: `r[` has no closing `]`".to_string());
             } else if is_heading {
                 error(format!(
@@ -194,64 +293,114 @@ struct Tag {
     end: usize,
     id: String,
     terminated: bool,
+    /// Preceded by something other than whitespace, as in `(r[x.y]`. Only reported when the
+    /// text inside is a valid ID, so code-like prose such as `arr[i]` isn't flagged.
+    glued: bool,
 }
 
 /// Tag candidates on one line. With `skip_inline_code`, text inside backtick spans is ignored.
 fn find_tags(line: &str, skip_inline_code: bool) -> Vec<Tag> {
     let bytes = line.as_bytes();
+    let in_code = if skip_inline_code {
+        inline_code_mask(line)
+    } else {
+        vec![false; bytes.len()]
+    };
     let mut tags = Vec::new();
-    let mut open_backticks = 0;
     let mut i = 0;
     while i < bytes.len() {
-        if skip_inline_code && bytes[i] == b'`' {
-            let run = bytes[i..].iter().take_while(|&&b| b == b'`').count();
-            if open_backticks == 0 {
-                open_backticks = run;
-            } else if open_backticks == run {
-                open_backticks = 0;
-            }
-            i += run;
-            continue;
-        }
-        let starts_tag = open_backticks == 0
-            && bytes[i..].starts_with(b"r[")
-            && (i == 0 || bytes[i - 1].is_ascii_whitespace());
-        if !starts_tag {
+        if in_code[i] || !bytes[i..].starts_with(b"r[") {
             i += 1;
             continue;
         }
+        let glued = i > 0 && !bytes[i - 1].is_ascii_whitespace();
         let id_start = i + 2;
-        match line[id_start..].find(']') {
-            Some(offset) => {
-                let end = id_start + offset + 1;
-                tags.push(Tag {
-                    start: i,
-                    end,
-                    id: line[id_start..end - 1].to_string(),
-                    terminated: true,
-                });
-                i = end;
-            }
-            None => {
-                tags.push(Tag {
-                    start: i,
-                    end: line.len(),
-                    id: line[id_start..].to_string(),
-                    terminated: false,
-                });
-                i = line.len();
-            }
+        let tag = match line[id_start..].find(']') {
+            Some(offset) => Tag {
+                start: i,
+                end: id_start + offset + 1,
+                id: line[id_start..id_start + offset].to_string(),
+                terminated: true,
+                glued,
+            },
+            None => Tag {
+                start: i,
+                end: line.len(),
+                id: line[id_start..].to_string(),
+                terminated: false,
+                glued,
+            },
+        };
+        if glued && !(tag.terminated && is_valid_id(&tag.id)) {
+            i += 1;
+            continue;
         }
+        i = tag.end;
+        tags.push(tag);
     }
     tags
+}
+
+/// Marks the bytes inside inline code spans. A span runs from a backtick run to the next run
+/// of the same length; a run with no closing run on the line is literal text.
+fn inline_code_mask(line: &str) -> Vec<bool> {
+    let bytes = line.as_bytes();
+    let run_at = |at: usize| bytes[at..].iter().take_while(|&&b| b == b'`').count();
+    let mut mask = vec![false; bytes.len()];
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] != b'`' {
+            i += 1;
+            continue;
+        }
+        let run = run_at(i);
+        let mut j = i + run;
+        let mut close = None;
+        while j < bytes.len() {
+            if bytes[j] != b'`' {
+                j += 1;
+                continue;
+            }
+            let other = run_at(j);
+            if other == run {
+                close = Some(j);
+                break;
+            }
+            j += other;
+        }
+        match close {
+            Some(j) => {
+                mask[i..j + run].fill(true);
+                i = j + run;
+            }
+            None => i += run,
+        }
+    }
+    mask
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn topics(names: &[&str]) -> Topics {
+        names
+            .iter()
+            .enumerate()
+            .map(|(i, name)| (name.to_string(), i + 1))
+            .collect()
+    }
+
+    fn test_topics() -> Topics {
+        topics(&["bind", "lit", "type", "a", "ok"])
+    }
+
+    fn rules(spec: &str) -> Vec<Rule> {
+        check(spec, &HashSet::new(), &test_topics()).unwrap()
+    }
+
     fn messages(spec: &str) -> Vec<String> {
-        match check(spec, &HashSet::new()) {
+        match check(spec, &HashSet::new(), &test_topics()) {
             Ok(_) => Vec::new(),
             Err(errors) => errors.into_iter().map(|e| e.to_string()).collect(),
         }
@@ -281,39 +430,55 @@ mod tests {
         ] {
             assert!(!is_valid_id(bad), "{bad}");
         }
+        assert!(is_grammar_id("grammar.fn_decl"));
+        assert!(!is_grammar_id("grammar._x") && !is_grammar_id("grammar."));
     }
 
     #[test]
     fn finds_tags_with_their_sections() {
-        let spec = "## 2. Syntax\n\n- r[bind.let] `let` binds. r[bind.var] `var` too.\n\n## 3. Types\n\nr[ty.int] Int.\n";
-        let rules = check(spec, &HashSet::new()).unwrap();
-        let found: Vec<_> = rules
-            .iter()
-            .map(|r| (r.id.as_str(), r.line, r.section.as_str()))
+        let spec = "## 2. Syntax\n\n- r[bind.let] `let` binds. r[bind.var] `var` too.\n\n## 3. Types\n\nr[type.int] Int.\n";
+        let found: Vec<_> = rules(spec)
+            .into_iter()
+            .map(|r| (r.id, r.line, r.section))
             .collect();
-        assert_eq!(
-            found,
-            [
-                ("bind.let", 3, "2. Syntax"),
-                ("bind.var", 3, "2. Syntax"),
-                ("ty.int", 7, "3. Types"),
-            ]
-        );
+        let expected = [
+            ("bind.let", 3, "2. Syntax"),
+            ("bind.var", 3, "2. Syntax"),
+            ("type.int", 7, "3. Types"),
+        ]
+        .map(|(id, line, section)| (id.to_string(), line, section.to_string()));
+        assert_eq!(found, expected);
     }
 
     #[test]
     fn table_cell_tags() {
         let spec = "| Integer | `42` | r[lit.int.default] Default type `Int`. |\n";
-        assert_eq!(
-            check(spec, &HashSet::new()).unwrap()[0].id,
-            "lit.int.default"
-        );
+        assert_eq!(rules(spec)[0].id, "lit.int.default");
     }
 
     #[test]
     fn code_is_not_a_tag() {
-        let spec = "Index with `r[i]` or `xs[i]`.\n```\nlet v = r[0]\nxs[i] = v\n```\n";
-        assert_eq!(check(spec, &HashSet::new()).unwrap(), Vec::new());
+        let spec = "Index with `r[i]` or `xs[i]`, or arr[i].\n```\nlet v = r[0]\nxs[i] = v\n```\n";
+        assert_eq!(rules(spec), Vec::new());
+    }
+
+    #[test]
+    fn unclosed_backtick_is_literal() {
+        let spec = "Use ` here r[bind.let] x.\nA ``double` run r[bind.var] y.\n";
+        let ids: Vec<_> = rules(spec).into_iter().map(|r| r.id).collect();
+        assert_eq!(ids, ["bind.let", "bind.var"]);
+    }
+
+    #[test]
+    fn glued_tags_are_errors() {
+        let errors = messages("(r[bind.var] y)\n**r[bind.let]** z\n");
+        assert_eq!(errors.len(), 2, "{errors:?}");
+        assert!(
+            errors[0]
+                .starts_with("line 1: rule tag `r[bind.var]` must start a line or follow a space"),
+            "{errors:?}"
+        );
+        assert!(errors[1].starts_with("line 2: rule tag `r[bind.let]`"));
     }
 
     #[test]
@@ -363,18 +528,64 @@ mod tests {
 
     #[test]
     fn retired_ids() {
-        let retired = parse_retired("# retired\n\nbind.old\n").unwrap();
-        let errors = check("r[bind.old] a\n", &retired).unwrap_err();
+        let (retired, errors) = parse_retired("# retired\n\nbind.old\ngrammar.old_arg\n");
+        assert!(errors.is_empty(), "{errors:?}");
+        assert!(retired.contains("grammar.old_arg"));
+        let errors = check("r[bind.old] a\n", &retired, &test_topics()).unwrap_err();
         assert_eq!(errors[0].line, 1);
         assert!(errors[0].message.contains("is retired"));
-        let bad = parse_retired("ok.id\nNot An Id\n").unwrap_err();
+        let (ok, bad) = parse_retired("ok.id\nNot An Id\n");
+        assert!(ok.contains("ok.id"));
         assert_eq!(bad[0].line, 2);
     }
 
     #[test]
+    fn topics_must_be_listed() {
+        let errors = messages("r[types.nominal] a\nr[grammar.block] b\n");
+        assert_eq!(errors.len(), 2, "{errors:?}");
+        assert!(
+            errors[0].contains("topic `types`, which spec/rule-topics.txt doesn't list"),
+            "{errors:?}"
+        );
+        assert!(errors[1].contains("reserved topic `grammar`"), "{errors:?}");
+    }
+
+    #[test]
+    fn topic_file() {
+        let (listed, errors) = parse_topics(
+            "# topics\n\nbind  Bindings\nlit Literals\nBad_Topic x\nnone\ngrammar Grammar\nbind again\n",
+        );
+        assert_eq!(
+            listed,
+            Topics::from([("bind".to_string(), 3), ("lit".to_string(), 4)])
+        );
+        let lines: Vec<_> = errors.iter().map(|e| e.line).collect();
+        assert_eq!(lines, [5, 6, 7, 8], "{errors:?}");
+        assert!(errors[1].message.contains("needs the subject"));
+        assert!(
+            errors[3]
+                .message
+                .contains("listed twice; it is first listed on line 3")
+        );
+    }
+
+    #[test]
+    fn unused_topic() {
+        let found = rules("r[bind.let] a\n");
+        let errors = unused_topics(&found, &topics(&["bind", "lit"]));
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].line, 2);
+        assert!(
+            errors[0]
+                .message
+                .contains("`lit` is listed, but no rule tag uses it")
+        );
+    }
+
+    #[test]
     fn strip_removes_only_tags() {
-        let untagged = "## 2. Syntax\n\n- `let` binds. `var` too.\n| A | B |\n```\nxs[i]\n```\nEnd";
-        let tagged = "## 2. Syntax\n\n- r[bind.let] `let` binds. r[bind.var] `var` too.\n| A | r[lit.a] B |\n```\nxs[i]\n```\nEnd";
+        let untagged = "## 2. Syntax\n\n- `let` binds. `var` too.\n| A | B |\n```\nxs[i]\n```\n(r[bind.x] kept) End";
+        let tagged = "## 2. Syntax\n\n- r[bind.let] `let` binds. r[bind.var] `var` too.\n| A | r[lit.a] B |\n```\nxs[i]\n```\n(r[bind.x] kept) End";
         assert_eq!(strip(tagged), untagged);
         assert_eq!(strip(untagged), untagged);
     }
