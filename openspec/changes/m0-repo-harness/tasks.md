@@ -27,7 +27,7 @@ Each group is one layer of the M0 stack (design.md, decision 7) and ends with `c
 - [x] 3.3 Show David a tagged sample of one section and get approval (done before 3.4)
 - [x] 3.4 Tag every normative sentence in `spec/quince-spec.md`, verify `cargo xtask spec-rules --strip` equals spec v0.4 byte for byte, and add `spec/retired-rules.txt` (empty)
 - [x] 3.5 Wire `spec-rules` into `xtask ci` and verify `cargo xtask ci` passes
-- [x] 3.6 Review fixes: tags glued to punctuation are errors, an unclosed backtick is literal, `spec/rule-topics.txt` is checked, `grammar` is reserved, eight topics renamed, problems in all three files reported together. Verify with unit tests and an unchanged strip output
+- [x] 3.6 Review fixes: tags glued to punctuation are errors, an unclosed backtick is literal, `spec/rule-topics.txt` is checked, `grammar` is reserved, eight topics renamed, problems in all three files reported together, and indexing in code blocks (`counter[user.id]`) isn't mistaken for a tag. Verify with unit tests and an unchanged strip output
 
 ## 4. Grammar extraction (`m0/grammar`)
 

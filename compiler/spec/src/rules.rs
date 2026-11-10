@@ -236,7 +236,8 @@ pub fn parse(spec: &str) -> (Vec<Rule>, Vec<SpecError>) {
         if in_code_block {
             // Code such as `xs[i]` is not a tag; only a well-formed ID is reported here.
             for tag in find_tags(line, false) {
-                if tag.terminated && is_valid_id(&tag.id) {
+                // Indexing such as `counter[user.id]` is glued, so it isn't a tag either.
+                if !tag.glued && tag.terminated && is_valid_id(&tag.id) {
                     error(format!(
                         "rule tag `r[{}]` is inside a code block; tags go before prose, never in code",
                         tag.id
@@ -253,7 +254,8 @@ pub fn parse(spec: &str) -> (Vec<Rule>, Vec<SpecError>) {
             if tag.glued {
                 error(format!(
                     "rule tag `r[{}]` must start a line or follow a space; move it out of any \
-                     markup or punctuation, directly before the sentence it covers",
+                     markup or punctuation, directly before the sentence it covers (or, if this \
+                     is code, put it in backticks)",
                     tag.id
                 ));
             } else if !tag.terminated {
@@ -458,7 +460,7 @@ mod tests {
 
     #[test]
     fn code_is_not_a_tag() {
-        let spec = "Index with `r[i]` or `xs[i]`, or arr[i].\n```\nlet v = r[0]\nxs[i] = v\n```\n";
+        let spec = "Index with `r[i]` or `xs[i]`, or arr[i].\n```\nlet v = r[0]\nxs[i] = v\nlet n = counter[user.id]\nheader[key.name] = v\n```\n";
         assert_eq!(rules(spec), Vec::new());
     }
 

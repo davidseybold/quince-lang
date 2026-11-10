@@ -8,7 +8,7 @@
 alias       Type aliases (`type Name = T`)
 arg         Function arguments: labels, defaults, passing
 assign      Assignment statements
-attr        Attributes (`#[...]`)
+attr        Attributes (`@name`)
 auto        Automatically derived `Eq` and `Hash`
 background  Long-lived background tasks (fire and forget)
 bind        Bindings: `let`, `var`, shadowing
