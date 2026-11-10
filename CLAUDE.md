@@ -14,6 +14,7 @@ Quince is a statically typed, reference-counted, effect-tracked language for ser
 | `spec/std-api.md` | Standard library API: prelude methods, effect operations, every `std` package. |
 | `docs/repo-plan.md` | Repo layout, crate list, and why Rust. |
 | `docs/milestones.md` | M0 to M14 with exit criteria. Work in this order. |
+| `docs/design/` | One design doc per milestone chunk, with its task list. |
 | `AGENTS.md` | Build and check commands, and a map of the code. |
 
 ## Decisions already made (don't reopen without asking David)
@@ -29,8 +30,9 @@ Quince is a statically typed, reference-counted, effect-tracked language for ser
 ## How work is done
 
 - **The core loop is spec rule → conformance test → code.** For each rule ID you implement, first write `.qnc` conformance tests from the spec text alone, then implement until they pass. If you can't write a test for a rule, the rule is ambiguous: stop and ask.
-- **OpenSpec, kept light.** The language spec says what Quince means. `openspec/specs/` holds only implementation decisions the language spec doesn't cover (JSON diagnostics schema, CST design, pipeline, runtime internals, package formats), and never restates the language spec. Open one OpenSpec change per milestone chunk (for example "M1: lexer"), with a design and a task list kept current so the next session can resume from it. Bug fixes and small tasks don't need a change. Revisit after M1 whether OpenSpec is earning its keep.
+- **Design docs.** Write one design doc per milestone chunk (for example "M1: lexer") in `docs/design/<name>.md`: why, the decisions and their alternatives, risks, and a task list kept current so the next session can resume from it. Run the design-reviewer loop on it before building. Bug fixes and small tasks don't need one.
+- **Implementation decisions live next to their code.** What the language spec doesn't cover (JSON diagnostics, fixture format, CST design, pipeline, runtime internals, package formats) is documented in the README of the crate or folder that enforces it, and never restates the language spec. Checks and tests enforce what they can; review covers the rest. There is no separate implementation spec: OpenSpec was dropped on 2026-11-10.
 - **Don't edit `spec/` on your own.** If the spec is ambiguous, contradictory or missing something, stop and ask David, and propose wording. A change to the language edits the spec in the same PR as the code and tests.
 - Every spec rule gets a stable ID, and every conformance test cites one. Every error code has `explain` text and a test.
-- Before finishing any change, run `cargo xtask ci` (once M0 creates it) and keep it green. Never skip or delete a test to get green.
+- Before finishing any change, run `cargo xtask ci` and keep it green. Never skip or delete a test to get green.
 - The repo root has no `quince.toml`, because the spec makes a nested manifest a compile error. `.qnc` fixtures go in `testdata/` folders, which are never compiled.

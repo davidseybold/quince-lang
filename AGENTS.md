@@ -21,9 +21,13 @@ How to build and check this repo. `CLAUDE.md` holds the working rules and the de
 
 The toolchain is pinned in `rust-toolchain.toml`, and rustup installs it the first time you run `cargo` in the repo.
 
+`ci` runs `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `spec-rules`, `spec-grammar`, `diagnostics` and `conformance`, and exits non-zero if any step failed.
+
+GitHub Actions runs `cargo xtask ci` with a read-only token on every pull request, whatever its base branch (so each layer of a stack is checked), and on every push to `main`. `.gitattributes` turns off line-ending conversion, so the byte comparisons in the spec checks agree on every platform and fixtures can hold CRLF on purpose.
+
 ## Rule IDs
 
-Every normative sentence in the spec carries a tag such as `r[bind.shadow.same-scope]`, written directly before the sentences it covers. Conformance tests cite these IDs. The first segment names a topic, not a section, and must be listed in `spec/rule-topics.txt`: reuse a listed topic before adding one. An ID is never renamed or reused: when a rule's meaning changes, its old ID goes in `spec/retired-rules.txt` and the rule gets a new one. Grammar productions have implicit IDs, `grammar.<production>`, and the `grammar` topic is reserved for them.
+The full rules for tags, IDs and the grammar file are in `compiler/spec/README.md`. In short: every normative sentence in the spec carries a tag such as `r[bind.shadow.same-scope]`, written directly before the sentences it covers. Conformance tests cite these IDs. The first segment names a topic, not a section, and must be listed in `spec/rule-topics.txt`: reuse a listed topic before adding one. An ID is never renamed or reused: when a rule's meaning changes, its old ID goes in `spec/retired-rules.txt` and the rule gets a new one. Grammar productions have implicit IDs, `grammar.<production>`, and the `grammar` topic is reserved for them.
 
 A spec change that adds normative text tags it in the same PR. No check can tell a rule from prose, so review enforces this. A change to what the spec means also bumps its minor version (Draft v0.5 to v0.6) in the same PR. Tags and wording-only edits don't.
 
@@ -32,14 +36,13 @@ A spec change that adds normative text tags it in the same PR. No check can tell
 | Path | What it is |
 | --- | --- |
 | `spec/` | The language spec and std API. The source of truth for what Quince means. Don't edit it without David's approval. |
-| `openspec/` | Implementation specs (`specs/`) and units of work (`changes/`). |
-| `compiler/<name>/` | One crate per compiler stage, named `quince_<name>`. Each crate's `lib.rs` says what it holds. |
+| `compiler/<name>/` | One crate per compiler stage, named `quince_<name>`. Each crate's `lib.rs` says what it holds, and its `README.md`, when it has one, holds the formats and rules it enforces. |
 | `compiler/cli/` | The single `quince` binary. |
 | `compiler/spec/` | `quince_spec`: reads the spec text (rule tags, grammar appendices) for xtask and the conformance runner. |
 | `runtime/` | The runtime, built as a static library linked into every Quince binary. |
 | `std/` | The standard library in Quince (from M6). |
 | `tests/conformance/` | The conformance runner (`quince_conformance`); fixtures live in its `testdata/`. |
 | `xtask/` | `cargo xtask`: repo checks. Add a check as a `Step` in `xtask/src/ci.rs`. |
-| `docs/` | The repo plan and milestones. |
+| `docs/` | The repo plan and milestones. `docs/design/` holds one design doc per milestone chunk, with its task list. |
 
 Only `compiler/codegen-llvm` and `compiler/bind` may depend on LLVM.

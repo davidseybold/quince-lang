@@ -1,7 +1,7 @@
 //! Runs the `.qnc` conformance fixtures in `tests/conformance/testdata/` and reports spec
 //! coverage by rule ID.
 //!
-//! The fixture format is in `openspec/specs/conformance-tests/spec.md`.
+//! The fixture format and the coverage report are in `tests/conformance/testdata/README.md`.
 //! `cargo xtask conformance` drives this crate. The compiler plugs in through [`Backend`].
 
 pub mod coverage;

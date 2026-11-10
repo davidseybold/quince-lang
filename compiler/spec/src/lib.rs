@@ -1,6 +1,6 @@
 //! Reads the Quince language spec: rule IDs and the grammar appendices.
 //!
-//! The formats are defined in `openspec/specs/spec-rule-ids/spec.md`.
+//! The formats it checks are defined in this crate's `README.md`.
 
 pub mod grammar;
 pub mod rules;

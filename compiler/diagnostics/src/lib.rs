@@ -1,7 +1,7 @@
 //! Error-code registry, JSON diagnostic format, fixes and `explain` text for Quince.
 //!
 //! The JSON shape is spec section 8. What the spec leaves open (positions, edits, code format)
-//! is fixed in `openspec/specs/diagnostics/spec.md`.
+//! is fixed in this crate's `README.md`.
 
 mod registry;
 pub mod schema;

@@ -1,8 +1,24 @@
-# Design
+# M0: Repo and harness
+
+Written as the first OpenSpec change (2026-11-10) and built as PRs #2 to #7. OpenSpec was dropped the same day. The contracts this design set now live next to the code that enforces them: `compiler/spec/README.md` (rule IDs, grammar), `compiler/diagnostics/README.md`, `tests/conformance/testdata/README.md` and `AGENTS.md` (`cargo xtask ci`). Mentions of delta specs below refer to those.
+
+## Why
+
+Nothing can be built against the spec yet: there is no workspace, no single check command, no way to cite a spec rule, and no runner for conformance tests. M0 puts the harness in place, so every later milestone can follow the core loop (spec rule, then conformance test, then code) and show its spec coverage as a number.
+
+## Impact and approvals
+
+- **New top-level folders:** `compiler/` (including `compiler/spec`, a crate the repo plan doesn't list; see decision 1), `runtime/`, `std/` (placeholder), `tests/conformance/`, `xtask/`, `.github/workflows/`.
+- **`spec/quince-spec.md`** gains rule-ID tags, which change no wording. They went past David first as a sample, then as the full pass.
+- **Spec wording changes (approved by David):** section 8's edit form becomes `{ start, end, text }` with an optional `file`, and the header moves to Draft v0.5 (diagnostics layer).
+- **New `spec/grammar.ebnf`.**
+- **Toolchain:** Rust via rustup, pinned in `rust-toolchain.toml` (1.99.1).
+- **Dependencies (approved by David, 2026-11-10):** `serde` and `serde_json` in `quince_diagnostics` and the runner. Nothing else. The JSON Schema is validated by a test against a hand-written schema file, not by a schema crate.
+- **Delivery:** a `gh stack` of about six PRs, each under ~500 changed lines except the rule-ID pass on the spec (see decision 7).
 
 ## Context
 
-The repo holds only the spec (`spec/quince-spec.md`, Draft v0.4), the std API, the repo plan and the milestones. See proposal.md for why M0 comes first. Constraints that shape the design:
+The repo holds only the spec (`spec/quince-spec.md`, Draft v0.4), the std API, the repo plan and the milestones. See Why, above, for why M0 comes first. Constraints that shape the design:
 
 - `CLAUDE.md`: one command for all checks, small crates, and the core loop of spec rule, then conformance test, then code. Never edit `spec/` without David's approval.
 - The repo root can't hold a `quince.toml`, and `.qnc` fixtures live in `testdata/` folders, which are never compiled.

@@ -11,7 +11,7 @@ Updated 2026-11-10 against spec Draft v0.4. Nothing has been created yet.
 | Runtime language | Rust, built as a static library linked into every binary | Kept |
 | Self-hosting | Not before 1.0, maybe never | Kept |
 | Language spec | Stays prose with rule IDs, in `spec/` once it moves out of the doc | Kept |
-| Implementation specs and change process | OpenSpec, in `openspec/` | Added after v0.1 |
+| Implementation decisions and change process | Design docs in `docs/design/`; formats and rules in the README of the crate that enforces them | OpenSpec added after v0.1, dropped 2026-11-10 |
 | First build step | The parser, in `compiler/syntax` | New |
 
 ## Why Rust still fits v0.4
@@ -40,9 +40,8 @@ quince/
   AGENTS.md              build, test, bless; map of the repo
   spec/                  language spec (Markdown, one file per section, rule IDs)
     grammar.ebnf         the grammar appendices, extracted; the parser is tested against it
-  openspec/
-    specs/               cli, diagnostics, query, compiler-pipeline, runtime, pkg, bind, lsp
-    changes/             every unit of work; changes cite spec rule IDs
+  docs/
+    design/              one design doc per milestone chunk; its tasks cite spec rule IDs
   compiler/              cargo workspace, crates named quince_*
     syntax/              lexer, parser, lossless CST, formatter        <- start here
     types/ effects/      name resolution, type and effect checking, exhaustiveness
