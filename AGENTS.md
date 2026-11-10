@@ -17,6 +17,7 @@ How to build and check this repo. `CLAUDE.md` holds the working rules and the de
 | `cargo xtask spec-grammar` | Checks that `spec/grammar.ebnf` matches the spec's grammar appendices, that every name it uses is defined and every production is used, and that no production reuses a retired name. Errors give the spec line to fix. |
 | `cargo xtask spec-grammar --write` | Regenerates `spec/grammar.ebnf` from the spec. Run it after the spec's grammar changes. Only the file's header (its terminal list) is edited by hand. |
 | `cargo xtask diagnostics` | Checks that every registered diagnostic code has explain text, and every code that isn't retired has a conformance test. To add a code, see `compiler/diagnostics/src/registry.rs`. |
+| `cargo xtask conformance` | Runs the `.qnc` fixtures in `tests/conformance/testdata/` and writes spec coverage by rule ID to `target/conformance/coverage.json`. The fixture format is in that folder's README. |
 
 The toolchain is pinned in `rust-toolchain.toml`, and rustup installs it the first time you run `cargo` in the repo.
 
@@ -37,6 +38,7 @@ A spec change that adds normative text tags it in the same PR. No check can tell
 | `compiler/spec/` | `quince_spec`: reads the spec text (rule tags, grammar appendices) for xtask and the conformance runner. |
 | `runtime/` | The runtime, built as a static library linked into every Quince binary. |
 | `std/` | The standard library in Quince (from M6). |
+| `tests/conformance/` | The conformance runner (`quince_conformance`); fixtures live in its `testdata/`. |
 | `xtask/` | `cargo xtask`: repo checks. Add a check as a `Step` in `xtask/src/ci.rs`. |
 | `docs/` | The repo plan and milestones. |
 

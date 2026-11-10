@@ -36,6 +36,16 @@ name = "quince_codegen_llvm"
 version = "0.0.0"
 
 [[package]]
+name = "quince_conformance"
+version = "0.0.0"
+dependencies = [
+ "quince_diagnostics",
+ "quince_spec",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "quince_diagnostics"
 version = "0.0.0"
 dependencies = [
@@ -156,8 +166,10 @@ checksum = "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563"
 name = "xtask"
 version = "0.0.0"
 dependencies = [
+ "quince_conformance",
  "quince_diagnostics",
  "quince_spec",
+ "serde_json",
 ]
 
 [[package]]

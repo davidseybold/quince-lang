@@ -46,11 +46,11 @@ Each group is one layer of the M0 stack (design.md, decision 7) and ends with `c
 
 ## 6. Conformance runner and coverage (`m0/conformance`)
 
-- [ ] 6.1 Implement fixture discovery and header parsing (`rule`, `mode`, `exit`), with self-tests for the missing-citation and unknown-rule failures
-- [ ] 6.2 Implement `//~` and `//~^` expectation matching against a `Backend`, with self-tests using a fake backend for matched, unexpected and caret cases
-- [ ] 6.3 Make a missing backend fail loudly, and verify with a self-test
-- [ ] 6.4 Implement the rule-ID loader (spec tags plus `grammar.*`) and the coverage report (JSON plus per-section summary), and verify a failing fixture doesn't count as coverage
-- [ ] 6.5 Wire `conformance` into `xtask ci` and verify the M0 exit: CI is green on the empty suite, and `target/conformance/coverage.json` lists every rule ID as uncovered
+- [x] 6.1 Implement fixture discovery and header parsing (`rule`, `mode`, `exit`), with self-tests for the missing-citation and unknown-rule failures
+- [x] 6.2 Implement `//~` and `//~^` expectation matching against a `Backend`, with self-tests using a fake backend for matched, unexpected and caret cases
+- [x] 6.3 Make a missing backend fail loudly, and verify with a self-test
+- [x] 6.4 Implement the rule-ID loader (spec tags plus `grammar.*`) and the coverage report (JSON plus per-section summary), and verify a failing fixture doesn't count as coverage
+- [x] 6.5 Wire `conformance` into `xtask ci` and verify the M0 exit: CI is green on the empty suite, and `target/conformance/coverage.json` lists every rule ID as uncovered
 
 ## Workflow follow-up
 

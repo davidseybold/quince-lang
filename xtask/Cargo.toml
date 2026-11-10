@@ -7,7 +7,9 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+quince_conformance = { path = "../tests/conformance" }
 quince_diagnostics = { path = "../compiler/diagnostics" }
+serde_json = "1.0.154"
 quince_spec = { path = "../compiler/spec" }
 
 [lints]
