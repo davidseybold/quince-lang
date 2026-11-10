@@ -875,7 +875,7 @@ r[diag.json] With `--format json`, every diagnostic has a stable code, an exact 
     {
       "description": "add an arm for `Timeout`",
       "applicability": "needs-review",
-      "edits": [{ "at": [46, 5], "insert": "FetchError.Timeout(after:) => todo(\"handle timeout\"),\n" }]
+      "edits": [{ "start": [46, 5], "end": [46, 5], "text": "FetchError.Timeout(after:) => todo(\"handle timeout\"),\n" }]
     }
   ],
   "docs": "quince explain E0412"
@@ -883,6 +883,7 @@ r[diag.json] With `--format json`, every diagnostic has a stable code, an exact 
 ```
 
 - r[diag.applicability] `applicability` is `safe` (apply automatically), `needs-review`, or `placeholder` (inserts a `todo`).
+- r[diag.edits] An edit replaces the text from `start` up to `end` with `text`: when `start` equals `end` it inserts, and an empty `text` deletes.
 - r[diag.code-stable] Error codes are stable across editions; r[diag.explain] `quince` `explain <code>` prints a full explanation with examples.
 - r[diag.all-errors] The compiler reports all independent errors in one run, ordered so fixing the first rarely invalidates the rest.
 

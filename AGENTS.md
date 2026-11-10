@@ -16,6 +16,7 @@ How to build and check this repo. `CLAUDE.md` holds the working rules and the de
 | `cargo xtask spec-rules --strip` | Prints the spec with every tag removed, so you can diff the wording without the tags. |
 | `cargo xtask spec-grammar` | Checks that `spec/grammar.ebnf` matches the spec's grammar appendices, that every name it uses is defined and every production is used, and that no production reuses a retired name. Errors give the spec line to fix. |
 | `cargo xtask spec-grammar --write` | Regenerates `spec/grammar.ebnf` from the spec. Run it after the spec's grammar changes. Only the file's header (its terminal list) is edited by hand. |
+| `cargo xtask diagnostics` | Checks that every registered diagnostic code has explain text and a conformance test. To add a code, see `compiler/diagnostics/src/registry.rs`. |
 
 The toolchain is pinned in `rust-toolchain.toml`, and rustup installs it the first time you run `cargo` in the repo.
 

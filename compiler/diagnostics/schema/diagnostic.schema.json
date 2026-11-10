@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/davidseybold/quince-lang/compiler/diagnostics/schema/diagnostic.schema.json",
+  "title": "Quince diagnostic",
+  "description": "One diagnostic as printed by `quince ... --format json` (spec section 8). Positions are [line, column], both 1-based; the column counts Unicode scalar values and a span's end is exclusive.",
+  "type": "object",
+  "properties": {
+    "code": {
+      "description": "E and four digits for an error, W and four digits for a warning.",
+      "type": "string",
+      "pattern": "^[EW][0-9]{4}$"
+    },
+    "severity": { "enum": ["error", "warning"] },
+    "message": { "type": "string" },
+    "span": {
+      "type": "object",
+      "properties": {
+        "file": {
+          "description": "Relative to the project root, with / separators.",
+          "type": "string"
+        },
+        "start": { "$ref": "#/$defs/position" },
+        "end": { "$ref": "#/$defs/position" }
+      },
+      "required": ["file", "start", "end"],
+      "additionalProperties": false
+    },
+    "fixes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "description": { "type": "string" },
+          "applicability": { "enum": ["safe", "needs-review", "placeholder"] },
+          "edits": {
+            "type": "array",
+            "items": {
+              "description": "Replace the text from start up to end with text. start equal to end inserts; an empty text deletes.",
+              "type": "object",
+              "properties": {
+                "start": { "$ref": "#/$defs/position" },
+                "end": { "$ref": "#/$defs/position" },
+                "text": { "type": "string" }
+              },
+              "required": ["start", "end", "text"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["description", "applicability", "edits"],
+        "additionalProperties": false
+      }
+    },
+    "docs": {
+      "description": "Always `quince explain <code>`.",
+      "type": "string"
+    }
+  },
+  "required": ["code", "severity", "message", "span", "fixes", "docs"],
+  "additionalProperties": false,
+  "$defs": {
+    "position": {
+      "description": "[line, column], both 1-based.",
+      "type": "array",
+      "items": { "type": "integer", "minimum": 1 },
+      "minItems": 2,
+      "maxItems": 2
+    }
+  }
+}

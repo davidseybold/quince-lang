@@ -1,0 +1,53 @@
+//! Every diagnostic code the toolchain can emit.
+//!
+//! To add a code: write `compiler/diagnostics/explain/<CODE>.md`, add a row below that loads it
+//! with `include_str!`, and add a conformance fixture that expects the code with `//~ <CODE>`.
+//! `cargo xtask diagnostics` checks all three. A code is never reused: to retire one, set
+//! `retired: true` and keep its row and explain text.
+
+use crate::{Code, Severity};
+
+pub struct CodeInfo {
+    pub code: &'static str,
+    pub severity: Severity,
+    /// A few words, such as "non-exhaustive match".
+    pub title: &'static str,
+    /// The full text `quince explain` prints, with examples.
+    pub explain: &'static str,
+    pub retired: bool,
+}
+
+/// Empty until M1 emits the first diagnostic. `E0412` is reserved for a non-exhaustive match,
+/// so the example in spec section 8 stays true.
+pub const REGISTRY: &[CodeInfo] = &[];
+
+pub fn lookup(code: &Code) -> Option<&'static CodeInfo> {
+    REGISTRY.iter().find(|info| info.code == code.as_str())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn registry_rows_are_well_formed() {
+        let mut seen = HashSet::new();
+        for info in REGISTRY {
+            let code = Code::parse(info.code).unwrap();
+            assert!(seen.insert(info.code), "{} is registered twice", info.code);
+            assert_eq!(
+                code.default_severity(),
+                info.severity,
+                "{}: the letter must match the severity",
+                info.code
+            );
+            assert!(!info.title.trim().is_empty(), "{} has no title", info.code);
+            assert!(
+                !info.explain.trim().is_empty(),
+                "{} has no explain text",
+                info.code
+            );
+        }
+    }
+}
