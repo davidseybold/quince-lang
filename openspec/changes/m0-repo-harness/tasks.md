@@ -42,7 +42,7 @@ Each group is one layer of the M0 stack (design.md, decision 7) and ends with `c
 - [x] 5.2 Write `diagnostic.schema.json` and the schema-subset checker, and verify the spec example validates and an extra field is rejected
 - [x] 5.3 Add the empty code registry and the `explain/` folder convention, and document how to add a code in `AGENTS.md`
 - [x] 5.4 Implement `xtask diagnostics` (explain text present, a fixture expects each code, no orphan explain files), with unit tests for each failure, and wire it into `xtask ci`
-- [x] 5.5 Review fixes: add the approved `r[diag.edit-file]` rule and the optional edit `file`, bump the spec to Draft v0.5, count positions over CRLF and a BOM as specified, reject overlapping edits with `Fix::check`, add the promoted-warning, deletion and schema-pattern tests, and share serde versions through `[workspace.dependencies]`
+- [x] 5.5 Review fixes: add the approved `r[diag.edit-file]` rule and the optional edit `file`, bump the spec to Draft v0.5, count positions over CRLF, lone CR and a BOM as specified, reject overlapping edits and insertions at another edit's edge with `Fix::check`, add the promoted-warning, deletion and schema-pattern tests, and share serde versions through `[workspace.dependencies]`
 
 ## 6. Conformance runner and coverage (`m0/conformance`)
 

@@ -110,8 +110,8 @@ pub struct Span {
 }
 
 /// `[line, column]`, both 1-based. The column counts Unicode scalar values from the start of
-/// the line. A line ends at LF; a CR right before an LF belongs to the line ending, and a
-/// leading UTF-8 byte order mark isn't counted.
+/// the line. A line ends at LF, CR LF or a lone CR, as in LSP, and a leading UTF-8 byte order
+/// mark isn't counted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Position(pub u32, pub u32);
 
@@ -129,8 +129,15 @@ impl Position {
     pub fn at(source: &str, byte_offset: usize) -> Position {
         let offset = source.floor_char_boundary(byte_offset.min(source.len()));
         let before = &source[..offset];
-        let line_start = before.rfind('\n').map_or(0, |i| i + 1);
-        let line = before.matches('\n').count() + 1;
+        let bytes = source.as_bytes();
+        let (mut line, mut line_start) = (1, 0);
+        for (i, &b) in before.as_bytes().iter().enumerate() {
+            let ends_line = b == b'\n' || (b == b'\r' && bytes.get(i + 1) != Some(&b'\n'));
+            if ends_line {
+                line += 1;
+                line_start = i + 1;
+            }
+        }
         let mut text = &before[line_start..];
         if line == 1 {
             text = text.strip_prefix('\u{FEFF}').unwrap_or(text);
@@ -180,8 +187,9 @@ impl Fix {
             if file != next_file {
                 continue;
             }
-            let both_insert = a.start == a.end && b.start == b.end && a.start == b.start;
-            if a.end > b.start || both_insert {
+            // An insertion touching another edit could land on either side of its text.
+            let insertion_touches = a.end == b.start && (a.start == a.end || b.start == b.end);
+            if a.end > b.start || insertion_touches {
                 return Err(format!(
                     "edits in {file} at {:?}-{:?} and {:?}-{:?} overlap; every edit in a fix \
                      refers to the original text, so edits must not overlap",
@@ -315,6 +323,12 @@ mod tests {
         assert!(same_file.check("src/a.qnc").is_err());
         let two_inserts = fix(vec![edit((2, 1), (2, 1), None), edit((2, 1), (2, 1), None)]);
         assert!(two_inserts.check("src/a.qnc").is_err());
+        for at in [(3, 1), (3, 5)] {
+            let edge = fix(vec![edit((3, 1), (3, 5), None), edit(at, at, None)]);
+            assert!(edge.check("src/a.qnc").is_err(), "insertion at {at:?}");
+        }
+        let apart = fix(vec![edit((3, 1), (3, 5), None), edit((3, 6), (3, 6), None)]);
+        assert_eq!(apart.check("src/a.qnc"), Ok(()));
         let backwards = fix(vec![edit((2, 5), (2, 1), None)]);
         assert!(
             backwards
@@ -372,7 +386,10 @@ mod tests {
         assert_eq!(Position::at(crlf, 2), Position(1, 2));
         assert_eq!(Position::at(crlf, 3), Position(2, 1));
         assert_eq!(Position::at(crlf, 5), Position(2, 3));
-        assert_eq!(Position::at("a\rb", 2), Position(1, 3));
+        let lone_cr = "a\rbc";
+        assert_eq!(Position::at(lone_cr, 1), Position(1, 2));
+        assert_eq!(Position::at(lone_cr, 2), Position(2, 1));
+        assert_eq!(Position::at(lone_cr, 4), Position(2, 3));
         assert_eq!(Position::at("a\tb", 2), Position(1, 3));
         let bom = "\u{FEFF}ab\ncd";
         assert_eq!(Position::at(bom, 3), Position(1, 1));
