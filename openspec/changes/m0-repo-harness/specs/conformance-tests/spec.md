@@ -20,7 +20,7 @@ The runner SHALL treat every `*.qnc` file under `tests/conformance/testdata/` as
 ### Requirement: Fixture header
 A fixture's header SHALL be its leading run of `//` comment lines and blank lines. It ends at the first line that is neither.
 
-A header line of the form `// <word>:`, where `<word>` is one run of ASCII letters and hyphens, SHALL be a directive. The directives are `rule`, `mode` and `exit`, and any other word, in any letter case, SHALL be an error. Other header comments are free text.
+A header line of the form `// <word>:`, where `<word>` is one run of lowercase ASCII letters and hyphens, SHALL be a directive. The directives are `rule`, `mode` and `exit`, and any other lowercase word SHALL be an error. A case variant of a directive, such as `// Mode:`, SHALL be an error too. Other header comments, including `// Note: ...`, are free text.
 
 #### Scenario: Blank line inside the header
 - **WHEN** a fixture starts `// rule: bind.let`, a blank line, then `// mode: run`
@@ -30,8 +30,12 @@ A header line of the form `// <word>:`, where `<word>` is one run of ASCII lette
 - **WHEN** a header line is `// Mode: run` or `// rules: bind.let`
 - **THEN** the fixture fails and names the unknown directive
 
+#### Scenario: Free-text note
+- **WHEN** a header line is `// Note: shadowing is rejected`
+- **THEN** it is a free-text comment
+
 ### Requirement: Directives appear once, in the header
-After the header, a line that starts with `// rule:`, `// mode:` or `// exit:` SHALL be an error. A fixture SHALL NOT repeat `mode` or `exit`, and SHALL NOT cite the same rule twice.
+After the header, a comment line whose directive word is `rule`, `mode` or `exit` in any letter case SHALL be an error. A fixture SHALL NOT repeat `mode` or `exit`, and SHALL NOT cite the same rule twice.
 
 #### Scenario: Directive after code
 - **WHEN** a `// rule: c.d` line follows the first line of code
@@ -58,7 +62,7 @@ A fixture SHALL cite one or more rules with `// rule: <id>` in its header. Each 
 
 ### Requirement: Fixture modes
 A fixture header MAY set `// mode: <mode>`, and the default is `check`. An unknown mode SHALL be an error. The modes are an open set, and later changes add modes (`fmt` in M1; test, query and bind modes later).
-- `check` runs the whole checker as far as it exists.
+- `check` runs the whole checker as far as it exists (see Check fixtures).
 - `parse` runs only the parser (see Parse fixtures).
 - `run` builds and runs the file as a program (see Run fixtures).
 
@@ -67,6 +71,13 @@ A fixture header MAY set `// mode: <mode>`, and the default is `check`. An unkno
 #### Scenario: Unknown mode
 - **WHEN** a header sets `// mode: compile`
 - **THEN** the fixture fails and lists the known modes
+
+### Requirement: Check fixtures
+A `check` fixture SHALL be a valid program under the whole spec apart from its expected diagnostics, so it keeps passing as later stages arrive. M1 wires only the `parse` backend, and the `check` backend arrives with the checker.
+
+#### Scenario: Name-resolution fixture before the type checker
+- **WHEN** an M2 check fixture tests an unknown import and also adds a `String` to an `Int`
+- **THEN** the fixture is invalid as written, because it starts failing once M3's type checker reports the addition
 
 ### Requirement: Parse fixtures
 A `parse` fixture SHALL be judged only on the parser's diagnostics, even after later stages exist, so a syntax fixture keeps passing when name resolution or lints add diagnostics.
@@ -81,6 +92,10 @@ A `run` fixture's program SHALL build without errors. Warnings aren't judged in 
 #### Scenario: Run fixture with expected output
 - **WHEN** `hello.qnc` has `// mode: run` and `hello.stdout` holds `hi\n`
 - **THEN** the fixture passes only if the program exits with 0 and prints exactly `hi\n`
+
+#### Scenario: Run fixture that doesn't build
+- **WHEN** a run fixture's program has a type error
+- **THEN** the fixture fails and lists the build's error diagnostics
 
 #### Scenario: Run fixture without an output file
 - **WHEN** a run fixture has no `.stdout` file and its program prints `hi\n`
@@ -131,7 +146,8 @@ Each run SHALL write `target/conformance/coverage.json` and print a per-section 
 - **THEN** `bind.let` is reported as uncovered
 
 ### Requirement: Coverage report shape
-The report SHALL have the shape `{ "total", "covered", "sections": [{ "section", "total", "covered", "rules": [{ "id", "covered_by": [<fixture name>] }] }] }`:
+The report SHALL have the shape `{ "spec_version", "total", "covered", "sections": [{ "section", "total", "covered", "rules": [{ "id", "covered_by": [<fixture name>] }] }] }`:
+- `spec_version` is the spec's draft version, such as `"0.5"`, read from its header;
 - sections appear in spec order, and each is named by its `## ` heading;
 - grammar IDs come last, under the section `Grammar productions`;
 - an empty `covered_by` means the rule is uncovered.

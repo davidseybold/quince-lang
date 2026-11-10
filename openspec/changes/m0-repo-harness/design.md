@@ -115,12 +115,12 @@ The grammar keeps the spec's own notation and gets no conversion to ISO EBNF, so
 - **Code format (approved by David, 2026-11-10):** `E` plus four digits for errors and `W` plus four digits for warnings. A code is never reused, and a retired code keeps its row and explain text, marked retired. `--deny warnings` changes a warning's reported severity, not its code. `E0412` is reserved for a non-exhaustive match, so the spec's own example stays true.
 - **JSON types:** serde structs that serialize exactly to the shape `r[diag.json]` defines. The field set is closed: unknown fields are rejected, and a new field (such as secondary spans or notes) needs a spec change first. The language spec leaves the following open, so they are decided here:
   - **Positions (approved by David, 2026-11-10):** `[line, column]`, both 1-based. `column` counts Unicode scalar values, which is what an agent editing text counts, and a tab is one column. `end` is exclusive.
-  - **Lines:** a line ends at LF. A CR right before an LF is part of the line ending, and any other CR is an ordinary character. A leading UTF-8 BOM isn't counted. The end of input after a trailing newline is `[last + 1, 1]`. Which line endings the lexer accepts is section 2's business and M1's. This only fixes how positions count.
+  - **Lines:** a line ends at LF, CR LF, or a lone CR, the same line endings LSP and editors use, so line numbers agree across `quince check`, the language server and the agent's editor. A leading UTF-8 BOM isn't counted. The end of input after a trailing newline is `[last + 1, 1]`. Which line endings the lexer accepts is section 2's business and M1's. This only fixes how positions count.
   - `file`, in a span or an edit, is relative to the project root, with `/` separators.
   - `severity` is `"error"` or `"warning"`. `fixes` is always present, as `[]` when empty.
 - **Edits (approved by David, 2026-11-10):** every edit is `{ "start": [l, c], "end": [l, c], "text": "..." }` with an optional `"file"`, and replaces the text from `start` up to `end`. When `start` equals `end` it inserts, and an empty `text` deletes. Without `file`, an edit applies to the diagnostic's span file. An insertion at `[1, 1]` into a file that doesn't exist creates it. That covers the fixes the spec requires across files, such as `r[pkg.main-fix]` moving `main` into `cmd/<package>/` and `r[contract.pub-visibility]` adding an accessor where the struct is declared.
 
-  As in LSP's `TextEdit` and `WorkspaceEdit`, all positions in a fix refer to the text before any edit is applied, edits to one file never overlap, and two insertions never share a position. A fix is applied as if all at once. `Fix::check` rejects a fix that breaks these rules.
+  As in LSP's `TextEdit` and `WorkspaceEdit`, all positions in a fix refer to the text before any edit is applied, edits to one file never overlap, and an insertion never sits at another insertion's position or at either end of another edit's range (the replacement can carry the inserted text instead). So the order of texts is never ambiguous, and a fix is applied as if all at once. `Fix::check` rejects a fix that breaks these rules, and the conformance runner runs it on every fix a backend reports.
 
   The diagnostics layer edits spec section 8 to match:
   - the example's `edits` line becomes `[{ "start": [46, 5], "end": [46, 5], "text": "FetchError.Timeout(after:) => todo(\"handle timeout\"),\n" }]`;
@@ -140,14 +140,14 @@ The grammar keeps the spec's own notation and gets no conversion to ISO EBNF, so
   - A `.stdout` file with no `.qnc` file is an error, because it's usually left behind by a rename.
   - Any failure to read a `.stdout` file other than "not found" is an error, never "no output expected".
 - **Fixture header:** the leading run of `//` lines and blank lines. It ends at the first other line.
-  - A line `// <word>:`, where the word is ASCII letters and hyphens, is a directive.
-  - The directives are `rule`, `mode` and `exit`. Any other word, in any case (`// Mode:`, `// rules:`), is an error.
-  - Other comments are free text.
-  - A `// rule:`, `// mode:` or `// exit:` line after the header is an error that says to move it up.
+  - A line `// <word>:`, where the word is lowercase ASCII letters and hyphens, is a directive.
+  - The directives are `rule`, `mode` and `exit`. Any other lowercase word (`// rules:`) is an error, and so is a case variant of a directive (`// Mode:`).
+  - Other comments are free text, so `// Note: ...` and `// TODO: ...` are fine.
+  - A `rule`, `mode` or `exit` directive after the header, in any case, is an error that says to move it up.
   - `mode` and `exit` appear at most once, and a rule is cited at most once.
 - **Directives:**
   - `// rule: <id>`: one or more required. Each cites a spec rule or `grammar.*` ID.
-  - `// mode: check` (the default), `parse` or `run`. Modes are an open set: an unknown one is an error, and later changes add more (`fmt` in M1). `parse` runs only the parser even after later stages exist, so a syntax fixture doesn't start failing when name resolution or lints add diagnostics.
+  - `// mode: check` (the default), `parse` or `run`. Modes are an open set: an unknown one is an error, and later changes add more (`fmt` in M1). `parse` runs only the parser even after later stages exist, so a syntax fixture doesn't start failing when name resolution or lints add diagnostics. A `check` fixture must be a valid program under the whole spec apart from its expected diagnostics, so it doesn't start failing when the type checker arrives. M1 wires only the `parse` backend.
   - In `run` mode, `// exit: <n>` (default 0). Standard output must equal the sibling `<name>.stdout`, and a missing file means the program prints nothing. The program must build without errors. Warnings aren't judged in run mode. Standard error isn't compared until a later change adds `<name>.stderr`.
 - **Inline expectations** (in `check` and `parse` fixtures):
   - `//~ CODE` expects a diagnostic with that code whose span starts on this line.
@@ -158,7 +158,7 @@ The grammar keeps the spec's own notation and gets no conversion to ISO EBNF, so
 - **Compiler seam:** a `Backend` trait with `parse` and `check` (each returning diagnostics) and `run` (returning exit code and output). Each returns `None` when that backend isn't wired up yet. M0 ships no backend, so any fixture fails with "no backend: … not wired up yet". Tests are written before the code and land in the same PR that makes them pass, so `main` stays green.
 - **Coverage report:**
   - The runner reads every rule ID from the spec (tags plus grammar productions). A rule is covered when at least one passing fixture cites it.
-  - The runner writes `target/conformance/coverage.json`, whose shape is fixed in the delta spec, and prints the total and covered counts per spec section. Grammar IDs are grouped last under `Grammar productions`.
+  - The runner writes `target/conformance/coverage.json`, whose shape is fixed in the delta spec and includes the spec's draft version, and prints the total and covered counts per spec section. Grammar IDs are grouped last under `Grammar productions`.
   - Listing roughly 970 uncovered IDs in the terminal would bury the summary, so the JSON report is where agents find them.
   - A fixture that cites an unknown ID is an error, and so is one that cites a retired ID, with a message saying it's retired.
 - **Self-tests:** the runner's unit tests use a fake `Backend`. A small fixture tree under `tests/conformance/src/selftest/` (a nested fixture, a `.stdout` pair, an orphan `.stdout`) tests discovery. A test runs the rule loader on the real spec. So the matching logic is tested before any real compiler exists.
@@ -193,6 +193,8 @@ None. This is greenfield. Rollback means reverting the stack's PRs.
 - **Project-shaped fixtures** (a folder with `quince.toml` and several files, needed for section 7) get a format in M2's change. That change also decides:
   - which project a single-file fixture belongs to;
   - whether expectation matching must check `span.file`;
+  - whether `r[pkg.main-fix]` needs a delete-file edit, or may leave an empty file behind;
+  - whether a tool must refuse an edit that creates a file (an insertion at `[1, 1]`) when the file already exists, instead of prepending to it, and how a fix marks that intent.
   - how expectations are written for files that can't hold `//~`.
 - **Backend wiring (M1).** Should the runner call the compiler in-process through `Backend`, or drive `quince check --format json` as a subprocess? A subprocess would also test the CLI's JSON path, and keeps xtask from compiling the compiler (and, from M7, LLVM). Either way, xtask must not link LLVM (decision 2).
 - **Rules that `.qnc` fixtures can't cover** (about 60 today: `cli.*`, `query.*`, `perf.*`, `target.*`, `publish.*`, `semver.*`). Snapshot tests, perf runs and git fixtures need a way to report the rules they cite into the coverage report, or the 1.0 exit of "no uncovered rule IDs" can't be met honestly. Each milestone that adds such a test kind decides how.

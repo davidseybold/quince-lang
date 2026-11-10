@@ -22,7 +22,7 @@ A position SHALL be `[line, column]` with both values 1-based, and a span's `end
 - **THEN** its span is `"start": [3, 1], "end": [3, 5]`
 
 ### Requirement: Lines in positions
-- A line SHALL end at LF (U+000A). A CR (U+000D) directly before an LF belongs to the line ending, and any other CR counts as an ordinary character. Which line endings the lexer accepts is for section 2 and M1 to decide.
+- A line SHALL end at LF (U+000A), at CR LF, or at a CR not followed by LF, as in LSP. A CR LF is one line ending. Which line endings the lexer accepts is for section 2 and M1 to decide.
 - A UTF-8 byte order mark at the start of a file SHALL NOT be counted, so the character after it is `[1, 1]`.
 - The position after the last character SHALL be the end of input. After a trailing newline, it is `[last line + 1, 1]`.
 
@@ -30,10 +30,14 @@ A position SHALL be `[line, column]` with both values 1-based, and a span's `end
 - **WHEN** a file is `a\r\nbc` and a diagnostic covers `bc`
 - **THEN** its span is `"start": [2, 1], "end": [2, 3]`
 
+#### Scenario: Lone CR
+- **WHEN** a file is `a\rbc` and a diagnostic covers `bc`
+- **THEN** its span is `"start": [2, 1], "end": [2, 3]`
+
 ### Requirement: Edits
 An edit SHALL carry only the fields the language spec defines for it: `start`, `end` and `text`, plus the optional `file`. Within one fix:
 - every position SHALL refer to the text as it was before any of the fix's edits were applied;
-- no two edits to the same file SHALL overlap, and two insertions SHALL NOT share a position.
+- no two edits to the same file SHALL overlap, and an insertion SHALL NOT sit at the same position as another insertion or at either end of another edit's range, so the order of the texts is never ambiguous.
 
 A tool applies a fix's edits as if all at once.
 
@@ -52,6 +56,21 @@ A tool applies a fix's edits as if all at once.
 #### Scenario: Overlapping edits
 - **WHEN** a fix has edits covering `[3, 1]`–`[3, 9]` and `[3, 5]`–`[3, 12]` in the same file
 - **THEN** the fix is rejected as malformed
+
+#### Scenario: Insertion at the edge of a replacement
+- **WHEN** a fix replaces `[3, 1]`–`[3, 5]` and inserts at `[3, 5]` in the same file
+- **THEN** the fix is rejected as malformed, because the replacement can include the inserted text instead
+
+#### Scenario: Adjacent replacements
+- **WHEN** a fix replaces `[3, 1]`–`[3, 5]` and `[3, 5]`–`[3, 9]` in the same file
+- **THEN** the fix is accepted
+
+### Requirement: Reported fixes are checked
+The conformance runner SHALL check every fix of every diagnostic a backend reports against the Edits requirement, and a malformed fix SHALL fail the fixture.
+
+#### Scenario: Backend reports an overlapping fix
+- **WHEN** a backend reports a diagnostic whose fix has overlapping edits
+- **THEN** the fixture fails and names the diagnostic and the overlap
 
 ### Requirement: JSON shape
 A diagnostic SHALL carry exactly the fields `r[diag.json]` lists, and any other field SHALL be rejected. The field set stays closed until a spec change adds a field. In addition:

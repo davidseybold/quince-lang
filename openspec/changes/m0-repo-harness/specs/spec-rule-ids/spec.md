@@ -59,6 +59,13 @@ Each production in the spec's grammar appendices SHALL have the rule ID `grammar
 - **WHEN** `grammar.old_arg` is retired and a production named `old_arg` is added to the spec
 - **THEN** `cargo xtask spec-grammar` fails and says the ID is retired
 
+### Requirement: Spec versions
+A change to what the spec means SHALL bump the spec's minor draft version (for example v0.5 to v0.6) in the same pull request. A change that only adds tags or rewords without changing meaning SHALL NOT bump it.
+
+#### Scenario: A rule's meaning changes
+- **WHEN** a pull request changes what a rule requires
+- **THEN** the same pull request retires the old ID, tags the new text, and bumps the draft version
+
 ### Requirement: New spec text is tagged
 A change that adds normative text to the spec SHALL tag it in the same pull request. Review enforces this, since no check can tell normative text from prose.
 
