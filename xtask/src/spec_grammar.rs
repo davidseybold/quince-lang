@@ -58,6 +58,9 @@ pub fn write(root: &Path) -> Result<(), String> {
 }
 
 fn extract(root: &Path) -> Result<grammar::Extracted, String> {
-    grammar::extract(&read(root, SPEC_PATH)?)
-        .map_err(|e| format!("{SPEC_PATH}:{}: {}", e.line, e.message))
+    grammar::extract(&read(root, SPEC_PATH)?).map_err(|e| match e.line {
+        // Line 0 means the problem has no line, such as a missing heading.
+        0 => format!("{SPEC_PATH}: {}", e.message),
+        line => format!("{SPEC_PATH}:{line}: {}", e.message),
+    })
 }
