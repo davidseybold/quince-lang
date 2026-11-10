@@ -2,8 +2,9 @@
 //!
 //! The validator supports `type`, `properties`, `required`, `additionalProperties: false`,
 //! `items`, `minItems`, `maxItems`, `minimum`, `enum` and local `$ref`s into `$defs`. It skips
-//! `pattern`, which `Code` checks instead. Any other keyword is an error, so the schema can't
-//! start depending on a feature that nothing checks.
+//! `pattern`, which `Code` checks instead; a test checks that the schema's code pattern is the
+//! one `Code` enforces. Any other keyword is an error, so the schema can't start depending on a
+//! feature that nothing checks.
 
 use serde_json::Value;
 
@@ -41,17 +42,21 @@ fn check(root: &Value, schema: &Value, value: &Value, path: &str, errors: &mut V
     for (keyword, rule) in rules {
         match keyword.as_str() {
             "type" => {
-                let expected = rule.as_str().unwrap_or("");
-                let ok = match expected {
-                    "object" => value.is_object(),
-                    "array" => value.is_array(),
-                    "string" => value.is_string(),
-                    "integer" => value.is_i64() || value.is_u64(),
-                    "boolean" => value.is_boolean(),
-                    _ => false,
+                let ok = match rule.as_str() {
+                    Some("object") => Some(value.is_object()),
+                    Some("array") => Some(value.is_array()),
+                    Some("string") => Some(value.is_string()),
+                    Some("integer") => Some(value.is_i64() || value.is_u64()),
+                    Some("boolean") => Some(value.is_boolean()),
+                    _ => None,
                 };
-                if !ok {
-                    errors.push(format!("{path}: expected {expected}, found {value}"));
+                match ok {
+                    Some(true) => {}
+                    Some(false) => errors.push(format!(
+                        "{path}: expected {}, found {value}",
+                        rule.as_str().unwrap_or_default()
+                    )),
+                    None => errors.push(format!("{path}: unsupported type {rule}")),
                 }
             }
             "enum" => {
@@ -193,6 +198,30 @@ mod tests {
         value["span"]["end"] = serde_json::json!([47]);
         let errors = validate(&schema(), &value);
         assert_eq!(errors.len(), 3, "{errors:?}");
+    }
+
+    #[test]
+    fn edit_file_and_deletion_validate() {
+        let mut value = example();
+        value["fixes"][0]["edits"] = serde_json::json!([
+            { "start": [9, 14], "end": [9, 20], "text": "" },
+            { "file": "cmd/app/main.qnc", "start": [1, 1], "end": [1, 1], "text": "fn main() {}\n" }
+        ]);
+        assert_eq!(validate(&schema(), &value), Vec::<String>::new());
+    }
+
+    #[test]
+    fn code_pattern_matches_code_parse() {
+        assert_eq!(schema()["properties"]["code"]["pattern"], "^[EW][0-9]{4}$");
+    }
+
+    #[test]
+    fn unsupported_type_is_an_error() {
+        let schema = serde_json::json!({ "type": ["string", "null"] });
+        assert_eq!(
+            validate(&schema, &"ab".into()),
+            [r#"$: unsupported type ["string","null"]"#]
+        );
     }
 
     #[test]

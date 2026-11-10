@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/davidseybold/quince-lang/compiler/diagnostics/schema/diagnostic.schema.json",
+  "$id": "https://github.com/davidseybold/quince-lang/blob/main/compiler/diagnostics/schema/diagnostic.schema.json",
   "title": "Quince diagnostic",
   "description": "One diagnostic as printed by `quince ... --format json` (spec section 8). Positions are [line, column], both 1-based; the column counts Unicode scalar values and a span's end is exclusive.",
   "type": "object",
@@ -26,6 +26,7 @@
       "additionalProperties": false
     },
     "fixes": {
+      "description": "Always present; [] when there are none. Within one fix, positions refer to the text before any edit, and edits to one file never overlap.",
       "type": "array",
       "items": {
         "type": "object",
@@ -35,9 +36,13 @@
           "edits": {
             "type": "array",
             "items": {
-              "description": "Replace the text from start up to end with text. start equal to end inserts; an empty text deletes.",
+              "description": "Replace the text from start up to end with text. start equal to end inserts; an empty text deletes. Without file, the edit applies to the span's file.",
               "type": "object",
               "properties": {
+                "file": {
+                  "description": "Relative to the project root, with / separators. An edit at [1, 1] to a missing file creates it.",
+                  "type": "string"
+                },
                 "start": { "$ref": "#/$defs/position" },
                 "end": { "$ref": "#/$defs/position" },
                 "text": { "type": "string" }

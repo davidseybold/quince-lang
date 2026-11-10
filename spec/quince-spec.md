@@ -1,6 +1,6 @@
 # Quince Language Spec
 
-Nov 9, 2026 · @David · Draft v0.4
+Nov 10, 2026 · @David · Draft v0.5
 
 ## 1. Overview and design principles
 
@@ -884,6 +884,7 @@ r[diag.json] With `--format json`, every diagnostic has a stable code, an exact 
 
 - r[diag.applicability] `applicability` is `safe` (apply automatically), `needs-review`, or `placeholder` (inserts a `todo`).
 - r[diag.edits] An edit replaces the text from `start` up to `end` with `text`: when `start` equals `end` it inserts, and an empty `text` deletes.
+- r[diag.edit-file] An edit may name a `file`, a path relative to the project root; without one it applies to the diagnostic's span file. An edit at `[1, 1]` to a file that doesn't exist creates it.
 - r[diag.code-stable] Error codes are stable across editions; r[diag.explain] `quince` `explain <code>` prints a full explanation with examples.
 - r[diag.all-errors] The compiler reports all independent errors in one run, ordered so fixing the first rarely invalidates the rest.
 

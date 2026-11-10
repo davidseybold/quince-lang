@@ -110,7 +110,8 @@ pub struct Span {
 }
 
 /// `[line, column]`, both 1-based. The column counts Unicode scalar values from the start of
-/// the line.
+/// the line. A line ends at LF; a CR right before an LF belongs to the line ending, and a
+/// leading UTF-8 byte order mark isn't counted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Position(pub u32, pub u32);
 
@@ -126,11 +127,19 @@ impl Position {
     /// The position of a byte offset in `source`. An offset past the end gives the position
     /// just after the last character.
     pub fn at(source: &str, byte_offset: usize) -> Position {
-        let before = &source[..source.floor_char_boundary(byte_offset.min(source.len()))];
+        let offset = source.floor_char_boundary(byte_offset.min(source.len()));
+        let before = &source[..offset];
         let line_start = before.rfind('\n').map_or(0, |i| i + 1);
         let line = before.matches('\n').count() + 1;
-        let column = before[line_start..].chars().count() + 1;
-        Position(to_u32(line), to_u32(column))
+        let mut text = &before[line_start..];
+        if line == 1 {
+            text = text.strip_prefix('\u{FEFF}').unwrap_or(text);
+        }
+        // Between the CR and LF of a CRLF, the CR isn't a column.
+        if source[offset..].starts_with('\n') {
+            text = text.strip_suffix('\r').unwrap_or(text);
+        }
+        Position(to_u32(line), to_u32(text.chars().count() + 1))
     }
 }
 
@@ -146,6 +155,44 @@ pub struct Fix {
     pub edits: Vec<Edit>,
 }
 
+impl Fix {
+    /// Checks the rules for a fix's edits: each edit's `start` is not after its `end`, edits to
+    /// the same file never overlap, and no two insertions share a position. `span_file` is the
+    /// file of an edit that names none. Positions all refer to the text before any edit, so a
+    /// tool can apply the edits as if all at once.
+    pub fn check(&self, span_file: &str) -> Result<(), String> {
+        let mut edits: Vec<(&str, &Edit)> = self
+            .edits
+            .iter()
+            .map(|edit| (edit.file.as_deref().unwrap_or(span_file), edit))
+            .collect();
+        for (file, edit) in &edits {
+            if edit.start > edit.end {
+                return Err(format!(
+                    "edit in {file} starts at {:?}, after its end {:?}",
+                    edit.start, edit.end
+                ));
+            }
+        }
+        edits.sort_by_key(|(file, edit)| (*file, edit.start, edit.end));
+        for pair in edits.windows(2) {
+            let ((file, a), (next_file, b)) = (pair[0], pair[1]);
+            if file != next_file {
+                continue;
+            }
+            let both_insert = a.start == a.end && b.start == b.end && a.start == b.start;
+            if a.end > b.start || both_insert {
+                return Err(format!(
+                    "edits in {file} at {:?}-{:?} and {:?}-{:?} overlap; every edit in a fix \
+                     refers to the original text, so edits must not overlap",
+                    a.start, a.end, b.start, b.end
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
 /// `safe` fixes are applied automatically; `placeholder` fixes insert a `todo`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -156,10 +203,13 @@ pub enum Applicability {
 }
 
 /// Replaces the text from `start` up to `end` with `text`. `start == end` inserts, and an
-/// empty `text` deletes.
+/// empty `text` deletes. Without `file`, the edit applies to the diagnostic's span file; an
+/// edit at `[1, 1]` to a file that doesn't exist creates it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Edit {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file: Option<String>,
     pub start: Position,
     pub end: Position,
     pub text: String,
@@ -195,6 +245,83 @@ mod tests {
         assert_eq!((edit.start, edit.end), (Position(46, 5), Position(46, 5)));
         let original: serde_json::Value = serde_json::from_str(&text).unwrap();
         assert_eq!(serde_json::to_value(&diagnostic).unwrap(), original);
+    }
+
+    fn span() -> Span {
+        Span {
+            file: "src/a.qnc".into(),
+            start: Position(1, 1),
+            end: Position(1, 2),
+        }
+    }
+
+    fn edit(start: (u32, u32), end: (u32, u32), file: Option<&str>) -> Edit {
+        Edit {
+            file: file.map(str::to_string),
+            start: Position(start.0, start.1),
+            end: Position(end.0, end.1),
+            text: String::new(),
+        }
+    }
+
+    fn fix(edits: Vec<Edit>) -> Fix {
+        Fix {
+            description: "d".into(),
+            applicability: Applicability::Safe,
+            edits,
+        }
+    }
+
+    #[test]
+    fn promoted_warning_keeps_its_code() {
+        let d = Diagnostic::new(Code::parse("W0003").unwrap(), Severity::Error, "x", span());
+        let value = serde_json::to_value(&d).unwrap();
+        assert_eq!(value["code"], "W0003");
+        assert_eq!(value["severity"], "error");
+        assert_eq!(value["fixes"], serde_json::json!([]));
+    }
+
+    #[test]
+    fn deletion_and_file_edits_round_trip() {
+        let deletion = r#"{"start":[9,14],"end":[9,20],"text":""}"#;
+        let parsed: Edit = serde_json::from_str(deletion).unwrap();
+        assert_eq!(parsed, edit((9, 14), (9, 20), None));
+        assert_eq!(serde_json::to_string(&parsed).unwrap(), deletion);
+        let create = r#"{"file":"cmd/app/main.qnc","start":[1,1],"end":[1,1],"text":""}"#;
+        let parsed: Edit = serde_json::from_str(create).unwrap();
+        assert_eq!(parsed.file.as_deref(), Some("cmd/app/main.qnc"));
+        assert_eq!(serde_json::to_string(&parsed).unwrap(), create);
+    }
+
+    #[test]
+    fn fix_check() {
+        let ok = fix(vec![
+            edit((3, 1), (3, 5), None),
+            edit((3, 5), (3, 9), None),
+            edit((3, 1), (3, 9), Some("src/b.qnc")),
+            edit((1, 1), (1, 1), Some("cmd/app/main.qnc")),
+        ]);
+        assert_eq!(ok.check("src/a.qnc"), Ok(()));
+        let overlap = fix(vec![
+            edit((3, 5), (3, 12), None),
+            edit((3, 1), (3, 9), None),
+        ]);
+        let err = overlap.check("src/a.qnc").unwrap_err();
+        assert!(err.contains("overlap"), "{err}");
+        let same_file = fix(vec![
+            edit((3, 1), (3, 9), Some("src/a.qnc")),
+            edit((3, 5), (3, 12), None),
+        ]);
+        assert!(same_file.check("src/a.qnc").is_err());
+        let two_inserts = fix(vec![edit((2, 1), (2, 1), None), edit((2, 1), (2, 1), None)]);
+        assert!(two_inserts.check("src/a.qnc").is_err());
+        let backwards = fix(vec![edit((2, 5), (2, 1), None)]);
+        assert!(
+            backwards
+                .check("src/a.qnc")
+                .unwrap_err()
+                .contains("after its end")
+        );
     }
 
     #[test]
@@ -236,5 +363,20 @@ mod tests {
         assert_eq!(Position::at("café", 0), Position(1, 1));
         assert_eq!(Position::at("café", "café".len()), Position(1, 5));
         assert_eq!(Position::at("ab", 99), Position(1, 3));
+    }
+
+    #[test]
+    fn positions_over_line_endings_and_bom() {
+        let crlf = "a\r\nbc";
+        assert_eq!(Position::at(crlf, 1), Position(1, 2));
+        assert_eq!(Position::at(crlf, 2), Position(1, 2));
+        assert_eq!(Position::at(crlf, 3), Position(2, 1));
+        assert_eq!(Position::at(crlf, 5), Position(2, 3));
+        assert_eq!(Position::at("a\rb", 2), Position(1, 3));
+        assert_eq!(Position::at("a\tb", 2), Position(1, 3));
+        let bom = "\u{FEFF}ab\ncd";
+        assert_eq!(Position::at(bom, 3), Position(1, 1));
+        assert_eq!(Position::at(bom, 4), Position(1, 2));
+        assert_eq!(Position::at("a\n", 2), Position(2, 1));
     }
 }
