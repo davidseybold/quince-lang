@@ -73,13 +73,15 @@ The grammar keeps the spec's own notation and gets no conversion to ISO EBNF, so
 ### 5. Diagnostics crate (`quince_diagnostics`)
 
 - **Registry:** a Rust table with one entry per code: code, default severity, a short title, and its explain text, loaded with `include_str!` from `compiler/diagnostics/explain/<CODE>.md`. Adding a code means adding one table row and one Markdown file. It is empty in M0.
-- **Code format (pending David):** `E` plus four digits for errors and `W` plus four digits for warnings. A code is never reused, and a retired code keeps its row and explain text, marked retired. `--deny warnings` changes a warning's reported severity, not its code. `E0412` is reserved for a non-exhaustive match, so the spec's own example stays true.
+- **Code format (approved by David, 2026-11-10):** `E` plus four digits for errors and `W` plus four digits for warnings. A code is never reused, and a retired code keeps its row and explain text, marked retired. `--deny warnings` changes a warning's reported severity, not its code. `E0412` is reserved for a non-exhaustive match, so the spec's own example stays true.
 - **JSON types:** serde structs that serialize exactly to the shape in spec section 8: `code`, `severity`, `message`, `span { file, start, end }`, `fixes [{ description, applicability, edits }]` and `docs`. The language spec leaves these open, so the decisions are made here:
   - Positions are `[line, column]`, both 1-based. `column` counts Unicode scalar values, which is what an agent editing text counts. `end` is exclusive.
   - `file` is relative to the project root, with `/` separators.
   - `severity` is `"error"` or `"warning"`.
   - `docs` is always `"quince explain <code>"`.
-  - **Edits (pending David):** the spec shows only `{ "at", "insert" }`, and fixes also need to replace and delete text.
+  - **Edits (approved by David, 2026-11-10):** every edit is `{ "start": [l, c], "end": [l, c], "text": "..." }` and replaces the text from `start` up to `end`. When `start` equals `end` it inserts, and an empty `text` deletes. This is the same model as LSP `TextEdit`. The spec's section 8 example uses `{ "at", "insert" }`, so the diagnostics layer also edits the spec: the example's `edits` line becomes `[{ "start": [46, 5], "end": [46, 5], "text": "FetchError.Timeout(after:) => todo(\"handle timeout\"),\n" }]`, and one sentence is added after the `applicability` bullet: "An edit replaces the text from `start` up to `end` with `text`: when `start` equals `end` it inserts, and an empty `text` deletes."
+  - Positions (1-based, Unicode scalar columns, exclusive end) were approved by David on 2026-11-10.
+- **Spec layout:** the spec stays one file through M0, so the strip check stays a byte comparison. Splitting it into one file per section, as the repo plan says, is a separate later change (agreed with David, 2026-11-10).
 - **Schema:** `compiler/diagnostics/schema/diagnostic.schema.json` (JSON Schema 2020-12), written by hand. A test serializes sample diagnostics and checks them against the schema with a small checker for the subset of JSON Schema that the schema uses. That avoids a schema-validation dependency.
 - **Coverage rule (`xtask diagnostics`):** every registry code has a non-empty explain file and appears in at least one fixture's `//~` expectation. It also reports explain files with no registry row.
 

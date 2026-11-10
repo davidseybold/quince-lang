@@ -35,5 +35,5 @@ None. This is the first change.
 - **`spec/quince-spec.md`** gains rule-ID tags. No wording changes. Each one goes past David first, as a sample and then as the full pass.
 - **New `spec/grammar.ebnf`.**
 - **Toolchain:** Rust via rustup, pinned in `rust-toolchain.toml`. Rust is not installed on the dev machine yet.
-- **Dependencies (need David's approval):** `serde` and `serde_json` in `quince_diagnostics` and the runner. Nothing else. The JSON Schema is validated by a test against a hand-written schema file, not by a schema crate.
+- **Dependencies (approved by David, 2026-11-10):** `serde` and `serde_json` in `quince_diagnostics` and the runner. Nothing else. The JSON Schema is validated by a test against a hand-written schema file, not by a schema crate.
 - **Delivery:** a `gh stack` of about six PRs, each under ~500 changed lines except the rule-ID pass on the spec (see design.md).

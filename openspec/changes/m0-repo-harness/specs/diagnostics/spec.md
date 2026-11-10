@@ -20,6 +20,17 @@ A position SHALL be `[line, column]` with both values 1-based. `column` SHALL co
 - **WHEN** a diagnostic covers `café` starting at the first column of line 3
 - **THEN** its span is `"start": [3, 1], "end": [3, 5]`
 
+### Requirement: Edits
+Every edit in a fix SHALL be an object with exactly `start`, `end` and `text`, and SHALL mean: replace the text from `start` up to `end` with `text`. An insertion SHALL be written with `start` equal to `end`, and a deletion with empty `text`. No other edit form SHALL exist.
+
+#### Scenario: Insertion
+- **WHEN** a fix adds a match arm at line 46, column 5
+- **THEN** its edit is `{ "start": [46, 5], "end": [46, 5], "text": "..." }`
+
+#### Scenario: Deletion
+- **WHEN** a fix shortens `email: email` to `email:` on line 9, where the second `email` covers columns 15 to 20
+- **THEN** its edit is `{ "start": [9, 14], "end": [9, 20], "text": "" }`
+
 ### Requirement: JSON shape
 A diagnostic SHALL serialize with exactly the fields `code`, `severity`, `message`, `span`, `fixes` and `docs`, where `severity` is `"error"` or `"warning"`, each fix has `description`, `applicability` (`"safe"`, `"needs-review"` or `"placeholder"`) and `edits`, and `docs` is `"quince explain <code>"`. Output SHALL validate against `compiler/diagnostics/schema/diagnostic.schema.json`.
 
