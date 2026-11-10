@@ -73,7 +73,7 @@ A fixture header MAY set `// mode: <mode>`, and the default is `check`. An unkno
 - **THEN** the fixture fails and lists the known modes
 
 ### Requirement: Check fixtures
-A `check` fixture SHALL be a valid program under the whole spec apart from its expected diagnostics, so it keeps passing as later stages arrive. M1 wires only the `parse` backend, and the `check` backend arrives with the checker.
+A `check` fixture SHALL be a valid program under the whole spec apart from its expected diagnostics, so it keeps passing as later stages arrive. M1 wires only the `parse` backend, and the `check` backend arrives with the checker. No tool can tell an invalid check fixture until the later stages exist, so review enforces this.
 
 #### Scenario: Name-resolution fixture before the type checker
 - **WHEN** an M2 check fixture tests an unknown import and also adds a `String` to an `Int`

@@ -65,6 +65,13 @@ A tool applies a fix's edits as if all at once.
 - **WHEN** a fix replaces `[3, 1]`–`[3, 5]` and `[3, 5]`–`[3, 9]` in the same file
 - **THEN** the fix is accepted
 
+### Requirement: Each edit is well formed
+An edit's `start` SHALL NOT be after its `end`, and both positions SHALL exist in the original text, except `[1, 1]` in a file the edit creates.
+
+#### Scenario: Backwards edit
+- **WHEN** an edit's `start` is `[2, 5]` and its `end` is `[2, 1]`
+- **THEN** the fix is rejected as malformed
+
 ### Requirement: Reported fixes are checked
 The conformance runner SHALL check every fix of every diagnostic a backend reports against the Edits requirement, and a malformed fix SHALL fail the fixture.
 
