@@ -178,11 +178,13 @@ All 105 current topics are placed exactly once: 104 in the tables above, and `st
 | `r[prelude.effect-ops]`, `r[prelude.effect-ops-no-import]`, `r[prelude.state-no-ops]`: how built-in effect operations are named and handled | Effects |
 | **(approved by David, 2026-11-10)** The built-in effect declarations (`effect Console { … }`, `effect Fs { … }`, and the rest: about 75 lines). `r[handler.receiver]`, `r[effect.interface]` and `r[prelude.effect-ops]` say a handler implements each operation of an effect, so the fixed built-in effects' operation sets are part of the language. | Effects |
 | **(approved by David, 2026-11-10)** The declarations of `FailurePolicy` and `ScopeFailed` (needed by `r[background.policy]`, `r[background.result]` and `r[background.scope-failed]`), `TimedOut` (`r[timeout.result]`) and `ChannelClosed` (`r[chan.send]`) | Concurrency |
+| The declarations of `FsError` and `NetError`. `r[cap.violation]` returns `FsError.PermissionDenied` and `NetError.PermissionDenied`, and `r[test.default-fakes]` relies on `NetError.Refused`. The other types the effect declarations name (`Metadata`, `Outbound`, `Inbound`, `Listener`, `ProcessError`, `ProcessOutput`) are named only, so they move, a deliberate dependency like `list-index`'s. | Effects |
+| The untagged notes after the effect declarations: a manifest limit returns `FsError.PermissionDenied`, and which operations are cancellation points | Effects |
 | `r[prelude.broken-pipe]`: a write to closed standard output ends the program with code 0 | Program execution |
 
 **Moves to `std/API.md`,** with 33 Prelude tags removed and the text kept:
 - every method listing: numbers, `Bool`, `Char`, ranges, `String`, `Bytes`, `List`, `Iter`, `Map`, `Set`, `Option`, `Result`, `Duration`, `Timestamp`, `Url`, `Regex`;
-- the rest of `std.sync`, `with_timeout` and `with_resource`, and the types the effect operations use (`FsError`, `NetError` and the others);
+- the rest of `std.sync`, `with_timeout` and `with_resource`, and the other types the effect operations use (`Metadata`, `Outbound`, `Inbound`, `Listener`, `ProcessError`, `ProcessOutput`);
 - the Standard library index;
 - the rules `r[prelude.effvars]`, `std-imports`, `expect`, `timeout-resource-pkg`, `int-conversions`, `int-consts`, `float-consts`, `float32`, `bool`, `range-step`, `range-step-methods`, `string-no-len`, `string-immutable`, `list-no-inplace`, `no-for-each`, `iter-type`, `iter-lazy`, `iter-effects`, `map-from`, `try-from`, `map-update`, `time-display`, `regex-imports`, `parse-error`, `sync-imports`, `ref-self`, `no-unbounded`, `pool-open`, `pool-checkout-err`, `taskscope-no-methods`, `effect-types-import`, `conn-ref` and `inbound-listen`;
 - `r[std.no-unwrap]`, from §4, as the 34th tag.
@@ -202,7 +204,7 @@ All 105 current topics are placed exactly once: 104 in the tables above, and `st
 
 **Out to `docs/`.**
 - §1 Target domain and Core principles, and §12 Open questions, go to a new `docs/design-principles.md`.
-- The §10 Pipeline list goes to `docs/repo-plan.md`, which the project `CLAUDE.md` makes the home for pipeline decisions until the pipeline crate documents them.
+- The §10 Pipeline list goes to `docs/repo-plan.md` as a holding place. The project `CLAUDE.md` puts pipeline decisions in the README of the crate that enforces them, which takes this text over once that crate exists.
 - All of it is untagged. Tagged text that stays part of the language never leaves `spec/`: `r[build.llvm-only]` and its rationale go to Toolchain as they are.
 
 ### 3. The chapter manifest, `spec/chapters.txt`
@@ -293,7 +295,7 @@ lex        reference/lexical.md           Lexical structure
 
   Each move PR lists the flagged units and where they landed, and a reviewer checks them. `spec-compare` can't see context.
 - **Untagged text** (examples, code blocks, rationale) moves with the rule it illustrates.
-- **Code blocks.** A code block may split at a declaration boundary when its declarations belong to different chapters or files: the Prelude's std.sync block, for example. A declaration unit is a line at column 0 and every following line up to the next line at column 0. Each part keeps the fence.
+- **Code blocks.** A code block may split at a declaration boundary when its declarations belong to different chapters or files: the Prelude's std.sync block, for example. A declaration unit is a line at column 0 and every following line up to the next line at column 0, except that a line which only closes (`}`, `)` or `]`) belongs to the unit before it. Blank lines separate units and belong to none. A column-0 `//` comment line is its own unit and moves with the declaration after it. Each part keeps the fence.
 - **Tables** split by row when their rows belong to different chapters. Each part repeats the header row. Rows bound for a chapter that a later layer creates wait in `quince-spec.md`.
 - **Allowed additions:**
   - headings (through `headings.tsv`);
@@ -308,15 +310,15 @@ lex        reference/lexical.md           Lexical structure
 | --- | --- | --- |
 | Prelude intro (untagged) | "This appendix is the single source for each prelude signature; the standard library API doc cites these lines and adds cost, failure and example notes." | Removed |
 | Prelude, before `r[prelude.std-imports]` (untagged) | "This appendix also gives the signatures of the std types and functions that the spec's own sections and the prelude's signatures use, so the spec alone is enough to write code." | Removed: it states the superseded decision |
-| `r[prelude.only]` (§7) | "…Appendix: Prelude lists every one with its signature" | Reworded: "…[Prelude and special interfaces](prelude.md) lists every one" (the signatures of most types are now in `std/API.md`) |
+| `r[prelude.only]` (§7) | "…Appendix: Prelude lists every one with its signature" | Reworded: "…the [table of prelude names](#prelude-names) lists every one" (the signatures of most types are now in `std/API.md`) |
 | `r[prelude.tagged-values]` | "The tagged literals … build these values at compile time" (its antecedent, the Duration/Url block, moves) | Reworded: "build `Duration`, `Timestamp`, `Url` and `Regex` values at compile time" |
 | `r[prelude.state-no-ops]` | "the permission for the reference-type methods above" (those methods move) | Positional reference: "above" becomes a link to the std.sync section of `std/API.md` (`refs.tsv`) |
 | Effects, line 549 (untagged) | "…are listed in Appendix: Prelude" | Positional reference: becomes a link to the declarations in Effects |
 
 ### 7. Positional references
 
-- **Definition.** A positional reference is text that locates other text by position or name: "section N", "§N", "Appendix: …", "this appendix", "(Heading, below)", "see Heading above", or a bare "above" or "below" that points at another rule.
-- **Finding them.** A scan of `spec/` and `std-api.md` for these patterns builds the full list. Every hit is reviewed, and a bare "above" that still points at its neighbour stays. Each rewrite is a row in `refs.tsv`: file, rule ID or block, old phrase, new phrase, and **final link target**.
+- **Definition.** A positional reference is text that locates other text by position or name: "section N", "§N", "Appendix: …", "this appendix", "(Heading, below)", "see Heading above", "(see Heading)", or a bare "above" or "below" that points at another rule.
+- **Finding them.** A scan of `spec/` and `std-api.md` for these patterns builds the full list. Every hit is reviewed. A bare "above" that still points at its neighbour stays, but every parenthesized "(below)" or "(above)" is rewritten as a link, even a local one, so the leftover check has no exceptions. The scan includes `\(see [A-Z]`, which finds the five name-only references ("(see Ranges)", "(see Inference rules)", "(see Cancellation)" twice, "(see Iter)"). Each rewrite is a row in `refs.tsv`: file, rule ID or block, old phrase, new phrase, and **final link target**.
 - **Rewrites.**
   - **Outside code blocks,** the reference becomes a relative Markdown link, and the surrounding words are unchanged: `section 5` → `[Effects](effects.md)`.
   - **Inside code blocks,** it becomes the plain target name: `(section 11)` → `(Interop with C)`.
@@ -330,7 +332,7 @@ lex        reference/lexical.md           Lexical structure
   - Every relative link in a Markdown file under `spec/`, and every link from `std/API.md` into `spec/`, names an existing file.
   - A `#fragment` must name a heading in that file, under GitHub's anchor rules as github-slugger implements them, with unit tests on the spec's awkward headings.
   - External links aren't fetched.
-- **Leftover check.** From the reference layer on, `spec-links` also fails on text under `spec/` that matches `section [0-9]`, `§ ?[0-9]`, `[Aa]ppendix`, or a parenthesized "below" or "above".
+- **Leftover check.** From the reference layer on, `spec-links` also fails on text under `spec/` that matches `section [0-9]`, `§ ?[0-9]`, `[Aa]ppendix`, `\(see [A-Z]`, or a parenthesized "below" or "above".
 
 ### 8. Proving nothing changed: `cargo xtask spec-compare`
 
@@ -364,14 +366,17 @@ The segmenter that extracts the text a tag covers is new code (`rules::parse` on
 - **Info strings.** The `ebnf` info string is ignored.
 
 **It fails unless:**
-- every surviving rule has the same text before and after, under its mapped ID;
+- every surviving rule has the same text before and after, under its mapped ID, and sits in a manifest file;
+- every unit whose ID is `removed` sits only in `std/API.md`, with its tag stripped;
+- an untagged unit sits in `std/API.md` only if `removed.tsv` lists it as `to-std`;
+- the tag count is 894 before layer 5 and 860 from layer 5 on, and the production count is 80;
 - every old heading appears in `headings.tsv`, and every new heading is either a mapped target or listed as new;
 - the untagged units are the same multiset before and after, apart from:
   - headings;
   - repeated table header rows and code fences;
   - `README.md`;
   - the Introduction's link;
-  - the units in `removed.tsv`.
+  - the units in `removed.tsv` (removed outright, or `to-std`).
 
 **Output.**
 - each unmatched unit, with its location;
@@ -380,6 +385,8 @@ The segmenter that extracts the text a tag covers is new code (`rules::parse` on
 - the counts of units moved, removed, reworded and added.
 
 `spec-rules`, `spec-grammar` and `spec-links` run on every layer as part of `ci`.
+
+**Stripping.** `cargo xtask spec-rules --strip` takes an optional chapter file. With one, it prints that file with its tags removed; without one, it prints every manifest file in order, each after a line `<!-- spec/<path> -->`. `compiler/spec/README.md` says so from layer 2.
 
 ### 9. Coverage report
 
@@ -416,14 +423,14 @@ On a new worktree off `main`, once the OpenSpec removal (#10) is merged. Each la
    - the Prelude's library material and `r[std.no-unwrap]` are appended to it, with their tags removed;
    - `id-map.tsv` starts, with its 34 `removed` rows;
    - `std` is deleted from `rule-topics.txt`;
-   - `std/README.md`, the project `CLAUDE.md` table and `AGENTS.md` are updated. `AGENTS.md` says: for std signatures, read `std/API.md`; once `quince query` works, use it.
+   - `std/README.md`, the project `CLAUDE.md` table, `docs/milestones.md` and `docs/repo-plan.md` (their `spec/std-api.md` paths) and `AGENTS.md` are updated. `AGENTS.md` says: for std signatures, read `std/API.md`; once `quince query` works, use it.
 6. **`rename-ids`:**
    - the renames are added to `id-map.tsv`;
    - every chapter and construct goes in `chapters.txt`;
    - `rule-topics.txt` is deleted;
    - an empty `moved-rules.txt` is added, and the runner learns moved IDs;
    - the chapter checks are turned on;
-   - `compiler/diagnostics/README.md`'s `diag.*` citations and `AGENTS.md`'s ID example are updated.
+   - `compiler/spec/README.md` describes the new ID format, chapters and `moved-rules.txt`, and `AGENTS.md`'s ID example is updated. (`diag.*` IDs keep their names, since `diag` is its own chapter's prefix.)
 
    From here on, IDs are final, and M1 may cite them.
 7. **`references`:** every positional reference is rewritten (decision 7), with the reworded and removed text from decision 6 that isn't tied to a move. `refs.tsv` and `rewordings.tsv` are added, and the leftover check is turned on.
@@ -479,6 +486,33 @@ Nothing outside the repo consumes the spec, and no fixture cites an ID.
 
 None. David settled the chapter list, the tooling chapters, the ID scheme, moved rules, the Prelude split and its borderline rules, the rewordings, and the version (2026-11-10).
 
+One call applied by the doc's own keep rule, for David to confirm in review: the `FsError` and `NetError` declarations stay in Effects, because kept rules name their variants (decision 2).
+
 ## Tasks
 
-The layers in decision 11, in order, each a PR in one `gh stack`. Run the pr-reviewer loop on the stack before handing it to David.
+One `gh stack`, a PR per layer (decision 11). Tick each box as it lands on its branch. Run the pr-reviewer loop on the whole stack before handing it to David.
+
+- [ ] 1. `design`: this doc reviewed and approved
+- [ ] 2. `manifest`
+  - [ ] `chapters.txt` with `legacy`; manifest parsing in `quince_spec`
+  - [ ] `spec/README.md` with the header (test: within 10 lines); `ebnf` info strings; manual diff in the PR
+  - [ ] grammar assembled from `ebnf` blocks; errors with file and line
+  - [ ] rule parsing across files; `--strip` across files
+  - [ ] coverage by chapter; `spec_version` from the README
+  - [ ] pointers to `spec/quince-spec.md` moved to `spec/README.md`; `compiler/spec/README.md` and the testdata README updated
+- [ ] 3. `links`: `spec-links` with github-slugger anchors, its subcommand and `ci` step, tests on awkward headings
+- [ ] 4. `compare`: baseline committed; segmenter with planted-failure tests; production and declaration units; placement and count checks; `ci` step
+- [ ] 5. `move-library`
+  - [ ] `std/API.md` from `spec/std-api.md`, plus the Prelude's library material, tags stripped
+  - [ ] `id-map.tsv` with 34 `removed` rows; `removed.tsv` `to-std` rows; `std` out of `rule-topics.txt`
+  - [ ] `std/README.md`, `CLAUDE.md`, `AGENTS.md`, `docs/milestones.md`, `docs/repo-plan.md` paths
+- [ ] 6. `rename-ids`
+  - [ ] `id-map.tsv` renames, with `hand` rows (40 or fewer)
+  - [ ] `chapters.txt` constructs; `rule-topics.txt` deleted; chapter checks on
+  - [ ] `moved-rules.txt` and the runner's moved-ID error
+  - [ ] `compiler/spec/README.md`, `tests/conformance/testdata/README.md`, `AGENTS.md`
+- [ ] 7. `references`: scan; `refs.tsv` with final targets; `rewordings.tsv`; removals not tied to a move; leftover check on
+- [ ] 8. `move-core`: chapters 1 to 9; `headings.tsv` rows; flagged units listed in the PR
+- [ ] 9. `move-semantics`: chapters 10 to 17; flagged units listed
+- [ ] 10. `move-tooling`: chapters 18 to 20; `docs/design-principles.md`; Pipeline to `docs/repo-plan.md`; `quince-spec.md` and `legacy` deleted; final-target check; diagnostics example test path
+- [ ] 11. `cleanup`: `docs/repo-plan.md`, `docs/milestones.md` (chapters, v0.4, M9 notes); `spec-compare` and baseline deleted; status "done"
