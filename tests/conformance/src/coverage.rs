@@ -7,6 +7,8 @@ use std::fmt::Write as _;
 
 #[derive(Debug, Serialize)]
 pub struct Coverage {
+    /// The spec's draft version, such as `0.5`, so a report can be tied to what it measured.
+    pub spec_version: String,
     pub total: usize,
     pub covered: usize,
     /// In the order sections first appear in the spec, then grammar productions.
@@ -30,7 +32,12 @@ pub struct RuleCoverage {
 
 /// Builds the report. `section_order` lists sections in spec order; a failing fixture covers
 /// nothing.
-pub fn build(rules: &RuleSet, section_order: &[String], results: &[FixtureResult]) -> Coverage {
+pub fn build(
+    spec_version: &str,
+    rules: &RuleSet,
+    section_order: &[String],
+    results: &[FixtureResult],
+) -> Coverage {
     let mut covered_by: BTreeMap<&str, Vec<String>> = BTreeMap::new();
     for result in results.iter().filter(|r| r.passed()) {
         for id in &result.rules {
@@ -72,6 +79,7 @@ pub fn build(rules: &RuleSet, section_order: &[String], results: &[FixtureResult
     }
     sections.retain(|s| s.total > 0);
     Coverage {
+        spec_version: spec_version.to_string(),
         total: sections.iter().map(|s| s.total).sum(),
         covered: sections.iter().map(|s| s.covered).sum(),
         sections,
@@ -86,7 +94,10 @@ pub fn summary(coverage: &Coverage) -> String {
         .map(|s| s.section.len())
         .max()
         .unwrap_or(0);
-    let mut out = String::from("spec coverage (rules with a passing fixture)\n");
+    let mut out = format!(
+        "spec coverage for Draft v{} (rules with a passing fixture)\n",
+        coverage.spec_version
+    );
     for s in &coverage.sections {
         let _ = writeln!(
             out,
@@ -136,7 +147,7 @@ mod tests {
 
     #[test]
     fn empty_suite_lists_every_rule_uncovered() {
-        let c = build(&rules(), &order(), &[]);
+        let c = build("0.5", &rules(), &order(), &[]);
         assert_eq!((c.total, c.covered), (4, 0));
         let names: Vec<_> = c.sections.iter().map(|s| s.section.as_str()).collect();
         assert_eq!(names, ["2. Syntax", "3. Types", "Grammar productions"]);
@@ -151,6 +162,7 @@ mod tests {
     #[test]
     fn passing_fixture_covers_and_failing_does_not() {
         let c = build(
+            "0.5",
             &rules(),
             &order(),
             &[
@@ -165,7 +177,8 @@ mod tests {
 
     #[test]
     fn summary_has_a_line_per_section() {
-        let text = summary(&build(&rules(), &order(), &[]));
+        let text = summary(&build("0.5", &rules(), &order(), &[]));
+        assert!(text.starts_with("spec coverage for Draft v0.5"), "{text}");
         assert!(text.contains("2. Syntax"), "{text}");
         assert!(text.contains("total"), "{text}");
         assert_eq!(text.lines().count(), 5, "{text}");

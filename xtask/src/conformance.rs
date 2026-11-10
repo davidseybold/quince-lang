@@ -22,7 +22,7 @@ pub fn check(root: &Path) -> Result<(), String> {
         }
     }
 
-    let coverage = coverage::build(&rules.ids, &rules.sections, &results);
+    let coverage = coverage::build(&rules.spec_version, &rules.ids, &rules.sections, &results);
     let json = serde_json::to_string_pretty(&coverage).map_err(|e| e.to_string())?;
     let path = root.join(REPORT_PATH);
     if let Some(dir) = path.parent() {

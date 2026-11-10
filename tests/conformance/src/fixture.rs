@@ -1,10 +1,11 @@
 //! Parsing one `.qnc` fixture: its header directives and its inline expectations.
 //!
 //! The header is the leading run of `//` lines and blank lines. A header line of the form
-//! `// <word>:`, where the word is ASCII letters and hyphens, is a directive: `rule`, `mode` or
-//! `exit`. Any other word, in any case, is an error, so a typo such as `// rules:` or
-//! `// Mode:` never silently does nothing. Other header comments are free text. A directive
-//! after the header is an error too.
+//! `// <word>:`, where the word is lowercase ASCII letters and hyphens, is a directive: `rule`,
+//! `mode` or `exit`. Any other lowercase word is an error, and so is a case variant of a
+//! directive, so a typo such as `// rules:` or `// Mode:` never silently does nothing. Other
+//! header comments, such as `// Note: ...`, are free text. A directive after the header, in any
+//! case, is an error too.
 
 use quince_diagnostics::Code;
 
@@ -59,11 +60,16 @@ pub fn parse(name: &str, source: &str, stdout: Option<String>) -> Result<Fixture
             continue;
         };
         if !in_header {
-            if DIRECTIVES.contains(&key) {
+            if DIRECTIVES.contains(&key.to_ascii_lowercase().as_str()) {
                 errors.push(format!(
                     "line {line_no}: `// {key}:` comes after code; move it into the header at the top of the file"
                 ));
             }
+            continue;
+        }
+        let is_lowercase = key.bytes().all(|b| b.is_ascii_lowercase() || b == b'-');
+        if !is_lowercase && !DIRECTIVES.contains(&key.to_ascii_lowercase().as_str()) {
+            // Free text that happens to start with a capitalized word and a colon.
             continue;
         }
         match key {
@@ -243,6 +249,22 @@ mod tests {
         assert_eq!(
             errors,
             ["a fixture must cite at least one rule with `// rule: <id>` before any code"]
+        );
+    }
+
+    #[test]
+    fn free_text_notes_are_comments() {
+        let f = parse(
+            "x",
+            "// rule: a.b\n// Note: shadowing is rejected\n// TODO: more\nx\n",
+            None,
+        )
+        .unwrap();
+        assert_eq!(f.rules, ["a.b"]);
+        let errors = parse("x", "// rule: a.b\nfn f() {}\n// Mode: run\n", None).unwrap_err();
+        assert!(
+            errors[0].contains("`// Mode:` comes after code"),
+            "{errors:?}"
         );
     }
 

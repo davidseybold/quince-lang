@@ -63,6 +63,17 @@ pub struct Rules {
     /// Section names in spec order, ending with [`GRAMMAR_SECTION`].
     pub sections: Vec<String>,
     pub retired: HashSet<String>,
+    /// The draft version in the spec's header, such as `0.5`.
+    pub spec_version: String,
+}
+
+/// The version in the spec's `Draft vX.Y` header line.
+pub fn spec_version(spec: &str) -> Option<&str> {
+    spec.lines()
+        .take(10)
+        .find_map(|line| line.split("Draft v").nth(1))
+        .map(|rest| rest.split_whitespace().next().unwrap_or(rest))
+        .filter(|version| !version.is_empty())
 }
 
 /// Loads every rule ID: the spec's tags plus `grammar.<production>` for each production.
@@ -81,7 +92,14 @@ pub fn load_rules(root: &Path) -> Result<Rules, Vec<String>> {
     let (topics, topic_errors) = quince_spec::rules::parse_topics(&read(TOPICS_PATH)?);
     let mut errors = located(RETIRED_PATH, retired_errors);
     errors.extend(located(TOPICS_PATH, topic_errors));
-    let rules = match quince_spec::rules::check(&read(SPEC_PATH)?, &retired, &topics) {
+    let spec = read(SPEC_PATH)?;
+    let version = spec_version(&spec).map(str::to_string);
+    if version.is_none() {
+        errors.push(format!(
+            "{SPEC_PATH}: the header has no `Draft vX.Y` version line"
+        ));
+    }
+    let rules = match quince_spec::rules::check(&spec, &retired, &topics) {
         Ok(rules) => rules,
         Err(spec_errors) => {
             errors.extend(located(SPEC_PATH, spec_errors));
@@ -111,6 +129,7 @@ pub fn load_rules(root: &Path) -> Result<Rules, Vec<String>> {
         ids,
         sections,
         retired,
+        spec_version: version.expect("checked above"),
     })
 }
 
@@ -343,6 +362,18 @@ fn match_diagnostics(fixture: &Fixture, diagnostics: &[Diagnostic]) -> Vec<Strin
             failures.push(describe("unexpected", d));
         }
     }
+    for d in diagnostics {
+        for fix in &d.fixes {
+            if let Err(why) = fix.check(&d.span.file) {
+                failures.push(format!(
+                    "the fix \"{}\" on {} at line {} is malformed: {why}",
+                    fix.description,
+                    d.code,
+                    d.span.start.line()
+                ));
+            }
+        }
+    }
     failures
 }
 
@@ -428,6 +459,7 @@ mod tests {
             .collect(),
             sections: Vec::new(),
             retired: ["bind.old".to_string()].into(),
+            spec_version: "0.5".into(),
         }
     }
 
@@ -596,6 +628,62 @@ mod tests {
         );
     }
 
+    /// Reports one E0100 on line 2 with the given fix edits.
+    struct FixBackend(Vec<((u32, u32), (u32, u32))>);
+
+    impl Backend for FixBackend {
+        fn parse(&self, path: &str, source: &str) -> Option<Vec<Diagnostic>> {
+            self.check(path, source)
+        }
+
+        fn check(&self, path: &str, _source: &str) -> Option<Vec<Diagnostic>> {
+            let mut d = diagnostic(path, ("E0100", 2, 1));
+            d.fixes.push(quince_diagnostics::Fix {
+                description: "rename".into(),
+                applicability: quince_diagnostics::Applicability::Safe,
+                edits: self
+                    .0
+                    .iter()
+                    .map(|&(start, end)| quince_diagnostics::Edit {
+                        file: None,
+                        start: Position(start.0, start.1),
+                        end: Position(end.0, end.1),
+                        text: "y".into(),
+                    })
+                    .collect(),
+            });
+            Some(vec![d])
+        }
+
+        fn run(&self, _path: &str, _source: &str) -> Option<Result<RunOutput, Vec<Diagnostic>>> {
+            None
+        }
+    }
+
+    #[test]
+    fn reported_fixes_are_checked() {
+        let source = "// rule: bind.let-var
+let x = 1 //~ E0100
+";
+        let good = FixBackend(vec![((2, 5), (2, 6))]);
+        assert!(run(source, None, &good).passed());
+        let overlapping = FixBackend(vec![((2, 1), (2, 6)), ((2, 3), (2, 9))]);
+        let r = run(source, None, &overlapping);
+        assert_eq!(r.failures.len(), 1, "{:?}", r.failures);
+        assert!(
+            r.failures[0]
+                .starts_with("the fix \"rename\" on E0100 at line 2 is malformed: edits in"),
+            "{:?}",
+            r.failures
+        );
+    }
+
+    #[test]
+    fn reads_the_spec_version() {
+        assert_eq!(spec_version("# Spec\n\nNov 10 · Draft v0.5\n"), Some("0.5"));
+        assert_eq!(spec_version("# Spec\n"), None);
+    }
+
     #[test]
     fn malformed_fixture_fails() {
         let r = run("fn main() {}\n", None, &NoBackend);
@@ -662,5 +750,6 @@ mod tests {
             rules.sections.last().map(String::as_str),
             Some(GRAMMAR_SECTION)
         );
+        assert_eq!(rules.spec_version, "0.5");
     }
 }

@@ -13,7 +13,7 @@ fn f() {
 }
 ```
 
-Header lines of the form `// <word>:` are directives. The directives are `rule`, `mode` and `exit`, in lowercase. Any other word before a colon is an error, so write free-text comments without one (`// Shadowing in one scope is an error.`). A directive after the first line of code is an error too.
+Header lines of the form `// <word>:` with a lowercase word are directives. The directives are `rule`, `mode` and `exit`. Any other lowercase word before a colon is an error, and so is a case variant such as `// Mode:`. Other comments are free text, including `// Note: ...`. A directive after the first line of code is an error too.
 
 - `// rule: <id>` cites the spec rule the fixture tests. At least one is required, each ID once. Every ID must exist in `spec/quince-spec.md` (or be `grammar.<production>`) and not be retired.
 - `// mode: <mode>` is set at most once:
