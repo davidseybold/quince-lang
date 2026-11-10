@@ -28,7 +28,7 @@ Every edit in a fix SHALL be an object with exactly `start`, `end` and `text`, a
 - **THEN** its edit is `{ "start": [46, 5], "end": [46, 5], "text": "..." }`
 
 #### Scenario: Deletion
-- **WHEN** a fix shortens `email: email` to `email:` on line 9, where the second `email` covers columns 15 to 20
+- **WHEN** a fix shortens `email: email` to `email:` on line 9, where the space and the second `email` cover columns 14 to 19
 - **THEN** its edit is `{ "start": [9, 14], "end": [9, 20], "text": "" }`
 
 ### Requirement: JSON shape
