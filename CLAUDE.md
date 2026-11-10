@@ -10,7 +10,7 @@ Quince is a statically typed, reference-counted, effect-tracked language for ser
 
 | Path | What it is |
 | --- | --- |
-| `spec/quince-spec.md` | The language spec, Draft v0.4. **Source of truth for what Quince means.** |
+| `spec/quince-spec.md` | The language spec, Draft v0.5. **Source of truth for what Quince means.** |
 | `spec/std-api.md` | Standard library API: prelude methods, effect operations, every `std` package. |
 | `docs/repo-plan.md` | Repo layout, crate list, and why Rust. |
 | `docs/milestones.md` | M0 to M14 with exit criteria. Work in this order. |

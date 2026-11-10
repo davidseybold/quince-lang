@@ -1,6 +1,7 @@
 //! Repo automation. `cargo xtask ci` runs every fast check; see AGENTS.md.
 
 mod ci;
+mod diagnostics;
 mod spec_grammar;
 mod spec_rules;
 
@@ -16,6 +17,7 @@ commands:
   spec-rules --strip    print the spec with every rule-ID tag removed
   spec-grammar          check spec/grammar.ebnf against the spec's grammar appendices
   spec-grammar --write  regenerate spec/grammar.ebnf from the spec
+  diagnostics           check every diagnostic code has explain text and a conformance test
 ";
 
 fn main() -> ExitCode {
@@ -28,6 +30,7 @@ fn main() -> ExitCode {
         ["spec-rules", "--strip"] => exit(spec_rules::strip(&root)),
         ["spec-grammar"] => exit(spec_grammar::check(&root)),
         ["spec-grammar", "--write"] => exit(spec_grammar::write(&root)),
+        ["diagnostics"] => exit(diagnostics::check(&root)),
         ["help" | "--help" | "-h"] => {
             print!("{USAGE}");
             ExitCode::SUCCESS
