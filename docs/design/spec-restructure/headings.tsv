@@ -3,7 +3,6 @@
 # moved	baseline line (L120)	baseline heading	file	heading line it became (one row per part when a section splits)
 # dropped	baseline line	baseline heading
 # A baseline heading without a row must still be in quince-spec.md, unchanged.
-new	spec/quince-spec.md	### Prelude names
 moved	L5	## 1. Overview and design principles	spec/reference/introduction.md	# Introduction
 moved	L5	## 1. Overview and design principles	spec/quince-spec.md	## 1. Overview and design principles
 moved	L26	### Deliberately excluded	spec/reference/introduction.md	## Deliberately excluded
@@ -36,7 +35,6 @@ moved	L287	### Mutation	spec/reference/types.md	## Mutation
 moved	L287	### Mutation	spec/reference/expressions.md	## Closures and function values
 moved	L336	### Generics	spec/reference/items.md	## Generics
 moved	L355	### Interfaces	spec/reference/items.md	## Interfaces
-moved	L355	### Interfaces	spec/quince-spec.md	### Interfaces
 moved	L378	### Operators on user types	spec/reference/prelude.md	## Operators on user types
 moved	L406	### Automatic equality and hashing	spec/reference/prelude.md	## Automatic equality and hashing
 moved	L415	### Serialization	spec/reference/prelude.md	## Serialization
@@ -67,3 +65,29 @@ new	spec/reference/prelude.md	## Prelude names
 new	spec/reference/prelude.md	## Iterators
 new	spec/reference/expressions.md	# Expressions
 new	spec/reference/statements.md	# Statements
+moved	L462	## 4. Errors and failure	spec/reference/errors.md	# Errors and failure
+moved	L466	### Expected failures: `Result` and `Option`	spec/reference/errors.md	## Expected failures: `Result` and `Option`
+moved	L481	### The `?` operator	spec/reference/errors.md	## The `?` operator
+moved	L515	### Panics (bugs)	spec/reference/errors.md	## Panics (bugs)
+moved	L531	## 5. Effects and capabilities	spec/reference/effects.md	# Effects
+moved	L531	## 5. Effects and capabilities	spec/quince-spec.md	## 5. Effects and capabilities
+moved	L535	### Built-in effects	spec/reference/effects.md	## Built-in effects
+moved	L575	### Declaring and inferring	spec/reference/effects.md	## Declaring and inferring
+moved	L587	### Effect variables	spec/reference/effects.md	## Effect variables
+moved	L628	### Handlers in tests and production	spec/reference/effects.md	## Handlers in tests and production
+moved	L628	### Handlers in tests and production	spec/quince-spec.md	### Handlers in tests and production
+moved	L661	## 6. Contracts and testing	spec/reference/contracts.md	# Contracts
+moved	L661	## 6. Contracts and testing	spec/quince-spec.md	## 6. Contracts and testing
+moved	L665	### `requires` and `ensures`	spec/reference/contracts.md	## `requires` and `ensures`
+moved	L728	### Static verification (optional)	spec/reference/contracts.md	## Static verification (optional)
+moved	L911	## 9. Concurrency	spec/reference/concurrency.md	# Concurrency
+moved	L911	## 9. Concurrency	spec/quince-spec.md	## 9. Concurrency
+moved	L915	### Concurrent blocks	spec/reference/concurrency.md	## Concurrent blocks
+moved	L936	### Fan-out over a collection	spec/reference/concurrency.md	## Fan-out over a collection
+moved	L955	### Long-lived work (fire and forget)	spec/reference/concurrency.md	## Long-lived work (fire and forget)
+moved	L985	### Cancellation	spec/reference/concurrency.md	## Cancellation
+moved	L995	### Shared state	spec/reference/concurrency.md	## Shared state
+moved	L1003	### Waiting on several channels	spec/reference/concurrency.md	## Waiting on several channels
+moved	L1899	### Reference types and concurrency (std.sync)	spec/reference/concurrency.md	## Failure, timeout and channel types
+moved	L1962	### Built-in effect operations	spec/reference/effects.md	## Built-in effect operations
+moved	L1962	### Built-in effect operations	spec/quince-spec.md	### Built-in effect operations

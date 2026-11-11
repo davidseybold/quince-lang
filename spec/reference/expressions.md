@@ -21,7 +21,7 @@ if_expr     = "if" expr block [ "else" ( if_expr | block ) ]
 r[expr.block.expr-stmt] `if`, `match`, closures and the keyword forms (`concurrent`, `background`, `select`, `with`) are expressions. Declarations, loops and assignments are statements.
 
 - r[expr.block.value] A block's value is its last line when that line is an expression, and `()` otherwise. r[expr.block.last-newline] The last statement needs no newline before `}`, so a one-line block may hold a single statement: `Some(m) => { total = total + m },`. r[expr.block.fn-value] A function returns its body's value, as `word_counts` does in [Mutation](types.md#mutation).
-- r[expr.if.type] `if` with an `else` has its branches' common type. r[expr.if.no-else] Without an `else`, its type is `Unit` and its branch must be `Unit`: `let sign = if n < 0 { -1 } else { 1 }`. r[expr.block.unit-context] Where the expected type is `Unit` (an `if` without `else`, a loop body, the body of a function that returns `Unit`, or an `if` or `match` used as a statement), a last expression is a statement: its value is discarded under the unused-value rules ([Errors and failure](../quince-spec.md#expected-failures-result-and-option)). So `if ok { seen.insert(x) }` compiles, an unused `Result` is still an error, and the arms of a `match` used as a statement need not share a type.
+- r[expr.if.type] `if` with an `else` has its branches' common type. r[expr.if.no-else] Without an `else`, its type is `Unit` and its branch must be `Unit`: `let sign = if n < 0 { -1 } else { 1 }`. r[expr.block.unit-context] Where the expected type is `Unit` (an `if` without `else`, a loop body, the body of a function that returns `Unit`, or an `if` or `match` used as a statement), a last expression is a statement: its value is discarded under the unused-value rules ([Errors and failure](errors.md)). So `if ok { seen.insert(x) }` compiles, an unused `Result` is still an error, and the arms of a `match` used as a statement need not share a type.
 - r[expr.block.no-bare] There are no bare blocks. r[expr.block.brace-map] Anywhere else, `{` where an expression is expected starts a map literal. r[expr.block.positions] Blocks appear only as the bodies of functions, closures, `if`, `else`, match arms, `for`, `while`, `test` and the keyword forms. r[expr.block.keyword-bodies] The bodies of `with` and `background`, like `select` arms, are ordinary blocks of the enclosing function: `return`, `?`, `break` and `continue` leave them, and a `background` block first cancels its tasks and waits for them. r[expr.block.concurrent-tasks] A `concurrent` block's spawned expressions are tasks, not blocks of the function.
 
 ## Operators and precedence
@@ -100,7 +100,7 @@ r[expr.range.semantics] `a..b` runs from `a` up to but not including `b`, and `a
 ## Indexing and slicing
 
 - r[expr.index.int] `xs[i]` takes only an `Int`; another integer type is converted first, as in `xs[n.to_int64()]`. r[expr.index.slice] A slice is the method call `xs.slice(r)`, so `[]` has one meaning.
-- r[expr.index.list] `xs[i]` is `xs.get(i)` that panics when `i` is out of range ([Errors and failure](../quince-spec.md#panics-bugs)).
+- r[expr.index.list] `xs[i]` is `xs.get(i)` that panics when `i` is out of range ([Errors and failure](errors.md)).
 
 ## Exhaustive `match`
 

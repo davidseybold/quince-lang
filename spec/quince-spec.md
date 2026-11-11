@@ -31,129 +31,11 @@ Quince is built for services and tools: web servers and APIs, command-line tools
 
 ## 3. Type system
 
-### Interfaces
-
-- r[effect.handler.receiver] The one exception is a handler, which implements each operation of an `effect` as a method with a `self` receiver. r[effect.handler.uses] That method's `uses` may name the effects the effect is built on ([Effects](#declaring-and-inferring)), `State`, and the effect it handles. r[effect.handler.outer-call] A call to that effect from inside the handler goes to the handler that was in effect where the `with` installed it, never back to the handler itself. So a narrowing handler such as `net.only` passes allowed calls through, and a fake such as `fixed_clock` keeps its time in a reference type. r[effect.handler.uses-subset] It may name fewer of them, down to none.
-
 ### Methods
 
-- r[effect.op-call] Effect operations are called through the effect's name: `Log.info("started")`, `Db.query(sql)`. The handler that runs is the one `with` installed ([Effects](#handlers-in-tests-and-production)).
 - A struct literal may write a field whose value is a binding of the same name once: `Dashboard(profile:, orders:)`. r[tool.fmt.field-shorthand] `quince` `fmt` rewrites `profile: profile` to that form, so each literal has one canonical layout.
 
-## 4. Errors and failure
-
-Quince separates expected failures, which are values in the return type, from bugs, which panic and stop the program. r[err.panic.no-catch] There are no exceptions and no way to catch a panic in ordinary code: a panic ends its task, and only the scope that owns the task decides what happens next ([Concurrency](#9-concurrency)). Cancellation is a third case, separate from both: it unwinds a task but is neither an error value nor a bug ([Cancellation](#cancellation)).
-
-### Expected failures: `Result` and `Option`
-
-- r[err.result-option] A function that can fail returns `Result<T, E>`. A function that may have no answer returns `Option<T>`.
-- Error types are usually enums, so callers can match on every failure mode:
-
-```
-pub enum ParseError {
-  Empty,
-  InvalidChar(at: Int, found: Char),
-  TooLong(max: Int),
-}
-```
-
-- r[err.unused-result] An unused `Result` is a compile error. r[err.discard] To discard one deliberately, write `let _ = save(file)`. r[err.unused-value] An unused value of any other type except `Unit` is a warning, which `let _ =` also silences. r[err.var-self-value] A value returned by a `var self` method, such as the `Option` from `Map.insert`, raises no warning.
-
-### The `?` operator
-
-- r[err.try.unwrap] `expr?` unwraps `Ok`/`Some` or returns early with the `Err`/`None`.
-- r[err.try.from] The error must convert to the enclosing function's error type through an explicit `impl From<A> for B`. There is no automatic widening, so every error path can be traced by searching for its `From` impl.
-- `.map_err(f)` and `.ok_or(err)` cover cases with no `From` impl. r[err.try.same-type] When the error type already equals the function's error type, `?` needs no `From` impl. r[err.try.closure] Inside a closure, `?` returns from the closure, not from the enclosing function. r[err.try.option] `?` on an `Option` works only in a function that returns `Option`; in one that returns `Result`, the suggested fix is `.ok_or(e)?`.
-
-### Panics (bugs)
-
-A panic means the program has a bug, not that something in the world went wrong. These panic:
-
-- r[err.panic.arith] Integer overflow, division by zero, and a shift count outside the bit width
-- r[err.panic.index] Out-of-bounds indexing with `xs[i]` (use `xs.get(i)` for an `Option`)
-- r[err.panic.contract] A failed `requires` or `ensures` contract ([Contracts](#requires-and-ensures))
-- r[err.panic.explicit] An explicit `unreachable("reason")` or `todo("reason")`. Both have type Never ([Types](reference/types.md)), so either can stand in for any value while code is still being written
-
-r[err.panic.message] Every panic message includes the source location and, for contracts, the values that violated the condition. r[err.panic.task] A panic stops the current task; the scope that owns the task may log the panic or restart it, as its FailurePolicy says ([Concurrency](#long-lived-work-fire-and-forget)), but cannot inspect or resume it. That scope boundary is the only place a panic is handled.
-
 ## 5. Effects and capabilities
-
-r[effect.pure-default] Functions are pure by default: a function with no `uses` clause returns the same result for the same arguments and changes nothing its caller can observe. r[effect.uses-required] Any function that touches the outside world or shared state declares it with a `uses` clause, and the compiler rejects calls to effectful functions from a context that doesn't have that effect.
-
-### Built-in effects
-
-| Effect | Grants |
-| --- | --- |
-| r[effect.net] `Net` | Outbound network connections |
-| r[effect.listen] `Listen` | Accepting inbound connections |
-| r[effect.fs] `Fs` | Reading and writing files |
-| r[effect.clock] `Clock` | Reading the current time, sleeping |
-| r[effect.random] `Random` | Nondeterministic randomness |
-| r[effect.env] `Env` | Environment variables and command-line arguments |
-| r[effect.process] `Process` | Spawning subprocesses and ending the program early |
-| r[effect.console] `Console` | Reading standard input; writing standard output and standard error |
-| r[effect.state] `State` | Reading or writing a reference type whose row in the [Reference types](reference/types.md) table needs it |
-
-Each built-in effect's operations, such as Clock.now() and Fs.read\_text(path), are listed in [Built-in effect operations](#built-in-effect-operations). r[effect.log-not-builtin] Logging is not built in. The standard library declares it as a package effect, `pub effect Log uses Console, Clock { ... }`, so a function that logs says `uses Log`, and a test can capture its logs with `with Log = ...` without touching standard output.
-
-r[effect.decl] Packages declare their own effects with `effect`, naming the built-in effects each one is built on and listing its operations. r[effect.handler.def] A handler is any value whose type implements the operations with `impl Db for T`, and only those bodies may perform the underlying effects. r[effect.handler.crossing] A handler's type must be able to cross task boundaries ([Types](reference/types.md)), since tasks inherit handlers ([Concurrency](#9-concurrency)); that's why `PgDb` holds a `Pool` rather than a single connection:
-
-`pg`, `PgConn` and `PgError`, here and in [Interop with C](#11-interop), stand for a hypothetical third-party Postgres package. They are not part of std.
-
-```
-pub effect Db uses Net, State {
-  fn query(sql: String) -> Result<Rows, DbError>
-  fn execute(sql: String) -> Result<Int, DbError>
-}
-
-pub struct PgDb { pool: Pool<PgConn, PgError, uses Net> }
-
-impl Db for PgDb {
-  fn query(self, sql: String) -> Result<Rows, DbError> uses Net, State { ... }
-  fn execute(self, sql: String) -> Result<Int, DbError> uses Net, State { ... }
-}
-```
-
-- r[effect.op-uses] Calling a `Db` operation needs `uses Db`. r[effect.no-expand] A caller with `uses Db` doesn't also list `Net`; `quince` `query signature` shows what `Db` is built on.
-- r[effect.interface] The operations are the effect's whole interface: code outside the package reaches `Db` only through them, and they are what `with Db = ...` installs, in tests and in `main`.
-- r[effect.keyword-decl-only] `effect` appears only in declarations. [Effect variables](#effect-variables) are written `uses E`, so the keyword never appears in a generic parameter list.
-- r[effect.no-generics] Effects and their operations take no type parameters in v1. Handlers are installed at runtime and there is no `dyn`, so a generic operation such as `Cache.get<T>(key)` would have no implementation the compiler could pick. A cache that holds many types stores `Bytes` or `json.Value`, and an ordinary generic function gives it a typed wrapper.
-- r[effect.copy] `effect UsersDb = Db` declares a distinct effect with the same operations. A program with two databases declares one copy per database, writes `uses UsersDb, OrdersDb`, calls `UsersDb.query(sql)`, and installs each with its own `with`. The type checker keeps the two apart, and a signature says which database a function touches. r[effect.copy-handler] A handler for `Db` (such as `PgDb`) handles every copy. When the set is known only at runtime (shards, one database per tenant), use one effect whose operations take the key, such as `TenantDb.query(tenant, sql)`. r[effect.no-index] Effects can't be indexed by a value.
-
-### Declaring and inferring
-
-```
-pub fn sync_users(api: ApiClient, store: UserStore) -> Result<Int, SyncError>
-  uses Net, Db, Log
-{ ... }
-```
-
-- r[effect.declare-all] Every function declares its effects, public or private, so a reader never has to open a callee to learn what a function can do. r[effect.fix-uses] `quince` `fix` writes in a missing or out-of-date `uses` clause, so nobody works it out by hand.
-- r[effect.unused-warn] Declaring an effect a function doesn't use is a warning, so signatures stay honest in both directions. r[effect.unused-pub] A `pub` function is exempt, because adding an effect later is a breaking change ([Dependencies and publishing](#enforced-semantic-versioning)), and r[effect.fix-pub-review] `quince` `fix` marks adding an effect to a `pub` signature `needs-review`.
-- r[effect.closure-type] Closures carry effects in their type: `fn(Int) -> Int uses Log`. r[effect.pure-param] A parameter type with no `uses` accepts only pure closures. A function that should accept effectful ones declares an [effect variable](#effect-variables).
-
-### Effect variables
-
-r[effect.effvar.decl] A function that takes a closure and calls it declares an effect variable among its generic parameters with `uses`, and puts that variable in its own `uses` clause. The function then has exactly the effects of the closure it was given:
-
-```
-impl<T> List<T> {
-  fn map<U, uses E>(self, f: fn(T) -> U uses E) -> List<U> uses E
-}
-
-pub fn retry<T, Err, uses E>(attempts: Int, f: fn() -> Result<T, Err> uses E)
-  -> Result<T, Err>
-  uses E, Clock
-```
-
-- r[effect.effvar.inferred] **Inferred at every call, never written there.** `xs.map(fn(x) { x * 2 })` is pure. `xs.map(fn(u) { describe(u) })` calls `describe`, which uses `Log`, so the caller needs `Log`. `keys.map(fn(k) { cache.get(k) })` reads a `Ref`, so it uses `State`; reference types need no extra rule.
-- r[effect.effvar.opaque] **Opaque inside the function.** The body can call `f` but can't perform an effect from `E` itself or test what `E` holds. A higher-order function's behavior can't depend on which effects its caller passed in, so its signature tells a reader everything it can do.
-- r[effect.effvar.combine] **Combining.** A `uses` clause can mix variables and named effects (`uses E, Clock`). Two closure parameters can share one variable or take one each (`<uses E1, uses E2>` and `uses E1, E2`). An effect variable stands for a set of effects; there is no syntax for subtracting effects from one.
-- r[effect.effvar.subsumption] Subsumption. A closure whose effects are a subset of the expected ones is accepted, so a pure closure fits wherever an effectful one is expected. r[effect.effvar.union] When several closures meet in one type, inference takes the union of their effects: a list holding a route that uses `Db` and one that uses `Net` has type `List<Route<uses Db, Net>>`.
-- r[effect.effvar.types] **Structs and enums** that store a closure take effect parameters the same way: `struct Route<uses E> { path: String, handler: fn(Request) -> Response uses E }`. So does `serve`: `pub fn serve<uses E>(port: Int, handler: fn(Request) -> Response uses E) -> Result<Unit, ServeError> uses Listen, E`. This is abridged: std.http's `serve` also takes `host:` and `max_body:`, which have defaults.
-- r[effect.effvar.iface] **Interfaces** may take effect parameters, like `Iterator<uses E>` in [Prelude and special interfaces](reference/prelude.md), so `impl Iterator<uses Fs> for FileLines` can read a file one line at a time. r[effect.effvar.default-pure] Leaving out an effect argument means no effects: a `T: Iterator` bound accepts only pure iterators. r[effect.effvar.pure-ifaces] `Eq`, `Ord`, `Hash` and `Display` take no effect parameter, and neither do the operator interfaces ([Prelude and special interfaces](reference/prelude.md)), so comparing, hashing, printing and arithmetic never have effects.
-- r[effect.effvar.contracts] **Contracts** must be pure, so a `requires` or `ensures` can't call a closure whose type includes an effect variable.
-- r[effect.effvar.diagnostic] **Diagnostics.** When a closure is rejected because its parameter type has no `uses`, the error names the closure's effects and the call in it that brings in each one. If the function is in the caller's own package, the suggested fix adds an effect variable to it.
 
 ### Capabilities at runtime
 
@@ -164,7 +46,7 @@ fn main() -> Result<Unit, AppError> uses * { ... }
 ```
 
 - r[exec.cap.static] A uses clause is a static permission. r[exec.cap.context] At runtime, the capability behind each effect is implicit context that travels with each call. The compiler guarantees it is present wherever a uses clause says so, and nothing is passed by hand. r[exec.cap.with] A with block replaces that context for the code inside it.
-- r[exec.cap.inherit] Tasks inherit this context: a spawned task keeps the handlers in effect where it was spawned ([Concurrency](#9-concurrency)), and a C callback uses those of the call that registered it ([Interop with C](#callbacks)). r[exec.cap.no-capture] Nothing else captures handlers: a closure's effects go to the handlers in effect where it is called, and a lazy `Iter`'s to those in effect where it is pulled, even when it was created inside a different `with`.
+- r[exec.cap.inherit] Tasks inherit this context: a spawned task keeps the handlers in effect where it was spawned ([Concurrency](reference/concurrency.md)), and a C callback uses those of the call that registered it ([Interop with C](#callbacks)). r[exec.cap.no-capture] Nothing else captures handlers: a closure's effects go to the handlers in effect where it is called, and a lazy `Iter`'s to those in effect where it is pulled, even when it was created inside a different `with`.
 - r[exec.cap.manifest-limits] A program's entry in quince.toml (\[cmd.\<name>\]) can narrow its capabilities, e.g., `Net` limited to `api.example.com` or `Fs` limited to `./data`. r[exec.cap.violation] A violation is not a panic: the operation returns Err(NetError.PermissionDenied) or Err(FsError.PermissionDenied), and every std error type built on Net or Fs carries that error, directly or inside the NetError or FsError it wraps, and its message names the manifest line.
 - r[exec.cap.dependency] A dependency can never use an effect its declared API doesn't list, so auditing a package means reading its signatures. r[exec.cap.query-effects] quince query effects \<path> prints a function's effects with every package effect expanded to the built-in effects beneath it, which is the view to audit.
 - r[exec.main.err-exit] If `main` returns `Err(e)`, the runtime prints `e`'s `Display` to standard error and exits with code 1. r[exec.main.panic-exit] If the main task panics, the runtime prints the panic report to standard error and exits with code 101. r[exec.main.process-exit] `Process.exit(code)` cancels every running scope, waits for cleanup, then exits with `code`. It flushes standard output and standard error first. r[exec.main.signature] `main` is written `fn main()` or `fn main() -> Result<Unit, E>`, where `E` implements `Display`, with `uses *` on either.
@@ -175,60 +57,11 @@ fn main() -> Result<Unit, AppError> uses * { ... }
 
 ### Handlers in tests and production
 
-Tests can replace an effect's implementation for a block:
-
-```
-test "expired sessions are removed" {
-  with Clock = testing.fixed_clock(ts"2026-01-01T00:00:00Z") {
-    assert(purge_sessions(store).len() == 3)
-  }
-}
-```
-
-A handler is an ordinary value whose type implements an effect's operations (see [package effects](#declaring-and-inferring)). r[effect.with.install] `with` installs handlers for the code inside it, in tests and in production. This is how a program configures its database, logger and other services:
-
-```
-fn main() -> Result<Unit, AppError> uses * {
-  let cfg = load_config("app.toml")?
-  with Db = PgDb.connect(cfg.db, max: 20)?,
-       Log = log.json(cfg.log_level) {
-    http.serve(cfg.port, handler: route).map_err(AppError.Serve)
-  }
-}
-```
-
-- r[effect.with.package-main-only] Outside test code, a `with` for a package effect may appear only in `main`. A package that builds several programs, such as a server and a worker, gives each its own small package with one main ([Packages](reference/packages.md#packages)), so a program's production wiring always sits in one function an agent can read, and "which `Db` is this?" is always answered there.
 - r[exec.main.no-package-effects] `main` gets no package effects from `uses *`. r[exec.main.handler-proof] The compiler proves that every package effect reachable from `main` is covered by a `with`; a missing one is a compile error that names the call path.
 - r[exec.main.uses-star] `uses *` is allowed only on `main`. Anywhere else it is a compile error, and `quince` `fix` writes the real `uses` clause. Tests opt into real effects with `test "name" uses Net`.
 - r[test.package-effect-proof] A test that reaches a package effect with no `with` around it is a compile error that names the call path, the same proof as for `main`. The suggested fix wraps the call in `with Db = ...`. Built-in effects keep their default fakes ([Testing](#unit-tests)); package effects have none, because no fake database can be guessed. r[test.default-handler] An effect's own package may name one with `@test_default(f)` on the effect declaration, where `f` takes no arguments and returns a handler. std.log names `capture_log`, so a test of code that logs needs no `with Log`.
-- r[effect.with.nested-warn] Outside tests, a `with` nested inside another `with` for the same effect is a warning, because an override deep in the call stack hides which handler runs.
-- r[effect.with.query-handlers] `quince` `query handlers <fn>` prints which handler each of a function's effects resolves to from each program's main.
-- r[effect.with.builtin-anywhere] A `with` for a built-in effect can narrow it anywhere, in any function: `with Net = net.only("api.example.com") { run_plugin(input) }`.
-- r[effect.handler.no-continuation] Handlers are a handler type's value, not a continuation: they can't resume, abort or capture the code that called them. `with` is the only form of effect handler in the language.
 
 ## 6. Contracts and testing
-
-Contracts state what a function promises; tests and examples check it. r[contract.runtime] Contracts are checked at runtime in debug and test builds, and in release builds unless a function opts out with `@unchecked` after profiling. r[contract.cost-warn] Because contracts usually run in production, quince check warns about any contract that calls a standard-library function documented as slower than constant time, such as xs.sorted(), or a function of your own that contains a loop or recursion.
-
-### `requires` and `ensures`
-
-```
-pub fn withdraw(account: Account, amount: Money) -> Result<Account, WithdrawError>
-  requires amount > Money.ZERO
-  ensures(r) match r {
-    Ok(a) => a.balance == account.balance - amount,
-    Err(_) => true,
-  }
-{ ... }
-```
-
-- r[contract.requires] `requires` constrains the caller; a violation panics and blames the call site.
-- r[contract.ensures] `ensures` constrains the function; a violation panics and blames the function. r[contract.ensures-name] `ensures(r)` names the return value `r` (any name works) for use in the condition.
-- r[contract.pure] Contract expressions must be pure: no effects and no mutation. Reading a reference type needs `uses State`, so a contract can't read shared state such as `stats.get()`; it constrains only arguments and the return value.
-- r[contract.pub-visibility] The contracts of a `pub` function may name only what its callers can see: its parameters, `pub` fields and `pub` functions. Otherwise it is a compile error, and the suggested fix adds a `pub` pure accessor. A `requires` blames the caller, so the caller must be able to read it through `quince` `query signature`. Invariants on private fields belong in the struct's own `requires`.
-- r[contract.var-self] In a method that takes `var self`, `ensures` sees `self` as it is after the call. r[contract.no-old] There is no way to name the value from before the call, since there is no `old()`.
-- r[contract.invariant] Struct invariants use `requires` on the struct and are checked after every construction and update: `pub struct Interval { pub start: Int, pub end: Int } requires start <= end`. r[contract.invariant-update] Each assignment to a field of a var binding is a separate update, so a change that moves two fields together is written as one: `r = Interval(..r, start: 10, end: 20)`.
-- r[contract.iface] Interface methods may declare `requires` and `ensures`. r[contract.iface-inherit] Every `impl` inherits them unchanged and can't add or remove any, so a method's contract is always read in one place: the interface.
 
 ### Executable examples in doc comments
 
@@ -272,10 +105,6 @@ test "parse inverts display" forall (n: Int) {
 - r[test.prop.custom] `impl Generate for T` replaces the derived generator, or provides one for an `@opaque` type or a type with private fields, usually by calling the type's own constructor. r[test.prop.discard] A generated case that breaks a `requires` of the function under test is discarded, not counted as a failure, and the report says how many were discarded.
 - r[test.prop.contracts] Contracts on the function under test act as extra assertions on every generated case.
 - r[test.prop.shrink] Failing cases are shrunk to a minimal input and saved to `.``quince``/regressions`, which reruns them on every later test run.
-
-### Static verification (optional)
-
-r[contract.verify.opt-in] `quince` `verify` attempts to prove contracts with an SMT solver. It is opt-in per function with `@verify`, reports which contracts it proved, and never blocks a build unless the project config makes it required.
 
 ## 7. Modules, packages, and versioning
 
@@ -416,131 +245,11 @@ r[diag.json] With `--format json`, every diagnostic has a stable code, an exact 
 | `dependents <path>` | r[diag.query.dependents] Everything that would break if a definition changed |
 | `wire <Type>` | r[diag.query.wire] The JSON shape a type encodes to and decodes from, with wire names and which fields are optional |
 | source \<file> \[--without-tests\] | r[diag.query.source] A file's source, optionally with test blocks folded away ([Testing](#unit-tests)) |
-| `handlers <fn>` | r[diag.query.handlers] Which handler each of a function's effects resolves to, from each program's main ([Effects](#handlers-in-tests-and-production)) |
+| `handlers <fn>` | r[diag.query.handlers] Which handler each of a function's effects resolves to, from each program's main ([Effects](reference/effects.md)) |
 
 r[diag.query.lsp] The same queries are served over a long-running language server for editors and agents that keep a session open.
 
 ## 9. Concurrency
-
-r[conc.structured] Quince uses structured concurrency on green threads: every task belongs to a scope, and a scope doesn't exit until all its tasks have finished or been cancelled. r[conc.no-async] There is no `async` or `await`; blocking calls look like ordinary calls, and the effect system already shows which ones do I/O.
-
-### Concurrent blocks
-
-```
-fn load_dashboard(user: UserId) -> Result<Dashboard, LoadError>
-  uses Net
-{
-  let (profile, orders) = concurrent {
-    spawn fetch_profile(user),
-    spawn fetch_orders(user),
-  }?
-  Ok(Dashboard(profile:, orders:))
-}
-```
-
-- r[conc.block] A `concurrent` block runs its `spawn`ed tasks in parallel and evaluates to `Result<(A, B, ...), E>`: `Ok` holds each task's value, in the order written. Write `concurrent { ... }?` to unwrap it like any other `Result`.
-- r[conc.error-type] Every task that can fail returns `Result` with the same error type `E`. When the error types differ, convert them in the spawn expression, for example `spawn fetch_orders(user).map_err(LoadError.Orders)`; there is no automatic widening ([Errors and failure](#the--operator)). r[conc.plain] A task that returns a plain value can't fail, and a block whose tasks all return plain values evaluates to a plain tuple. r[conc.mixed] When some tasks return `Result` and others plain values, the block evaluates to `Result<(A, B, ...), E>`. `Ok` holds each `Result` task's value unwrapped and each plain value as it is, and only the `Result` tasks need the same `E`. r[conc.static-type] Whether a task can fail is decided by its static type at the spawn site: a value of a type parameter is a plain value even when a caller instantiates it with a `Result`, so a generic function behaves the same for every type. The same holds for failure policies.
-- r[conc.err-cancel] If any task returns `Err`, the block cancels its siblings, waits for them to stop, and evaluates to that `Err`. r[conc.panic] If a task panics, the block cancels its siblings the same way and then panics the enclosing task. r[conc.cancelled-silent] Siblings the block cancelled report nothing (see [Cancellation](#cancellation)).
-- r[conc.settle] `concurrent(settle: true) { ... }` runs every task to the end instead. It never cancels on an `Err`, and it evaluates to a tuple of `Result`s in the order written, so each task may have its own error type. r[conc.settle-panic] A panic still cancels the siblings and panics the enclosing task, because a panic is a bug.
-- r[conc.no-outlive] A task can never outlive its block, so when a function returns, all work it started is finished.
-- r[conc.not-effect] Starting tasks is not an effect. Because nothing escapes the scope, a function's signature already describes everything it can do.
-
-### Fan-out over a collection
-
-To run one task per item of a list, put `for` after `concurrent`:
-
-```
-fn fetch_all(urls: List<Url>) -> Result<List<Page>, FetchError>
-  uses Net
-{
-  concurrent(limit: 10) for url in urls {
-    spawn fetch(url)
-  }
-}
-```
-
-- r[conc.fanout.result] The block evaluates to `Result<List<T>, E>`, with the results in the same order as the input. It follows the same rules as a `concurrent` block: one shared error type, and the first `Err` cancels the remaining tasks. r[conc.fanout.plain] When every task returns a plain value, the block can't fail and evaluates to a plain `List<T>`, as a `concurrent { }` block gives a plain tuple.
-- r[conc.fanout.limit] `limit` caps how many tasks run at once. r[conc.fanout.limit-required] It is required, so every fan-out states how many tasks run at once. r[conc.fanout.limit-type] It takes any `Int` expression, with `requires limit >= 1`.
-- r[conc.fanout.settle] `settle: true` works here too. `concurrent(limit: 10, settle: true) for ...` never cancels on an `Err` and evaluates to `List<Result<T, E>>`.
-- r[conc.fanout.one-spawn] The body holds exactly one `spawn`. It can bind values before it, like any block, but it can't spawn twice or return early.
-
-### Long-lived work (fire and forget)
-
-Work that must outlive the current function is spawned into a longer-lived scope passed in as a `TaskScope` value:
-
-```
-fn main() -> Result<Unit, AppError> uses * {
-  with Log = log.json(log.Level.Info) {
-    let served = background (bg: TaskScope, on_error: FailurePolicy.LogAndContinue) {
-      http.serve(8080, handler: fn(req) { handle(req, bg:) })
-    }
-    served.map_err(AppError.Scope)?.map_err(AppError.Serve)
-  }
-}
-
-fn handle(req: Request, bg: TaskScope) -> Response uses Net {
-  let response = build_response(req)
-  spawn in bg send_analytics(req.url, event: "page_view")
-  response
-}
-```
-
-- r[conc.background.taskscope-param] Only a function that takes a `TaskScope` parameter can start work that outlives it, so this is visible in the signature.
-- r[conc.background.spawn-in] `spawn in bg expr` starts `expr` as a task in the scope `bg`. It follows the same rule as `spawn` inside `concurrent`: the whole expression is evaluated in the new task. r[conc.background.spawn-type] The form has type `Unit`, and `expr` must be `Unit` or `Result<Unit, E>` where `E` implements `Display`, so no task's result is silently thrown away. r[conc.background.scope-value] The scope can be any `TaskScope` value, such as `self.bg`. `spawn` is a keyword, so a `TaskScope` has no `spawn` method.
-- r[conc.background.policy] The scope's owner sets the failure policy with `on_error`, which takes a `FailurePolicy`: `FailurePolicy.LogAndContinue`, `FailurePolicy.Restart(max: n)`, or `FailurePolicy.FailScope` (the default). r[conc.background.log-policy] `LogAndContinue` writes through the `Log` effect, so the enclosing function needs `uses Log`. r[conc.background.log-import] `Log` comes from std.log, and this is the one place the language names a std effect, so code that uses this policy imports it: `import std.log.{Log}`.
-- r[conc.background.failure] A failure is a task that panics or returns `Err`. r[conc.background.policy-semantics] Under `LogAndContinue` the failure is logged and the scope carries on. Under `Restart(max: n)` the task is started again, up to n times. The count is per spawned task. Under `FailScope`, or once the restarts run out, the scope cancels its remaining tasks and fails.
-- r[conc.background.result] A `background` block evaluates to `Result<T, ScopeFailed>`, where `T` is the body's value. r[conc.background.scope-failed] `ScopeFailed` names the spawn site of the task that failed and holds its panic message or the `Display` text of its error. Cancellation is never a failure (see [Cancellation](#cancellation)).
-- r[conc.background.exit] When a `background` block exits, it cancels remaining tasks and waits for them, giving clean shutdown.
-- r[conc.background.owned] A task with no owning scope is impossible by construction. r[conc.background.no-escape] A `background` block's value can't contain a `TaskScope` (a compile error that names the field path), and spawning into a scope whose block has already exited panics, naming the spawn site and the `background` line. r[conc.background.store] Storing a scope in a handler or a struct for the block's lifetime is fine.
-- r[conc.background.handlers] A spawned task keeps the handlers that were in effect where it was spawned, even after it outlives that `with` block. If a test runs ` with Net = fake {  ``handle(req, bg:)` `}` and `handle` spawns analytics work into `bg`, that work uses the fake. A handler therefore lives as long as the longest task that captured it.
-
-### Cancellation
-
-- r[conc.cancel.cooperative] Cancellation is cooperative. r[conc.cancel.stop] A cancelled task stops at its next cancellation point (listed in [Cancellation](#cancellation)), and execution doesn't continue past it. r[conc.cancel.unwind] Instead the task unwinds to the scope that cancelled it, running `Resource` cleanup and closing any scopes it opened on the way ([Interop with C](#memory-across-the-boundary)). r[conc.cancel.not-error] Cancellation is never an error value: `?` never sees it, and no `Result` type has to carry it.
-- r[conc.cancel.points] The cancellation points are every effectful call, including package effects, since they are built on the others; every operation that waits (`receive`, `send` on a full channel, and `select`); and the checks the compiler inserts at the top of every loop iteration and at every function entry. r[conc.cancel.state] A `State` operation that doesn't wait is never a cancellation point (this means a reference-type method; a package effect's operation is always a cancellation point, even when the effect is built only on State), so an update to a `Ref` or `Atomic` is never stopped halfway. Waiting changes nothing, so stopping a task while it waits is always safe.
-- r[conc.cancel.no-catch] Code can't catch or suppress cancellation. r[conc.cancel.scope-sees] Only the scope that cancelled a task sees it: a `concurrent` block discards the siblings it cancelled, a `background` block treats cancelled tasks as shut down, and `with_timeout` reports it as a value ([Cancellation](#cancellation)). r[conc.cancel.not-failure] Cancellation is not a failure, so an `on_error` policy never sees it. This keeps cancellation out of every error type, and there is no catch-all for an agent to write that would swallow it by accident.
-- r[conc.cancel.pure] Pure code needs no explicit check: the compiler-inserted checks stop a long pure computation too, so every task can be cancelled. A pure function stays pure ([Effects](#5-effects-and-capabilities)), because a cancelled computation's result is never observed. r[conc.cancel.preempt] The same checks let the scheduler preempt a long-running task, so it can't starve the others.
-- r[conc.timeout.scope] `time.with_timeout(dur``"5s", fn() { ... })` is a scope that cancels its contents when the time runs out. r[conc.timeout.result] It evaluates to `Result<T, TimedOut>`, where `T` is the body's value, so the caller must handle the timeout. r[conc.timeout.own-timer] It reports only its own timer: if an enclosing scope cancels the task while the body runs, the cancellation keeps unwinding past `with_timeout` and never becomes `Err(TimedOut)`. r[conc.timeout.clock] It needs `uses Clock`, because it reads the time, so under `quince` `test` the timer runs on the fake clock and fires at the same point on every run.
-- r[conc.cancel.cleanup-shield] Cleanup that runs while a task unwinds is shielded from cancellation, so a graceful close (flushing a buffer, sending a goodbye) finishes. r[conc.cancel.cleanup-limit] It has a time limit, 10 seconds unless the resource declares another ([Interop with C](#memory-across-the-boundary)). Past the limit the cleanup itself is cancelled, and the resource's C-level release still runs.
-- r[conc.cancel.cleanup-panic] A panic in cleanup doesn't stop the unwinding. The remaining cleanups still run, and the task ends as panicked, whether it was unwinding from a cancellation or from an earlier panic. The owning scope handles it like any other panic, and the report lists every panic that occurred.
-
-### Shared state
-
-- r[conc.share.values] Values are immutable by default and can be shared freely between tasks.
-- A `Ref<T>` cannot cross a task boundary, and neither can any value that contains one ([Reference types](reference/types.md)). r[conc.share.spawn-reject] The compiler rejects capturing such a value in a `spawn`, and the error names the field that holds the reference.
-- r[conc.share.channels] Tasks communicate through `Channel<T>` or explicitly concurrent types such as `Atomic<T>` and `ConcurrentMap<K, V>`. r[conc.share.state] Every operation on them requires `uses State`. r[conc.share.no-races] Data races are impossible in safe code.
-- r[conc.chan.capacity] A `Channel<T>` has a fixed capacity, set when it is created. r[conc.chan.send] `ch.send(v)` waits while the channel is full and returns `Err(ChannelClosed)` once it has been closed. r[conc.chan.receive] `ch.receive()` waits for a value and returns `Option<T>`, which is `None` once the channel is closed and empty. r[conc.chan.close] `ch.close()` closes it, and values already sent can still be received.
-- r[conc.share.modify-pure] The closures passed to `Ref.modify`, `Atomic.modify` and `ConcurrentMap.update` must be pure. r[conc.share.modify-atomic] The update is applied only after the closure returns, so a cancellation inside the closure leaves the reference unchanged, and an update is never applied halfway.
-
-### Waiting on several channels
-
-r[conc.select.wait] `select` waits on several channel operations at once and runs the arm of the first one that is ready:
-
-```
-fn worker(jobs: Channel<Job>, control: Channel<Command>) uses State, Net {
-  while true {
-    select {
-      job = jobs.receive() => match job {
-        Some(j) => process(j),
-        None => return,
-      },
-      cmd = control.receive() => match cmd {
-        Some(Command.Stop) => return,
-        Some(_) => (),
-        None => {
-          for j in jobs.iter() { process(j) }
-          return
-        },
-      },
-    }
-  }
-}
-```
-
-- r[conc.select.arm] Each arm is `pattern = operation => expression`, where the operation is a `receive()` or a `send(v)` on a channel. Nothing else can be an arm. r[conc.select.irrefutable] An arm's pattern must be irrefutable, usually a plain name. A refutable one is a compile error, and its fix binds a name and matches in the body. r[conc.select.closed] A `receive()` on a closed, empty channel is ready at once and yields `None`, so a loop that keeps selecting on it spins. On `None`, leave the loop and drain the other channel with `.iter()`. r[conc.select.body] An arm's body is an ordinary block of the enclosing function, not a closure, so it may assign the function's `var`s and `return` from the function.
-- r[conc.select.value] The `select` evaluates to the value of the arm that ran, so every arm has the same type.
-- r[conc.select.random] When several arms are ready at once, one is picked at random. r[conc.select.seeded] Under `quince` `test` the pick is part of the seeded schedule, so a failure replays exactly.
-- r[conc.select.no-default] There is no timeout arm and no default arm. For a deadline, wrap the `select` in `with_timeout`; for shutdown, cancel the task. A `select` is a cancellation point like any other wait.
 
 ### Deterministic testing
 
@@ -589,7 +298,7 @@ r[mem.rc] Quince manages memory with reference counting that the compiler insert
 | r[tool.profile.debug] `debug` (default) | O0 | On | On | Full |
 | r[tool.profile.release] `release` | O2, ThinLTO | On | On, except `@unchecked` | Line tables |
 
-r[tool.profile.overflow] Overflow checks stay on in release builds because overflow is defined as a panic ([Errors and failure](#panics-bugs)), not an optimization opportunity.
+r[tool.profile.overflow] Overflow checks stay on in release builds because overflow is defined as a panic ([Errors and failure](reference/errors.md)), not an optimization opportunity.
 
 ### Targets
 
@@ -726,7 +435,7 @@ let changes = ffi.with_resource(Resource.adopt(out.get()), fn(db) {
 - r[ffi.cmem.drop-close] Dropping the last reference to an open resource closes it then and there, a moment reference counting makes exact ([Memory](#memory-management)). So a wrapper such as `Db` is correct without any close call, and its `close` method exists for callers that want the C error code. r[ffi.cmem.pinned-cleanup] For a `@pinned` library the cleanup is queued onto that library's thread. r[ffi.cmem.cycle-warn] Only a Resource freed when the cycle collector breaks its cycle ([Memory](#memory-management)) logs a warning, since the moment of cleanup is then unpredictable, and `quince` `check` warns about any reference type that can hold a Resource in a cycle.
 - r[ffi.cmem.use-after-close] Using a resource after it is closed is a bug: `res.ptr()` or `res.close()` on a closed resource panics, naming the foreign type and the line that closed it. r[ffi.cmem.escape-warn] `quince` `check` warns when a Resource, or a value holding one, is returned from or escapes a `with_resource` body.
 - r[ffi.cmem.scope-release] A value that owns C memory (a `Resource`, `CBuf`, `Callback` or `CString`, or a value holding one) is never released before the end of the scope that holds it, even after its last use, because C may still hold its pointer. r[ffi.cmem.drop-order] On every exit (normal, `?`, panic, cancellation), locals are released in reverse order of creation, and the fields of a dropped struct in declaration order. r[ffi.cmem.keep] To tie a callback to the handle C stores it in, use `res.keep(cb)`. The same is how to hand C memory it keeps, such as a string it stores: a `CString` passed directly is lent for that call only, so keep it on the resource with `res.keep(cstr)`.
-- r[ffi.cmem.cleanup-limit] Cleanup is shielded from cancellation and has a time limit, 10 seconds unless the resource's declaration sets another. Past the limit the cleanup is cancelled, and the C-level release still runs ([Cancellation](#cancellation)).
+- r[ffi.cmem.cleanup-limit] Cleanup is shielded from cancellation and has a time limit, 10 seconds unless the resource's declaration sets another. Past the limit the cleanup is cancelled, and the C-level release still runs ([Cancellation](reference/concurrency.md#cancellation)).
 
 **Sharing resources between tasks.** r[ffi.cresource.crossing] A `Resource<T>` can't cross a task boundary unless its foreign type is marked `@shareable`, a promise that the C handle is safe to use from several threads. r[ffi.pool.def] For the usual case, a handle that isn't, the standard library's `Pool<T, Err, uses E>` holds up to `max` of them and hands each one to a single task at a time:
 
@@ -768,7 +477,7 @@ Runtime rules for foreign calls (separate thread pool, `@pinned`, cancellation) 
 
 ### Testing foreign code
 
-C code does real I/O whatever handler is installed, so a test fake can't stand in for it. r[ffi.ffitest.opt-in] A test that reaches a `foreign` block must opt in to each effect the block declares that tests fake by default: a test that calls into `foreign "sqlite3" uses Fs` needs `test "..." uses Fs`, and the compile error names the block and the opt-in to add. r[ffi.ffitest.pure] Pure blocks and `uses State` blocks need nothing. r[ffi.ffitest.step] The scheduler counts each foreign call as one step. A test that should not touch real I/O replaces the wrapper's own effect with a fake ([Effects](#handlers-in-tests-and-production)).
+C code does real I/O whatever handler is installed, so a test fake can't stand in for it. r[ffi.ffitest.opt-in] A test that reaches a `foreign` block must opt in to each effect the block declares that tests fake by default: a test that calls into `foreign "sqlite3" uses Fs` needs `test "..." uses Fs`, and the compile error names the block and the opt-in to add. r[ffi.ffitest.pure] Pure blocks and `uses State` blocks need nothing. r[ffi.ffitest.step] The scheduler counts each foreign call as one step. A test that should not touch real I/O replaces the wrapper's own effect with a fake ([Effects](reference/effects.md)).
 
 ## 12. Open questions
 
@@ -781,117 +490,13 @@ Only the name remains open. Every design question raised in the v0.1 and v0.2 re
 ### Declarations, types and patterns
 
 ```ebnf
-contract     = "requires" expr | "ensures" [ "(" name ")" ] expr
-effect_decl  = "effect" Name ( [ "uses" effects ] "{" { fn_sig NEWLINE } "}" | "=" type_path )
 foreign_decl = "foreign" string [ "uses" effects ] "{" { ( { attribute NEWLINE } ( c_fn | "type" c_name ) ) NEWLINE } "}"
 c_fn         = "fn" c_name "(" [ c_name ":" type { "," c_name ":" type } [ "," ] ] ")" [ "->" type ]
 test_decl    = "test" string [ "forall" "(" params ")" ] [ "uses" effects ] block
-effects      = "*" | effect_ref { "," effect_ref }      // "*" only on main
-effect_ref   = type_path | Name                          // an effect or an effect variable
-
-concurrent   = "concurrent" [ "(" arg { "," arg } ")" ]
-               ( "{" spawn { "," spawn } [ "," ] "}" | "for" pattern "in" expr block )
-spawn        = "spawn" expr
-background   = "background" "(" name ":" "TaskScope" [ "," arg ] ")" block
-select       = "select" "{" { pattern "=" expr "=>" ( block | expr ) "," } "}"
-with_expr    = "with" handler { "," handler } block
-handler      = type_path "=" expr
 ```
 
 ## Appendix: Prelude
 
-### Prelude names
-
-r[effect.builtin-ops-no-import] Calling a built-in effect's operations never needs an import.
-
-### Reference types and concurrency (std.sync)
-
-```
-pub struct TimedOut { pub after: Duration }
-pub struct ChannelClosed
-pub struct ScopeFailed { pub spawn_site: String, pub message: String }
-pub enum FailurePolicy { LogAndContinue, Restart(max: Int), FailScope }
-```
-
 ### Built-in effect operations
 
-r[effect.builtin-ops] A built-in effect's operations are called through its name, like a package effect's: `Clock.now()`, `Fs.read_text(path)`, `Process.exit(1)`. These operations are what a handler for that effect implements, in tests and in a narrowing `with` ([Effects](#handlers-in-tests-and-production)). Standard library packages build higher-level APIs on them, such as `std.http` on `Net` and `Listen`.
-
-```
-effect Fs {
-  fn read(path: String) -> Result<Bytes, FsError>
-  fn read_text(path: String) -> Result<String, FsError>
-  fn read_range(path: String, offset: Int, length: Int) -> Result<Bytes, FsError>
-  fn read_lines(path: String) -> Result<Iter<Result<String, FsError>, uses Fs>, FsError>   // streams; each next() is an Fs call that may fail
-  fn write(path: String, data: Bytes) -> Result<Unit, FsError>
-  fn write_text(path: String, text: String) -> Result<Unit, FsError>
-  fn append(path: String, data: Bytes) -> Result<Unit, FsError>
-  fn exists(path: String) -> Result<Bool, FsError>
-  fn list_dir(path: String) -> Result<List<String>, FsError>         // sorted by name
-  fn walk(path: String) -> Result<List<String>, FsError>             // every file below path, sorted
-  fn metadata(path: String) -> Result<Metadata, FsError>
-  fn create_dir(path: String) -> Result<Unit, FsError>       // creates missing parents
-  fn remove(path: String) -> Result<Unit, FsError>           // a file or an empty directory
-  fn rename(path: String, to: String) -> Result<Unit, FsError>
-  fn copy(path: String, to: String) -> Result<Unit, FsError>
-  fn temp_dir() -> String
-}
-
-effect Net {
-  fn connect(host: String, port: Int, tls: Bool = false) -> Result<Outbound, NetError>
-  fn send(conn: Outbound, data: Bytes) -> Result<Unit, NetError>
-  fn receive(conn: Outbound, max: Int) -> Result<Bytes, NetError>   // empty once the peer closes
-  fn close(conn: Outbound)
-}
-
-effect Listen {
-  fn bind(host: String, port: Int) -> Result<Listener, NetError>
-  fn accept(listener: Listener) -> Result<Inbound, NetError>
-  fn send(conn: Inbound, data: Bytes) -> Result<Unit, NetError>
-  fn receive(conn: Inbound, max: Int) -> Result<Bytes, NetError>
-  fn close(conn: Inbound)
-}
-
-effect Clock {
-  fn now() -> Timestamp
-  fn monotonic() -> Duration              // since a fixed point; never goes backwards
-  fn sleep(d: Duration)
-}
-
-effect Random {
-  fn bytes(count: Int) -> Bytes           // from the OS's secure generator
-  fn int(range: Range<Int>) -> Int  requires !range.is_empty()   // Random.int(1..=6)
-  fn float() -> Float                     // at least 0.0, below 1.0
-  fn bool() -> Bool
-}
-
-effect Env {
-  fn get(name: String) -> Option<String>
-  fn vars() -> Map<String, String>
-  fn args() -> List<String>               // without the program name
-  fn program_name() -> String
-  fn current_dir() -> String
-}
-
-effect Process {
-  fn run(program: String, args: List<String>, input: Bytes = b"") -> Result<ProcessOutput, ProcessError>
-  fn exit(code: Int) -> Never
-}
-
-effect Console {
-  fn print(text: String)                  // standard output, then a newline
-  fn write(text: String)                  // standard output, no newline
-  fn eprint(text: String)                 // standard error, then a newline
-  fn read_line() -> Option<String>        // without the newline; None at end of input
-  fn read_all() -> Bytes
-  fn is_terminal() -> Bool                // whether standard output is a terminal
-}
-
-pub enum FsError { NotFound(path: String), AlreadyExists(path: String), DirectoryNotEmpty(path: String), InvalidUtf8(path: String), PermissionDenied(path: String), Other(path: String, message: String) }
-pub enum NetError { Refused, TimedOut, Reset, NameNotFound(host: String), PermissionDenied(host: String), Other(message: String) }
-```
-
-- r[effect.state-no-ops] `State` has no operations. It is the permission for the reference-type methods in [std.sync](../std/API.md#reference-types-and-concurrency-stdsync).
-- A manifest limit that refuses an operation returns `FsError.PermissionDenied` or `NetError.PermissionDenied` ([Program execution](#capabilities-at-runtime)).
 - r[exec.broken-pipe] Writes to a closed standard output end the program quietly with code 0, as Unix tools do on a broken pipe, so `Console` writes return nothing to check.
-- Sleeping, accepting and receiving are cancellation points like every effectful call ([Cancellation](#cancellation)).
