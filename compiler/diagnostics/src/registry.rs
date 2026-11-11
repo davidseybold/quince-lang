@@ -56,6 +56,11 @@ pub const REGISTRY: &[CodeInfo] = &[
         include_str!("../explain/E0008.md"),
     ),
     error(
+        "E0009",
+        "invalid char literal",
+        include_str!("../explain/E0009.md"),
+    ),
+    error(
         "E0010",
         "unknown literal tag",
         include_str!("../explain/E0010.md"),

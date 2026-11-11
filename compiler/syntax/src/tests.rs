@@ -3,6 +3,7 @@
 use crate::{Lexed, SyntaxKind, lex_str};
 use std::path::Path;
 
+mod chars;
 mod errors;
 mod multiline;
 mod numbers;
@@ -126,15 +127,6 @@ fn tokens_for_errors() {
          BlockComment \"/*\"\n"
     );
     assert_eq!(dump("/**/"), "BlockComment \"/**/\"\n");
-}
-
-/// Until their own layer, char literals lex by a fallback rule (`docs/design/m1-lexer.md`).
-#[test]
-fn char_fallback() {
-    assert_eq!(
-        dump("'a' 'b\n"),
-        "Char \"'a'\"\nWhitespace \" \"\nChar \"'b\"\nNewline \"\\n\"\n"
-    );
 }
 
 #[test]

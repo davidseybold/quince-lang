@@ -60,8 +60,12 @@ impl Lexer<'_> {
                     if let Err(problem) = escape.value {
                         dangling = problem == BadEscape::Dangling;
                         let text = &rest[len..len + escape.len];
-                        let mut error =
-                            escape_error(text, start + len, problem, interpolates, false);
+                        let mut error = escape_error(
+                            text,
+                            start + len,
+                            problem,
+                            EscapeIn::String { interpolates },
+                        );
                         if open_unicode_end == Some(len) {
                             error.fixes.clear();
                         }
@@ -238,26 +242,42 @@ pub(super) fn opens_unicode(text: &str) -> bool {
     text.starts_with("\\u") && !text.ends_with('}')
 }
 
-/// The E0006 for the escape `text`, at `at`, in a string that `interpolates` or in a bytes
-/// literal when `bytes` is true.
+/// The kind of literal an escape is in, which decides how its E0006 reads.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum EscapeIn {
+    /// A `"` or `"""` string, which interpolates unless it is a test's name.
+    String {
+        interpolates: bool,
+    },
+    Bytes,
+    Char,
+}
+
+/// The E0006 for the escape `text`, at `at`, in a literal of the kind `within`.
 pub(super) fn escape_error(
     text: &str,
     at: usize,
     problem: BadEscape,
-    interpolates: bool,
-    bytes: bool,
+    within: EscapeIn,
 ) -> LexError {
     let error =
         |message: String| LexError::new(at..at + text.len(), codes::INVALID_ESCAPE, message);
     let example = "as in `\\u{1F600}`";
-    let literal = if bytes { "a bytes literal" } else { "a string" };
+    let bytes = within == EscapeIn::Bytes;
+    let literal = match within {
+        EscapeIn::String { .. } => "a string",
+        EscapeIn::Bytes => "a bytes literal",
+        EscapeIn::Char => "a char literal",
+    };
     let message = match problem {
         BadEscape::Dangling => {
             "a `\\` at the end of a line escapes nothing: a backslash is written `\\\\`".to_string()
         }
         BadEscape::Needless(c) => {
-            let why = match c {
-                '}' if interpolates => ": only `{` opens an interpolation, so a lone `}` is text",
+            let why = match (c, within) {
+                ('}', EscapeIn::String { interpolates: true }) => {
+                    ": only `{` opens an interpolation, so a lone `}` is text"
+                }
                 _ => "",
             };
             return error(format!("`{c}` needs no escape in {literal}{why}")).with_fix(
@@ -320,6 +340,10 @@ pub(super) fn escape_error(
         BadEscape::Unknown(_) if bytes => format!(
             "`{text}` isn't an escape: a bytes literal's escapes are `\\x` with two hex digits, \
              `\\n`, `\\t`, `\\r`, `\\0`, `\\\\` and `\\\"`, so a backslash is written `\\\\`"
+        ),
+        BadEscape::Unknown(_) if within == EscapeIn::Char => format!(
+            "`{text}` isn't an escape: a char literal's escapes are `\\n`, `\\t`, `\\r`, `\\0`, \
+             `\\\\`, `\\'`, `\\\"`, `\\{{` and `\\u{{...}}`, so a backslash is written `\\\\`"
         ),
         BadEscape::Unknown(_) => format!(
             "`{text}` isn't an escape: a string's escapes are `\\n`, `\\t`, `\\r`, `\\0`, `\\\\`, \

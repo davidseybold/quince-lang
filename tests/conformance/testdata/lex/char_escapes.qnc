@@ -1,0 +1,19 @@
+// rule: lex.lit.char.escapes
+// mode: parse
+// A char literal takes a string's escapes, \n \t \\ \" \{ \r \0 and \u{...}, plus \'.
+// Any other escape is an error, including \} and \x.
+fn f() {
+  let a = '\n'
+  let b = '\t'
+  let c = '\\'
+  let d = '\"'
+  let e = '\{'
+  let g = '\r'
+  let h = '\0'
+  let i = '\u{1F600}'
+  let quote = '\''
+  let brace = '\}' //~ E0006
+  let unknown = '\q' //~ E0006
+  let hex = '\x' //~ E0006
+  let surrogate = '\u{D800}' //~ E0006
+}

@@ -92,6 +92,57 @@ pub fn bytes_value(text: &str) -> Vec<u8> {
     value
 }
 
+/// The value of a `Char` token's text, quotes included, or `None` when it isn't one character,
+/// which the lexer has already reported. Its escapes are decoded as `string_value` decodes a
+/// string's, so `\}` is `}`, and any other invalid escape, kept as written, is more than one.
+pub fn char_value(text: &str) -> Option<char> {
+    let body = text
+        .strip_prefix('\'')
+        .expect("a Char token starts with `'`");
+    // An unclosed char runs to its line end, so a `'` it ends with may be the `'` of `\'`.
+    let closed = body.ends_with('\'') && char_body_len(body) < body.len();
+    let body = if closed {
+        &body[..body.len() - 1]
+    } else {
+        body
+    };
+    let value = char_body_value(body);
+    let mut chars = value.chars();
+    let c = chars.next()?;
+    chars.next().is_none().then_some(c)
+}
+
+/// The length of a char literal's body at the start of `text`, which follows the opening `'`:
+/// up to its closing `'`, or all of `text` when there is none. An escape's `'` doesn't close it.
+pub(crate) fn char_body_len(text: &str) -> usize {
+    let mut len = 0;
+    while let Some(c) = text[len..].chars().next() {
+        match c {
+            '\'' => break,
+            '\\' => len += char_escape(&text[len..]).len,
+            c => len += c.len_utf8(),
+        }
+    }
+    len
+}
+
+/// The value of a char literal's body, with its escapes decoded as `char_value` describes.
+pub(crate) fn char_body_value(body: &str) -> String {
+    let mut value = String::with_capacity(body.len());
+    let mut rest = body;
+    while let Some(i) = rest.find('\\') {
+        value.push_str(&rest[..i]);
+        let escape = char_escape(&rest[i..]);
+        match escape.value {
+            Ok(c) | Err(BadEscape::Needless(c)) => value.push(c),
+            Err(_) => value.push_str(&rest[i..i + escape.len]),
+        }
+        rest = &rest[i + escape.len..];
+    }
+    value.push_str(rest);
+    value
+}
+
 /// An escape: its length in bytes, and the character it stands for or what is wrong with it.
 pub(crate) struct Escape {
     pub len: usize,
@@ -144,7 +195,7 @@ pub(crate) fn escape(text: &str) -> Escape {
         '\\' | '"' | '{' => ok(2, c),
         '\n' | '\r' => bad(1, BadEscape::Dangling),
         '\'' | '}' => bad(2, BadEscape::Needless(c)),
-        'u' => unicode_escape(text),
+        'u' => unicode_escape(text, false),
         c => bad(1 + c.len_utf8(), BadEscape::Unknown(c)),
     }
 }
@@ -182,8 +233,23 @@ pub(crate) fn byte_escape(text: &str) -> ByteEscape {
     ByteEscape { len, value }
 }
 
-/// `\u{...}` at the start of `text` (`r[lex.lit.string.unicode-escape]`).
-fn unicode_escape(text: &str) -> Escape {
+/// The escape at the start of `text`, which starts with `\`, in a char literal: a string's
+/// escapes plus `\'` (`r[lex.lit.char.escapes]`). It never takes the `'` that closes the char,
+/// except as the `'` of `\'`.
+pub(crate) fn char_escape(text: &str) -> Escape {
+    match text.as_bytes().get(1) {
+        Some(b'\'') => Escape {
+            len: 2,
+            value: Ok('\''),
+        },
+        Some(b'u') => unicode_escape(text, true),
+        _ => escape(text),
+    }
+}
+
+/// `\u{...}` at the start of `text` (`r[lex.lit.string.unicode-escape]`), in a char literal
+/// when `in_char` is true, where its digits also stop at a `'`.
+fn unicode_escape(text: &str, in_char: bool) -> Escape {
     let bad = |len, problem| Escape {
         len,
         value: Err(problem),
@@ -191,9 +257,12 @@ fn unicode_escape(text: &str) -> Escape {
     let Some(inner) = text[2..].strip_prefix('{') else {
         return bad(2, BadEscape::UnicodeNoBraces);
     };
-    let end = inner
-        .find(['}', '"', '{', '\\', '\n', '\r'])
-        .unwrap_or(inner.len());
+    let stops: &[char] = if in_char {
+        &['}', '"', '{', '\\', '\n', '\r', '\'']
+    } else {
+        &['}', '"', '{', '\\', '\n', '\r']
+    };
+    let end = inner.find(stops).unwrap_or(inner.len());
     let digits = &inner[..end];
     // `\u{AB\}` is one bad escape, so that deleting the `\` of a `\}` can't complete it. Only
     // with hex digits: a fix can turn `\'` into `'`, and that must not regroup the escape.

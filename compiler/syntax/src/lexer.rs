@@ -4,6 +4,7 @@ use crate::{Decoded, LexError, SyntaxKind, codes};
 use quince_diagnostics::{Applicability, Diagnostic, LineIndex};
 use std::ops::Range;
 
+mod chars;
 mod multiline;
 mod number;
 mod prefixed;
@@ -177,20 +178,6 @@ impl<'a> Lexer<'a> {
                 None => self.unknown_characters(),
             },
         }
-    }
-
-    /// Until chars have their own rules: everything from a `'` to the next `'` on the line.
-    fn char_literal(&mut self) {
-        let rest = &self.rest()[1..];
-        let len = match rest.find(['\'', '\n', '\r']) {
-            Some(i) if rest[i..].starts_with('\'') => i + 2,
-            found => {
-                let len = found.unwrap_or(rest.len()) + 1;
-                self.unclosed_literal_end = Some(self.pos + len);
-                len
-            }
-        };
-        self.bump(SyntaxKind::Char, len);
     }
 
     fn lone_carriage_return(&mut self, at: usize) {
