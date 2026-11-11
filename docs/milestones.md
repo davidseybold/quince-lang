@@ -41,7 +41,7 @@ Phase 1 ends when `quince check` parses and resolves a multi-file project, and `
 - The diagnostics crate: error-code registry, JSON schema, and a CI rule that every code has `explain` text and a test.
 - *Exit:* CI is green on an empty suite, and the coverage report lists every rule ID as uncovered.
 
-**M1. Syntax.** Lexical structure, the syntax in Items, Expressions and Statements, and the grammar (every chapter's `ebnf` blocks).
+**M1. Syntax.** Lexical structure, the syntax in Items, Expressions and Statements, the grammar (every chapter's `ebnf` blocks), and the formatting rules in Toolchain.
 
 - Lexer and hand-written recursive-descent parser producing a lossless CST, with error recovery.
 - Parse diagnostics with codes and spans; operator precedence and the rules against mixing `&&` with `||` or chaining comparisons.
