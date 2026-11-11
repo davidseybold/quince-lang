@@ -22,6 +22,10 @@ macro_rules! syntax_kinds {
             /// joins two adjacent tokens to form them.
             pub const PUNCTUATION: &[(&str, SyntaxKind)] =
                 &[$(($punct_text, SyntaxKind::$punct)),*];
+            /// Every kind that is neither a keyword nor punctuation, for tests that walk every
+            /// kind.
+            #[cfg(test)]
+            pub const TOKENS: &[SyntaxKind] = &[$(SyntaxKind::$token),*];
         }
     };
 }

@@ -12,7 +12,7 @@ pub(super) fn errors(text: &str) -> Vec<String> {
 }
 
 /// The token invariants, and every error range lies inside the text on character boundaries.
-fn check_error_ranges(text: &str, lexed: &Lexed) {
+pub(super) fn check_error_ranges(text: &str, lexed: &Lexed) {
     check_invariants(text, lexed);
     for e in &lexed.errors {
         let (start, end) = (e.range.start as usize, e.range.end as usize);

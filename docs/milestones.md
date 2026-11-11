@@ -46,7 +46,7 @@ Phase 1 ends when `quince check` parses and resolves a multi-file project, and `
 - Lexer and hand-written recursive-descent parser producing a lossless CST, with error recovery.
 - Parse diagnostics with codes and spans; operator precedence and the rules against mixing `&&` with `||` or chaining comparisons.
 - `quince fmt` for `.qnc` files, including attribute and comment placement.
-- *Exit:* every code block in the spec and the std API doc parses; `fmt` is idempotent and leaves canonical spec examples unchanged; a fuzzer finds no panics and printing the CST returns the input byte for byte.
+- *Exit:* every `parse` and `fmt` fixture in `testdata` passes, and `fmt` is idempotent on every fixture; a fuzzer finds no panics and printing the CST returns the input byte for byte. No test lexes, parses or formats the spec's code.
 
 **M2. Projects, modules and names.** Packages and modules, and the manifest in Dependencies and publishing (path dependencies only).
 

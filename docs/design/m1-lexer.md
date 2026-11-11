@@ -4,14 +4,14 @@ Status: approved. Passed design review (three passes). David decided the spec qu
 
 ## Why
 
-M1 ends with every code block in the spec parsing, `quince fmt` idempotent, and a lossless CST that prints back the input byte for byte ([milestones](../milestones.md)). Every one of those needs a token stream first, and so does every later stage that reads source. The lexer is also where most of the spec's [Lexical structure](../../spec/reference/lexical.md) chapter is enforced, and where the first diagnostic codes and the first conformance backend arrive.
+M1 ends with every parse fixture passing, `quince fmt` idempotent, and a lossless CST that prints back the input byte for byte ([milestones](../milestones.md)). Every one of those needs a token stream first, and so does every later stage that reads source. The lexer is also where most of the spec's [Lexical structure](../../spec/reference/lexical.md) chapter is enforced, and where the first diagnostic codes and the first conformance backend arrive.
 
 Getting the token contract right now matters more than the code, which is small. The parser, the formatter, `fix`, `query` and the language server all read tokens. Changing what a token is later means changing all of them, and every fixture and CST test that depends on token boundaries.
 
 ## Impact and approvals
 
 - **Code:** `compiler/syntax` (`quince_syntax`) gets its first modules and a `README.md` holding the token contract. `quince_diagnostics` gets a line index. `quince_conformance` gets its first backend.
-- **Crate dependencies:** `quince_syntax` gains `quince_diagnostics` (and through it the approved `serde` and `serde_json`), and `quince_spec` as a dev-dependency. `quince_conformance`, and so xtask, gain `quince_syntax`. M0 listed xtask's dependencies as `quince_spec`, `quince_diagnostics`, `quince_conformance` and `serde_json` ([M0 decision 2](m0-repo-harness.md#2-cargo-xtask-ci)). Decision 10 says why the change is fine.
+- **Crate dependencies:** `quince_syntax` gains `quince_diagnostics` (and through it the approved `serde` and `serde_json`). It had `quince_spec` as a dev-dependency until layer 7, which removed the tests that read the spec (decision 11). `quince_conformance`, and so xtask, gain `quince_syntax`. M0 listed xtask's dependencies as `quince_spec`, `quince_diagnostics`, `quince_conformance` and `serde_json` ([M0 decision 2](m0-repo-harness.md#2-cargo-xtask-ci)). Decision 10 says why the change is fine.
 - **Spec (approved by David, 2026-11-11):** the chapter leaves several things open that a lexer must decide. Spec questions, below, gives the approved wording for each. Each rule lands in the layer whose code enforces it, and each such layer bumps the spec's minor version.
 - **Diagnostic codes:** up to fifteen, the first in the registry (decision 9). A code whose rule waits on a spec question is registered only after approval.
 - **Dependencies:** none new. No `logos`, no `rowan`. Whether the CST uses `rowan` is the parser doc's question.
@@ -91,7 +91,7 @@ So the lexer offers only a helper for the parser: `SyntaxKind::continues_line()`
 - `=`, `+=`, `-=`, `*=`, `/=`, `%=`, `=>`, `->` (`r[lex.continue.more]`);
 - the binary operators other than `>` and `*`: `+`, `-`, `/`, `%`, `&`, `|`, `^`, `<<`, `&&`, `||`, `==`, `!=`, `<`, `<=`, `..`, `..=` and `is`. `-`, `|` and `<` also have other roles (prefix minus, pattern alternation, opening type arguments), but each of those continues the line too.
 
-`>` and `*` are the two kinds that depend on context: `>` closes type arguments, and `*` is the effect set in `uses *`. The parser decides those, including the second `>` of a `>>` shift. A unit test checks the list against the binary operators in `spec/grammar.ebnf`. Comments are trivia here too: a line ends with its last token before any comment.
+`>` and `*` are the two kinds that depend on context: `>` closes type arguments, and `*` is the effect set in `uses *`. The parser decides those, including the second `>` of a `>>` shift. A unit test checks the list against its own hand-written copy, not the spec (decision 11); the parser's fixtures will check where lines continue. Comments are trivia here too: a line ends with its last token before any comment.
 
 *Alternative:* Go-style terminator insertion in the lexer. Rejected for the reasons above: it would need a lexer that tracks generics and signatures, which is a parser.
 
@@ -111,7 +111,7 @@ The lexer takes the longest match among the grammar's punctuation terminals, wit
 - The 38 keywords of `r[lex.keywords]` each have their own kind (`FnKw`, `SelfTypeKw` for `Self`, and so on). There are no contextual keywords (`r[lex.no-contextual]`), so the lexer has no context to track: `main`, `limit`, `TaskScope` and the tag names lex as identifiers everywhere.
 - `c_name` lexes as an identifier too. Whether a C name may be a keyword is a question for the parser doc.
 
-A test reads the keyword list from `spec/reference/lexical.md` through `quince_spec` and fails if it differs from the lexer's table. A second test lexes every quoted terminal in `spec/grammar.ebnf` and checks each is one token, except `>>` and `>=`, which must be two `>`-led tokens, and `TaskScope`, which must be an `Ident`. So the spec and the lexer can't drift apart silently.
+A unit test checks the keyword table against its own hand-written copy of the 38 keywords, not the spec (decision 11), and checks that every keyword and punctuation lexes as one token of its kind.
 
 ### 7. Numbers
 
@@ -214,9 +214,8 @@ The runner changes:
 ### 11. Testing
 
 - **Unit tests** in `quince_syntax` compare token dumps (`kind "text"` per line) with hand-written expected text, and check decoded values through `literal`. No snapshot crate.
-- **Spec sync tests** (decisions 4 and 6): keywords against the spec, punctuation and `continues_line()` against the grammar.
-- **Corpus:** every code block labelled `quince` in the spec chapters and `std/API.md` lexes with no errors (spec question 5).
-- **Invariants on every input:** no panic; the token texts concatenate to the input; no token is empty; every error range lies inside the input on character boundaries. These run over seeded mutations (inserted, deleted and swapped characters, from a small dependency-free PRNG) of the corpus, the unit-test inputs and the `lex/` fixtures. The last two exercise the string and interpolation states, which the corpus barely reaches. They are bounded so `cargo test` stays under a second for this crate. A `cargo-fuzz` target needs nightly and a dependency, so it waits for the parser doc, which owns the fuzzing exit criterion.
+- **No `quince_syntax` test reads the spec** (decided by David, 2026-11-11). No lexer or parser test lexes or parses the spec's code blocks, or reads the spec's keyword list or grammar. Tests use the `testdata` fixtures and their own inputs, such as hand-written copies of the keyword list and of decision 4's line-continuing tokens. Layer 7 removed the spec sync tests that earlier layers added, and with them `quince_syntax`'s dev-dependency on `quince_spec`.
+- **Invariants on every input:** no panic; the token texts concatenate to the input; no token is empty; every error range lies inside the input on character boundaries. These run over seeded mutations (inserted, deleted and swapped bytes, from a small dependency-free PRNG) of the `lex/` fixtures, as bytes so they reach invalid UTF-8 and `decode_source`. The mutants together must report every code, which the fixtures guarantee, since every code has one. Each fixture's mutants come from a stream seeded by its own bytes, so editing another fixture doesn't change them. The unit-test inputs aren't collected (layer 7): the fixtures cover every code and literal form, and the `every_short_*` tests already try every short literal text. The mutations take about 0.25 s in debug. The crate's run takes about 2 s in debug, set by `every_short_multiline_string`, so they add no time to it; the first goal of under a second was already missed before layer 7. A `cargo-fuzz` target needs nightly and a dependency, so it waits for the parser doc, which owns the fuzzing exit criterion.
 - **Conformance fixtures:** one per diagnostic code, as `cargo xtask diagnostics` requires, and one per rule in Tasks.
 
 **Coverage honesty.** A fixture cites a rule only when a lexer that broke the rule would fail it. With no parser yet, a `parse` fixture fails only on an unexpected or missing diagnostic. So:
@@ -240,7 +239,7 @@ Each layer builds and passes `cargo xtask ci` on its own:
 6b2. `m1/lexer-chars`: char literals; E0009; the rest of the fallback rule is removed.
 6c1. `m1/lexer-lossy-fixes`: no fixes in a lossy text (decision 9).
 6c2. `m1/lexer-control`: spec question 8, and a bump; control and bidirectional characters; E0015.
-7. `m1/lexer-corpus`: spec question 5 (labels, no bump); the corpus and mutation tests.
+7. `m1/lexer-corpus`: the mutation tests over the fixtures; the spec sync tests removed. Spec question 5 is withdrawn.
 
 Each layer should come in at around 500 to 900 changed lines. Layer 2 was first planned to hold layers 2 to 4, but it would have run to about 1,600 lines, so it is split into the token stream, its errors, and numbers. Layer 6 was planned as one layer with six codes, but layer 5 alone, with three, came to about 1,200 lines, so it is split into 6a to 6c (decided by David, 2026-11-11). Layer 6b, with three codes and four forms, was estimated at about 1,150 lines, so char literals moved to 6b2 (decided by David, 2026-11-11). The codes keep the numbers the table gives, so E0008 is registered after E0013 and E0014.
 
@@ -248,7 +247,7 @@ Each layer should come in at around 500 to 900 changed lines. Layer 2 was first 
 
 ## Spec questions (decided by David, 2026-11-11)
 
-All eight are approved: question 1 in its strict form, the other seven as proposed. Each rule goes in `spec/reference/lexical.md` with the tag shown. Every ID has 2 to 4 segments, and its second segment is a construct listed under `lex` in `spec/chapters.txt`. Question 1 adds one construct, `source`. Question 5 doesn't block the lexer.
+Question 1 is approved in its strict form, and questions 2 to 4 and 6 to 8 as proposed. Question 5 was approved, then withdrawn before it landed. Each rule goes in `spec/reference/lexical.md` with the tag shown. Every ID has 2 to 4 segments, and its second segment is a construct listed under `lex` in `spec/chapters.txt`. Question 1 adds one construct, `source`.
 
 **1. Source text (layer 3).** The chapter doesn't say what a source file is made of. Approved, as a new section "Source text" at the top of the chapter, with a `source` construct ("Source text: encoding, line endings, whitespace"):
 - `r[lex.source.utf8]` A source file is UTF-8 text. A file that isn't valid UTF-8 is a compile error.
@@ -284,7 +283,7 @@ All eight are approved: question 1 in its strict form, the other seven as propos
 - `r[lex.lit.float.shape]` A float has digits on both sides of its point (`1.0`, not `1.` or `.5`), and its exponent is a lowercase `e`, an optional sign and digits. `1E9` is an error whose fix lowercases the `E`.
 - `r[lex.lit.no-suffix]` A numeric literal has no type suffix: its type comes from context.
 
-**5. Code block labels (layer 7, wording only, no bump).** The spec and `std/API.md` don't label their code blocks, so "every code block parses" can't tell Quince from TOML, JSON and REPL transcripts. A skip list keyed by file and first line would break on every edit. Approved: label every block (`quince`, `toml`, `json`, `text`), and add a `spec-rules` check that fails on an unlabelled block.
+**5. Code block labels (layer 7, wording only, no bump).** The spec and `std/API.md` don't label their code blocks, so "every code block parses" can't tell Quince from TOML, JSON and REPL transcripts. A skip list keyed by file and first line would break on every edit. Approved: label every block (`quince`, `toml`, `json`, `text`), and add a `spec-rules` check that fails on an unlabelled block. **Withdrawn** (David, 2026-11-11): no test lexes or parses the spec's code (decision 11), so nothing needs the labels, and the spec's blocks stay as they are.
 
 **6. Doc comments (layer 2).** `r[lex.comment.doc]` doesn't say whether `////` is a doc comment. Approved: `r[lex.comment.doc-exact]` "A doc comment starts with exactly three slashes: `////` starts an ordinary comment", as in Rust.
 
@@ -330,6 +329,8 @@ Found while writing this. None of them block the lexer.
 - **Rules this doc hands over** (decision 11): fixtures for `lex.keywords`, `lex.no-contextual`, `lex.no-shift-token`, `lex.grammar-rules`, `lex.ident-classes`, `lex.indentation`, `lex.comment.doc` and `lex.comment.doc-exact`. The formatter doc takes `lex.source.canonical`.
 - **Coverage ratchet.** M0 left this for M1. Decide it once the parser adds real coverage.
 - **Adjacent literals** (layer 6b). A quote in a string that isn't escaped can leave two literals side by side with no lexical error: `"press "b" now"` is a string and then a bytes literal, and `"the "r" key"` a string and then a raw string. With an unknown tag, as in `"say "hi" now"`, the lexer reports E0010. The parser reports two adjacent literals as it reports any two expressions with nothing between them, with no hint for this shape (decision 9). Likewise `r"a\"b"` is a raw string, `r"a\"`, then an unclosed bytes literal.
+
+- **No spec corpus** (decided by David, 2026-11-11). M1's exit criterion no longer asks for the spec's code blocks to parse, and no lexer or parser test reads the spec (decision 11). The parser is tested with `parse` fixtures in `testdata`, and `fmt` with `fmt` fixtures, a mode the formatter doc adds to the fixture format.
 
 ## For later milestones
 
@@ -399,6 +400,6 @@ Rule IDs in brackets are what each task's fixtures cite. Rules added by spec que
 - [x] Control and bidirectional characters; E0015. [`lex.source.control`]
 
 **Layer 7: `m1/lexer-corpus`**
-- [ ] Spec: label every code block (question 5), and the `spec-rules` check for unlabelled blocks.
-- [ ] Corpus test over the spec and `std/API.md`.
-- [ ] Mutation tests of the invariants.
+- [x] Mutation tests of the invariants, over the `lex/` fixtures.
+- [x] Remove the spec sync tests and the dev-dependency on `quince_spec` (decision 11).
+- Withdrawn: the code block labels (question 5) and the corpus test over the spec (David, 2026-11-11).

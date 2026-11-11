@@ -1,4 +1,4 @@
-//! Lexer tests: token dumps, the invariants, and sync with the spec.
+//! Lexer tests: token dumps and the invariants.
 
 use crate::{Lexed, SyntaxKind, lex_str};
 use std::path::Path;
@@ -7,6 +7,7 @@ mod chars;
 mod control;
 mod errors;
 mod multiline;
+mod mutations;
 mod numbers;
 mod prefixed;
 mod strings;
@@ -130,71 +131,88 @@ fn tokens_for_errors() {
     assert_eq!(dump("/**/"), "BlockComment \"/**/\"\n");
 }
 
+/// The keywords of `r[lex.keywords]`, copied by hand so the table can't lose, gain or rename
+/// one unnoticed.
+const KEYWORDS: [&str; 38] = [
+    "fn",
+    "let",
+    "var",
+    "type",
+    "struct",
+    "enum",
+    "interface",
+    "impl",
+    "match",
+    "is",
+    "if",
+    "else",
+    "for",
+    "in",
+    "while",
+    "return",
+    "break",
+    "continue",
+    "import",
+    "pub",
+    "uses",
+    "requires",
+    "ensures",
+    "test",
+    "forall",
+    "with",
+    "concurrent",
+    "spawn",
+    "background",
+    "foreign",
+    "true",
+    "false",
+    "self",
+    "Self",
+    "const",
+    "effect",
+    "select",
+    "as",
+];
+
+/// The tokens after which a line always continues (decision 4 of the lexer design doc), copied
+/// by hand.
+const CONTINUES_LINE: [&str; 29] = [
+    ",", "(", "[", "{", "=", "+=", "-=", "*=", "/=", "%=", "=>", "->", "+", "-", "/", "%", "&",
+    "|", "^", "<<", "&&", "||", "==", "!=", "<", "<=", "..", "..=", "is",
+];
+
+/// The keyword table is exactly [`KEYWORDS`], and every keyword and punctuation token lexes as
+/// one token of its kind.
 #[test]
-fn continues_line_is_the_grammars_binary_operators_and_more() {
-    let grammar = std::fs::read_to_string(repo_root().join(quince_spec::GRAMMAR_PATH)).unwrap();
-    let (_, grammar) = quince_spec::grammar::split_header(&grammar);
-    let binary = [
-        "logic", "compare", "cmp_op", "bits", "arith", "term", "range",
-    ];
-    let mut expected: Vec<String> = productions_terminals(grammar, &binary);
-    expected.extend(productions_terminals(grammar, &["assign_op"]));
-    expected.extend(["=>", "->", ",", "(", "[", "{"].map(String::from));
-    // `>` and `*` depend on context, and `>=` and `>>` aren't tokens.
-    expected.retain(|t| ![">", "*", ">=", ">>"].contains(&t.as_str()));
-    for terminal in &expected {
-        let kind = single_token(terminal);
-        assert!(kind.continues_line(), "{terminal} must continue a line");
+fn keywords_and_punctuation() {
+    let mut ours: Vec<&str> = SyntaxKind::KEYWORDS.iter().map(|(text, _)| *text).collect();
+    let mut expected = KEYWORDS.to_vec();
+    ours.sort();
+    expected.sort();
+    assert_eq!(ours, expected);
+    for &(text, kind) in SyntaxKind::KEYWORDS.iter().chain(SyntaxKind::PUNCTUATION) {
+        assert_eq!(single_token(text), kind, "{text}");
+    }
+}
+
+/// A kind continues a line exactly when it is a keyword or punctuation in [`CONTINUES_LINE`].
+#[test]
+fn continues_line() {
+    for text in CONTINUES_LINE {
+        assert!(
+            single_token(text).continues_line(),
+            "{text} must continue a line"
+        );
     }
     for &(text, kind) in SyntaxKind::PUNCTUATION.iter().chain(SyntaxKind::KEYWORDS) {
         assert_eq!(
             kind.continues_line(),
-            expected.iter().any(|t| t == text),
+            CONTINUES_LINE.contains(&text),
             "{text}"
         );
     }
-}
-
-#[test]
-fn every_grammar_terminal_is_one_token() {
-    let grammar = std::fs::read_to_string(repo_root().join(quince_spec::GRAMMAR_PATH)).unwrap();
-    let (_, grammar) = quince_spec::grammar::split_header(&grammar);
-    let terminals = productions_terminals(grammar, &[]);
-    assert!(terminals.len() > 70, "{terminals:?}");
-    for terminal in &terminals {
-        match terminal.as_str() {
-            ">=" | ">>" => {
-                let kinds: Vec<_> = lex_str(terminal).tokens.iter().map(|t| t.kind).collect();
-                assert_eq!(kinds[0], SyntaxKind::Gt, "{terminal}");
-                assert_eq!(kinds.len(), 2, "{terminal}");
-            }
-            "TaskScope" => assert_eq!(single_token(terminal), SyntaxKind::Ident),
-            _ => {
-                let kind = single_token(terminal);
-                assert_ne!(kind, SyntaxKind::Ident, "{terminal}");
-            }
-        }
-    }
-}
-
-#[test]
-fn keywords_match_the_spec() {
-    let spec = quince_spec::Spec::load(&repo_root()).unwrap();
-    let chapter = spec.file("reference/lexical.md").unwrap();
-    let line = chapter
-        .text
-        .lines()
-        .skip_while(|l| *l != "r[lex.keywords]")
-        .nth(1)
-        .unwrap();
-    let mut spec_keywords: Vec<&str> = line.split('`').skip(1).step_by(2).collect();
-    let mut ours: Vec<&str> = SyntaxKind::KEYWORDS.iter().map(|(text, _)| *text).collect();
-    spec_keywords.sort();
-    ours.sort();
-    assert_eq!(ours.len(), 38);
-    assert_eq!(ours, spec_keywords);
-    for (text, kind) in SyntaxKind::KEYWORDS {
-        assert_eq!(single_token(text), *kind);
+    for kind in SyntaxKind::TOKENS {
+        assert!(!kind.continues_line(), "{kind:?} must not continue a line");
     }
 }
 
@@ -207,42 +225,4 @@ fn single_token(text: &str) -> SyntaxKind {
     assert!(lexed.errors.is_empty(), "{text}: {:?}", lexed.errors);
     assert_eq!(lexed.tokens.len(), 1, "{text} lexes as {:?}", lexed.tokens);
     lexed.tokens[0].kind
-}
-
-/// The quoted terminals of the named productions, or of every production when `names` is
-/// empty. A production starts at a line `name =`, and indented lines continue it.
-fn productions_terminals(grammar: &str, names: &[&str]) -> Vec<String> {
-    let mut found = Vec::new();
-    let mut in_named = false;
-    for line in grammar.lines() {
-        if !line.starts_with(char::is_whitespace) && !line.starts_with("//") {
-            let name = line.split('=').next().unwrap_or("").trim();
-            in_named = names.is_empty() || names.contains(&name);
-        }
-        if !in_named {
-            continue;
-        }
-        let rhs = if line.starts_with(char::is_whitespace) {
-            line
-        } else {
-            line.split_once('=').map_or("", |(_, r)| r)
-        };
-        let mut rest = rhs;
-        while let Some(i) = rest.find(['"', '/']) {
-            if rest[i..].starts_with("//") {
-                break;
-            }
-            if rest[i..].starts_with('/') {
-                rest = &rest[i + 1..];
-                continue;
-            }
-            let after = &rest[i + 1..];
-            let end = after.find('"').expect("a closed string");
-            if !found.iter().any(|t| t == &after[..end]) {
-                found.push(after[..end].to_string());
-            }
-            rest = &after[end + 1..];
-        }
-    }
-    found
 }
