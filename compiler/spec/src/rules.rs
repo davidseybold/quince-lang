@@ -1,10 +1,11 @@
-//! Rule tags: `r[<id>]`, written directly before the sentence or sentences a rule covers.
+//! Rule tags: `r[<id>]` on a line of its own, directly above the paragraph or top-level `-` or
+//! `*` list item it covers, as in the Rust Reference.
 //!
-//! A tag is `r[` at the start of a line or after whitespace, outside code blocks and inline
-//! code spans, closed by `]` and followed by one space. Tags never appear in headings. Text
-//! shaped like a tag anywhere else is an error, so a misplaced tag can't silently drop out of
-//! coverage. A backtick run with no closing run on the same line is literal text, as in
-//! CommonMark.
+//! A tag line holds only the tag, at column 0, and follows a blank line, a heading or the start
+//! of the file. It covers exactly the block after it: the paragraph, or the item's own text and
+//! its lazy continuation lines. `r[` anywhere else outside code blocks and inline code spans is
+//! an error, so a misplaced tag can't silently drop out of coverage. A backtick run with no
+//! closing run on the same line is literal text, as in CommonMark.
 
 use crate::manifest::{Chapter, LEGACY_PREFIX};
 use crate::{CHAPTERS_PATH, ChapterFile, FileError, MOVED_PATH, SpecError};
@@ -300,65 +301,58 @@ fn entries(text: &str) -> impl Iterator<Item = (usize, &str)> {
         .filter(|(_, entry)| !entry.is_empty() && !entry.starts_with('#'))
 }
 
-/// A chapter file with every tag and the space after it removed.
+/// A chapter file with every tag line removed.
 pub fn strip(spec: &str) -> String {
     let mut out = String::with_capacity(spec.len());
     let mut in_code_block = false;
     for chunk in spec.split_inclusive('\n') {
-        if chunk.trim_start().starts_with("```") {
+        if is_fence(chunk) {
             in_code_block = !in_code_block;
         }
-        if in_code_block {
+        if in_code_block || tag_line(chunk).is_none() {
             out.push_str(chunk);
-            continue;
         }
-        let mut copied_to = 0;
-        for tag in tag_spans(chunk) {
-            out.push_str(&chunk[copied_to..tag.start]);
-            copied_to = if chunk[tag.end..].starts_with(' ') {
-                tag.end + 1
-            } else {
-                tag.end
-            };
-        }
-        out.push_str(&chunk[copied_to..]);
     }
     out
 }
 
-/// A well-formed tag on a prose line: `r[<id>]` from byte `start` up to `end`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TagSpan {
-    pub id: String,
-    pub start: usize,
-    /// Just past the `]`.
-    pub end: usize,
+/// The ID of a tag line: a line holding only `r[<id>]` from column 0, perhaps with trailing
+/// whitespace. The ID isn't checked.
+fn tag_line(line: &str) -> Option<&str> {
+    let inner = line.trim_end().strip_prefix("r[")?.strip_suffix(']')?;
+    (!inner.contains(']')).then_some(inner)
 }
 
-/// The well-formed tags on one prose line, outside inline code spans, in order. Misplaced or
-/// malformed tag-shaped text is skipped; `parse` reports it.
-pub fn tag_spans(line: &str) -> Vec<TagSpan> {
+/// Tag-shaped text on one prose line: `r[` at the start of the line or after whitespace, or
+/// glued to other text around a valid ID.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Candidate {
+    pub id: String,
+    /// Byte offset of the `r`.
+    pub start: usize,
+    /// Byte offset just past the `]`, or the end of the line when unterminated.
+    pub end: usize,
+    pub terminated: bool,
+    /// Preceded by something other than whitespace, as in `(r[x.y]`. Only found when the text
+    /// inside is a valid ID, so code-like prose such as `arr[i]` isn't flagged.
+    pub glued: bool,
+}
+
+/// The tag candidates on one prose line, outside inline code spans, in order.
+pub fn candidates(line: &str) -> Vec<Candidate> {
     find_tags(line, true)
-        .into_iter()
-        .filter(|tag| !tag.glued && tag.terminated && is_valid_id(&tag.id))
-        .map(|tag| TagSpan {
-            id: tag.id,
-            start: tag.start,
-            end: tag.end,
-        })
-        .collect()
 }
 
 /// Finds every tag in one file and reports misplaced or malformed ones, without the uniqueness
 /// and chapter checks.
 pub fn parse(spec: &str) -> (Vec<Rule>, Vec<SpecError>) {
+    let lines: Vec<&str> = spec.lines().collect();
     let mut rules = Vec::new();
     let mut errors = Vec::new();
     let mut in_code_block = false;
-    for (index, line) in spec.lines().enumerate() {
+    for (index, &line) in lines.iter().enumerate() {
         let line_no = index + 1;
-        let trimmed = line.trim_start();
-        if trimmed.starts_with("```") {
+        if is_fence(line) {
             in_code_block = !in_code_block;
             continue;
         }
@@ -374,65 +368,189 @@ pub fn parse(spec: &str) -> (Vec<Rule>, Vec<SpecError>) {
                 // Indexing such as `counter[user.id]` is glued, so it isn't a tag either.
                 if !tag.glued && tag.terminated && is_valid_id(&tag.id) {
                     error(format!(
-                        "rule tag `r[{}]` is inside a code block; tags go before prose, never in code",
+                        "rule tag `r[{}]` is inside a code block; tags go on their own line above \
+                         prose, never in code",
                         tag.id
                     ));
                 }
             }
             continue;
         }
-        let is_heading = trimmed.starts_with('#');
-        for tag in find_tags(line, true) {
-            if tag.glued {
-                error(format!(
-                    "rule tag `r[{}]` must start a line or follow a space; move it out of any \
-                     markup or punctuation, directly before the sentence it covers (or, if this \
-                     is code, put it in backticks)",
-                    tag.id
-                ));
-            } else if !tag.terminated {
-                error("unterminated rule tag: `r[` has no closing `]`".to_string());
-            } else if is_heading {
-                error(format!(
-                    "rule tag `r[{}]` is in a heading; put it before the sentence it covers",
-                    tag.id
-                ));
-            } else if !is_valid_id(&tag.id) {
-                error(format!(
-                    "invalid rule ID `{}`: use 2 to 4 dot-separated segments of lowercase letters, \
-                     digits and hyphens, such as `stmt.bind.shadow.same-scope`",
-                    tag.id
-                ));
-            } else if !line[tag.end..].starts_with(' ') {
-                error(format!(
-                    "rule tag `r[{}]` must be followed by a space and the text it covers",
-                    tag.id
-                ));
+        if let Some(id) = tag_line(line) {
+            if !is_valid_id(id) {
+                error(invalid_id(id));
+            } else if let Some(problem) = placement_problem(&lines, index) {
+                error(format!("rule tag `r[{id}]` {problem}"));
             } else {
                 rules.push(Rule {
-                    id: tag.id,
+                    id: id.to_string(),
                     line: line_no,
                 });
             }
+            continue;
+        }
+        let in_heading = is_heading(line);
+        let indented_tag = tag_line(line.trim_start()).is_some();
+        for tag in find_tags(line, true) {
+            error(if !tag.terminated {
+                "unterminated rule tag: `r[` has no closing `]`".to_string()
+            } else if !is_valid_id(&tag.id) {
+                invalid_id(&tag.id)
+            } else if in_heading {
+                format!(
+                    "rule tag `r[{}]` is in a heading; put it on its own line below the heading, \
+                     directly above the paragraph or item it covers",
+                    tag.id
+                )
+            } else if indented_tag {
+                format!(
+                    "rule tag `r[{}]` is indented; a tag line starts at column 0, and a nested \
+                     block can't be tagged: make the rule a top-level paragraph or item",
+                    tag.id
+                )
+            } else {
+                format!(
+                    "rule tag `r[{}]` must be on a line of its own, directly above the paragraph \
+                     or top-level `-` or `*` item it covers; tags don't go inside paragraphs, \
+                     list items or table cells (if this is code, put it in backticks)",
+                    tag.id
+                )
+            });
         }
     }
     (rules, errors)
 }
 
-struct Tag {
-    /// Byte offset of the `r`.
-    start: usize,
-    /// Byte offset just past the `]`, or the end of the line when unterminated.
-    end: usize,
-    id: String,
-    terminated: bool,
-    /// Preceded by something other than whitespace, as in `(r[x.y]`. Only reported when the
-    /// text inside is a valid ID, so code-like prose such as `arr[i]` isn't flagged.
-    glued: bool,
+fn invalid_id(id: &str) -> String {
+    format!(
+        "invalid rule ID `{id}`: use 2 to 4 dot-separated segments of lowercase letters, digits \
+         and hyphens, such as `stmt.bind.shadow.same-scope`"
+    )
+}
+
+/// What is wrong with where the tag line `lines[index]` sits, if anything, worded to follow
+/// "rule tag `r[id]`".
+fn placement_problem(lines: &[&str], index: usize) -> Option<String> {
+    let follows_break = index == 0 || {
+        let before = lines[index - 1];
+        before.trim().is_empty() || is_heading(before)
+    };
+    if !follows_break {
+        return Some(
+            "must follow a blank line, a heading or the start of the file; put a blank line \
+             before it"
+                .to_string(),
+        );
+    }
+    let cover = "put the paragraph or top-level `-` or `*` item it covers on the next line";
+    let Some(&next) = lines.get(index + 1) else {
+        return Some(format!("ends the file and covers nothing; {cover}"));
+    };
+    let uncoverable = [
+        (next.trim().is_empty(), "a blank line"),
+        (tag_line(next).is_some(), "another tag line"),
+        (next.starts_with(char::is_whitespace), "an indented line"),
+        (is_heading(next), "a heading"),
+        (is_fence(next), "a code block"),
+        (next.starts_with('|'), "a table"),
+        (is_thematic_break(next), "a thematic break"),
+        (next.starts_with('>'), "a blockquote"),
+        (next.starts_with('<'), "an HTML block"),
+        (is_numbered_item(next), "a numbered item"),
+        (next.starts_with("+ "), "a `+` item (use `-` or `*`)"),
+    ];
+    if let Some((_, what)) = uncoverable.iter().find(|(found, _)| *found) {
+        return Some(format!(
+            "is followed by {what}, which it can't cover; {cover}"
+        ));
+    }
+    let item = next.starts_with("- ") || next.starts_with("* ");
+    // A paragraph's lines, tag line included, become a heading over a setext underline.
+    let mut end = index + 1;
+    while end < lines.len() && !lines[end].trim().is_empty() {
+        let line = lines[end];
+        if !item && is_setext_underline(line) {
+            return Some(format!(
+                "covers a paragraph with the setext underline `{}` on line {}, which makes the \
+                 paragraph and the tag a heading; put a blank line before the underline, or make \
+                 it a `#` heading",
+                line.trim(),
+                end + 1
+            ));
+        }
+        if end > index + 1 && is_block_start(line) {
+            break;
+        }
+        end += 1;
+    }
+    let ends_at_blank = lines.get(end).is_some_and(|line| line.trim().is_empty());
+    let indented_after_blank = lines[end.min(lines.len())..]
+        .iter()
+        .position(|line| !line.trim().is_empty())
+        .map(|offset| end + offset)
+        .filter(|&at| item && ends_at_blank && lines[at].starts_with(char::is_whitespace));
+    if let Some(at) = indented_after_blank {
+        let line_no = at + 1;
+        return Some(format!(
+            "covers a list item with indented content after a blank line (line {line_no}); a \
+             rule never extends into nested blocks, so make that content a top-level block or \
+             join it to the item"
+        ));
+    }
+    None
+}
+
+fn is_fence(line: &str) -> bool {
+    line.trim_start().starts_with("```")
+}
+
+/// An ATX heading: one to six `#` and then a space or the end of the line.
+fn is_heading(line: &str) -> bool {
+    let hashes = line.len() - line.trim_start_matches('#').len();
+    (1..=6).contains(&hashes)
+        && line[hashes..]
+            .chars()
+            .next()
+            .is_none_or(char::is_whitespace)
+}
+
+/// Three or more `*`, `-` or `_`, all the same, with only spaces between: `***`, `- - -`.
+fn is_thematic_break(line: &str) -> bool {
+    let marks: Vec<char> = line.chars().filter(|c| !c.is_whitespace()).collect();
+    marks.len() >= 3 && matches!(marks[0], '*' | '-' | '_') && marks.iter().all(|&c| c == marks[0])
+}
+
+/// A line of only `=` or only `-`, with at most three spaces before it, which turns the
+/// paragraph above it into a heading.
+fn is_setext_underline(line: &str) -> bool {
+    let indent = line.len() - line.trim_start_matches(' ').len();
+    let marks = line.trim();
+    indent <= 3
+        && !marks.is_empty()
+        && (marks.bytes().all(|b| b == b'=') || marks.bytes().all(|b| b == b'-'))
+}
+
+fn is_numbered_item(line: &str) -> bool {
+    let digits = line.len() - line.trim_start_matches(|c: char| c.is_ascii_digit()).len();
+    digits > 0 && (line[digits..].starts_with(". ") || line[digits..].starts_with(") "))
+}
+
+/// A line that ends a paragraph or an item's own lines by starting another block.
+fn is_block_start(line: &str) -> bool {
+    let trimmed = line.trim_start();
+    is_fence(line)
+        || is_heading(trimmed)
+        || trimmed.starts_with('|')
+        || trimmed.starts_with('>')
+        || trimmed.starts_with("- ")
+        || trimmed.starts_with("* ")
+        || trimmed.starts_with("+ ")
+        || is_numbered_item(trimmed)
+        || tag_line(line).is_some()
 }
 
 /// Tag candidates on one line. With `skip_inline_code`, text inside backtick spans is ignored.
-fn find_tags(line: &str, skip_inline_code: bool) -> Vec<Tag> {
+fn find_tags(line: &str, skip_inline_code: bool) -> Vec<Candidate> {
     let bytes = line.as_bytes();
     let in_code = if skip_inline_code {
         inline_code_mask(line)
@@ -449,14 +567,14 @@ fn find_tags(line: &str, skip_inline_code: bool) -> Vec<Tag> {
         let glued = i > 0 && !bytes[i - 1].is_ascii_whitespace();
         let id_start = i + 2;
         let tag = match line[id_start..].find(']') {
-            Some(offset) => Tag {
+            Some(offset) => Candidate {
                 start: i,
                 end: id_start + offset + 1,
                 id: line[id_start..id_start + offset].to_string(),
                 terminated: true,
                 glued,
             },
-            None => Tag {
+            None => Candidate {
                 start: i,
                 end: line.len(),
                 id: line[id_start..].to_string(),
@@ -598,13 +716,13 @@ mod tests {
                 "bind",
                 "spec/reference/a.md",
                 "Syntax",
-                "# Syntax\n\n- r[bind.let] `let` binds. r[bind.var] `var` too.\n",
+                "# Syntax\n\nr[bind.let]\n- `let` binds.\n\nr[bind.var]\n* `var` too.\n",
             ),
             file(
                 "type",
                 "spec/reference/b.md",
                 "Types",
-                "# Types\n\nr[type.int] Int.\n",
+                "# Types\nr[type.int]\nInt.\n",
             ),
         ];
         let (found, errors) = check(&files, &HashSet::new(), &chapters());
@@ -615,8 +733,8 @@ mod tests {
             .collect();
         let expected = [
             ("bind.let", "spec/reference/a.md", 3, "Syntax"),
-            ("bind.var", "spec/reference/a.md", 3, "Syntax"),
-            ("type.int", "spec/reference/b.md", 3, "Types"),
+            ("bind.var", "spec/reference/a.md", 6, "Syntax"),
+            ("type.int", "spec/reference/b.md", 2, "Types"),
         ]
         .map(|(id, path, line, chapter)| {
             (id.to_string(), path.to_string(), line, chapter.to_string())
@@ -627,12 +745,12 @@ mod tests {
     #[test]
     fn errors_name_their_file() {
         let files = [
-            file(LEGACY_PREFIX, "spec/a.md", "A", "r[bind.let] a\n"),
+            file(LEGACY_PREFIX, "spec/a.md", "A", "r[bind.let]\na\n"),
             file(
                 LEGACY_PREFIX,
                 "spec/b.md",
                 "B",
-                "\nr[bind.let] b\nr[nope.x] c\n",
+                "\nr[bind.let]\nb\n\nr[nope.x]\nc\n",
             ),
         ];
         let (found, errors) = check(&files, &HashSet::new(), &chapters());
@@ -643,26 +761,144 @@ mod tests {
             errors[0],
             "spec/b.md:2: duplicate rule ID `bind.let`; it is first used at spec/a.md:1"
         );
-        assert!(errors[1].starts_with("spec/b.md:3: rule ID `nope.x` starts with `nope`"));
+        assert!(errors[1].starts_with("spec/b.md:5: rule ID `nope.x` starts with `nope`"));
     }
 
     #[test]
-    fn table_cell_tags() {
-        let spec = "| Integer | `42` | r[lit.int.default] Default type `Int`. |\n";
-        assert_eq!(rules(spec)[0].id, "lit.int.default");
+    fn covers_paragraphs_and_top_level_items() {
+        let spec = "r[bind.let]\nA paragraph\nwith a lazy line.\n\nr[bind.var]\n- An item\nlazily continued\n  and indented.\n- An untagged sibling.\n\n  Its nested paragraph.\n\nr[lit.int.hex]\n* A star item.\n\n- Loose sibling.\n\nr[lit.int.oct]\n- A dash item\n- - -\n";
+        let ids: Vec<_> = rules(spec).into_iter().map(|r| (r.id, r.line)).collect();
+        assert_eq!(
+            ids,
+            [
+                ("bind.let".to_string(), 1),
+                ("bind.var".to_string(), 5),
+                ("lit.int.hex".to_string(), 13),
+                ("lit.int.oct".to_string(), 18),
+            ]
+        );
+    }
+
+    /// The problem with the tag on line `line` of `spec`, after "rule tag `r[bind.let]` ".
+    fn placement(spec: &str, line: usize) -> String {
+        let errors = messages(spec);
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        let prefix = format!("line {line}: rule tag `r[bind.let]` ");
+        errors[0]
+            .strip_prefix(&prefix)
+            .unwrap_or_else(|| panic!("{errors:?}"))
+            .to_string()
+    }
+
+    #[test]
+    fn tag_lines_follow_a_break() {
+        assert_eq!(
+            placement("Some text.\nr[bind.let]\nCovered.\n", 2),
+            "must follow a blank line, a heading or the start of the file; put a blank line before it"
+        );
+        assert_eq!(
+            placement("- An item.\nr[bind.let]\n- Covered.\n", 2),
+            "must follow a blank line, a heading or the start of the file; put a blank line before it"
+        );
+    }
+
+    #[test]
+    fn tag_lines_cover_only_paragraphs_and_bullet_items() {
+        let cover = "which it can't cover; put the paragraph or top-level `-` or `*` item it covers on the next line";
+        for (next, what) in [
+            ("", "a blank line"),
+            ("r[bind.var]", "another tag line"),
+            ("  Indented text.", "an indented line"),
+            ("    code", "an indented line"),
+            ("## Heading", "a heading"),
+            ("```", "a code block"),
+            ("| A | B |", "a table"),
+            ("***", "a thematic break"),
+            ("- - -", "a thematic break"),
+            ("> Quoted.", "a blockquote"),
+            ("<div>", "an HTML block"),
+            ("1. Numbered.", "a numbered item"),
+            ("2) Numbered.", "a numbered item"),
+            ("+ Plus.", "a `+` item (use `-` or `*`)"),
+        ] {
+            let spec = format!("r[bind.let]\n{next}\n\nText.\n```\n");
+            let errors = messages(&spec);
+            let wanted = format!("line 1: rule tag `r[bind.let]` is followed by {what}, {cover}");
+            assert!(errors.contains(&wanted), "{next:?}: {errors:?}");
+        }
+        assert_eq!(
+            placement("Text.\n\nr[bind.let]\n", 3),
+            "ends the file and covers nothing; put the paragraph or top-level `-` or `*` item it covers on the next line"
+        );
+    }
+
+    #[test]
+    fn tagged_paragraphs_have_no_setext_underline() {
+        assert_eq!(
+            placement("r[bind.let]\nCovered\ntext.\n---\n", 1),
+            "covers a paragraph with the setext underline `---` on line 4, which makes the paragraph and the tag a heading; put a blank line before the underline, or make it a `#` heading"
+        );
+        assert!(
+            placement("r[bind.let]\n===\n", 1)
+                .starts_with("covers a paragraph with the setext underline `===` on line 2")
+        );
+        // After a blank line, `---` is a thematic break, and an item can't take an underline.
+        let ids: Vec<_> = rules("r[bind.let]\nText.\n\n---\n\nr[bind.var]\n- Item\n---\n")
+            .into_iter()
+            .map(|r| r.id)
+            .collect();
+        assert_eq!(ids, ["bind.let", "bind.var"]);
+    }
+
+    #[test]
+    fn tagged_items_have_no_indented_content_after_a_blank_line() {
+        assert_eq!(
+            placement("r[bind.let]\n- Covered.\n\n  A nested paragraph.\n", 1),
+            "covers a list item with indented content after a blank line (line 4); a rule never extends into nested blocks, so make that content a top-level block or join it to the item"
+        );
+        assert!(
+            placement("r[bind.let]\n- Covered.\n\n\n  - Nested.\n", 1).starts_with(
+                "covers a list item with indented content after a blank line (line 5)"
+            )
+        );
+    }
+
+    #[test]
+    fn tags_off_their_own_line_are_errors() {
+        let errors = messages(
+            "Text r[bind.let] inline.\nr[bind.var] Old form.\n- r[lit.int.hex] In an item.\n| A | r[lit.int.oct] B |\n  r[lit.float] \n\n- Item\n\n  r[bind.x]\n  Nested.\n",
+        );
+        let own_line = "must be on a line of its own, directly above the paragraph or top-level `-` or `*` item it covers; tags don't go inside paragraphs, list items or table cells (if this is code, put it in backticks)";
+        let indented = "is indented; a tag line starts at column 0, and a nested block can't be tagged: make the rule a top-level paragraph or item";
+        assert_eq!(
+            errors,
+            [
+                format!("line 1: rule tag `r[bind.let]` {own_line}"),
+                format!("line 2: rule tag `r[bind.var]` {own_line}"),
+                format!("line 3: rule tag `r[lit.int.hex]` {own_line}"),
+                format!("line 4: rule tag `r[lit.int.oct]` {own_line}"),
+                format!("line 5: rule tag `r[lit.float]` {indented}"),
+                format!("line 9: rule tag `r[bind.x]` {indented}"),
+            ]
+        );
     }
 
     #[test]
     fn code_is_not_a_tag() {
-        let spec = "Index with `r[i]` or `xs[i]`, or arr[i].\n```\nlet v = r[0]\nxs[i] = v\nlet n = counter[user.id]\nheader[key.name] = v\n```\n";
+        let spec = "Index with `r[i]` or `xs[i]`, or arr[i], and `r[bind.let]`.\n```\nlet v = r[0]\nxs[i] = v\nlet n = counter[user.id]\nheader[key.name] = v\n```\n";
         assert_eq!(rules(spec), Vec::new());
     }
 
     #[test]
     fn unclosed_backtick_is_literal() {
-        let spec = "Use ` here r[bind.let] x.\nA ``double` run r[bind.var] y.\n";
-        let ids: Vec<_> = rules(spec).into_iter().map(|r| r.id).collect();
-        assert_eq!(ids, ["bind.let", "bind.var"]);
+        let errors = messages("Use ` here r[bind.let] x.\nA ``double` run r[bind.var] y.\n");
+        assert_eq!(errors.len(), 2, "{errors:?}");
+        assert!(
+            errors[0].starts_with("line 1: rule tag `r[bind.let]` must be on a line of its own")
+        );
+        assert!(
+            errors[1].starts_with("line 2: rule tag `r[bind.var]` must be on a line of its own")
+        );
     }
 
     #[test]
@@ -670,19 +906,21 @@ mod tests {
         let errors = messages("(r[bind.var] y)\n**r[bind.let]** z\n");
         assert_eq!(errors.len(), 2, "{errors:?}");
         assert!(
-            errors[0]
-                .starts_with("line 1: rule tag `r[bind.var]` must start a line or follow a space"),
+            errors[0].starts_with("line 1: rule tag `r[bind.var]` must be on a line of its own"),
             "{errors:?}"
         );
-        assert!(errors[1].starts_with("line 2: rule tag `r[bind.let]`"));
+        assert!(
+            errors[1].starts_with("line 2: rule tag `r[bind.let]` must be on a line of its own")
+        );
     }
 
     #[test]
     fn tag_in_code_block() {
         assert_eq!(
-            messages("```\n// r[bind.let] no\n```\n"),
+            messages("```\n// r[bind.let] no\nr[bind.var]\n```\n"),
             [
-                "line 2: rule tag `r[bind.let]` is inside a code block; tags go before prose, never in code"
+                "line 2: rule tag `r[bind.let]` is inside a code block; tags go on their own line above prose, never in code",
+                "line 3: rule tag `r[bind.var]` is inside a code block; tags go on their own line above prose, never in code",
             ]
         );
     }
@@ -692,33 +930,27 @@ mod tests {
         assert_eq!(
             messages("### r[bind.let] Bindings\n"),
             [
-                "line 1: rule tag `r[bind.let]` is in a heading; put it before the sentence it covers"
+                "line 1: rule tag `r[bind.let]` is in a heading; put it on its own line below the heading, directly above the paragraph or item it covers"
             ]
         );
     }
 
     #[test]
     fn invalid_and_unterminated() {
-        let errors = messages("r[Bind_Shadow] x\nr[bind] y\nr[bind.let\n");
-        assert_eq!(errors.len(), 3, "{errors:?}");
+        let errors =
+            messages("r[Bind_Shadow]\nx\n\nr[bind]\ny\n\nr[bind.let\nz\n\nText r[Bad] here.\n");
+        assert_eq!(errors.len(), 4, "{errors:?}");
         assert!(errors[0].starts_with("line 1: invalid rule ID `Bind_Shadow`"));
-        assert!(errors[1].starts_with("line 2: invalid rule ID `bind`"));
-        assert!(errors[2].starts_with("line 3: unterminated rule tag"));
-    }
-
-    #[test]
-    fn tag_needs_a_space_after_it() {
-        assert_eq!(
-            messages("r[bind.let]`let` binds.\n"),
-            ["line 1: rule tag `r[bind.let]` must be followed by a space and the text it covers"]
-        );
+        assert!(errors[1].starts_with("line 4: invalid rule ID `bind`"));
+        assert!(errors[2].starts_with("line 7: unterminated rule tag"));
+        assert!(errors[3].starts_with("line 10: invalid rule ID `Bad`"));
     }
 
     #[test]
     fn duplicate_ids() {
         assert_eq!(
-            messages("r[bind.let] a\n\nr[bind.let] b\n"),
-            ["line 3: duplicate rule ID `bind.let`; it is first used at spec.md:1"]
+            messages("r[bind.let]\na\n\nr[bind.let]\nb\n"),
+            ["line 4: duplicate rule ID `bind.let`; it is first used at spec.md:1"]
         );
     }
 
@@ -727,7 +959,7 @@ mod tests {
         let (retired, errors) = parse_retired("# retired\n\nbind.old\ngrammar.old_arg\n");
         assert!(errors.is_empty(), "{errors:?}");
         assert!(retired.contains("grammar.old_arg"));
-        let (_, errors) = check_one("r[bind.old] a\n", &retired);
+        let (_, errors) = check_one("r[bind.old]\na\n", &retired);
         assert_eq!(errors[0].line, 1);
         assert!(errors[0].message.contains("is retired"));
         let (ok, bad) = parse_retired("ok.id\nNot An Id\n");
@@ -766,7 +998,7 @@ mod tests {
              bind.var  type.var\n",
         );
         assert_eq!(errors, Vec::new());
-        let found = rules("r[type.let] a\nr[bind.var] b\nr[type.var] c\n");
+        let found = rules("r[type.let]\na\n\nr[bind.var]\nb\n\nr[type.var]\nc\n");
         let retired = HashSet::from(["type.old".to_string()]);
         let errors: Vec<_> = check_moved(&moved, &found, &retired)
             .into_iter()
@@ -777,21 +1009,34 @@ mod tests {
             [
                 "spec/moved-rules.txt:3: `bind.gone` moved to `type.gone`, which is neither a rule tag nor retired; give the rule's current ID",
                 "spec/moved-rules.txt:4: `bind.twice` moved to `bind.let`, which moved again to `type.let`; point `bind.twice` at the final ID",
-                "spec.md:2: rule ID `bind.var` moved to `type.var` (spec/moved-rules.txt) and can't be a tag again; pick a new ID",
+                "spec.md:4: rule ID `bind.var` moved to `type.var` (spec/moved-rules.txt) and can't be a tag again; pick a new ID",
             ]
         );
+    }
+
+    /// `ids` as consecutive tagged paragraphs, each covering one letter.
+    fn tagged(ids: &[&str]) -> String {
+        ids.iter()
+            .map(|id| format!("r[{id}]\nx\n"))
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     #[test]
     fn legacy_tags_need_a_chapter_prefix() {
         assert_eq!(
-            messages("r[types.nominal] a\nr[grammar.block] b\nr[legacy.x] c\nr[type.int] d\n"),
+            messages(&tagged(&[
+                "types.nominal",
+                "grammar.block",
+                "legacy.x",
+                "type.int"
+            ])),
             [
                 "line 1: rule ID `types.nominal` starts with `types`, which isn't a chapter prefix \
                  in spec/chapters.txt; start it with the prefix of the chapter the rule belongs to",
-                "line 2: rule ID `grammar.block` uses the reserved prefix `grammar`, which belongs \
+                "line 4: rule ID `grammar.block` uses the reserved prefix `grammar`, which belongs \
                  to IDs derived from grammar productions; start it with its chapter's prefix",
-                "line 3: rule ID `legacy.x` starts with `legacy`, which isn't a chapter prefix in \
+                "line 7: rule ID `legacy.x` starts with `legacy`, which isn't a chapter prefix in \
                  spec/chapters.txt; start it with the prefix of the chapter the rule belongs to",
             ]
         );
@@ -803,7 +1048,7 @@ mod tests {
             "type",
             "spec/reference/types.md",
             "Types",
-            "r[type.int] a\nr[bind.let] b\nr[nope.x] c\n",
+            &tagged(&["type.int", "bind.let", "nope.x"]),
         )];
         let (_, errors) = check(&files, &HashSet::new(), &chapters());
         let errors: Vec<_> = errors.into_iter().map(|e| e.to_string()).collect();
@@ -816,8 +1061,8 @@ mod tests {
         assert_eq!(
             errors,
             [
-                format!("spec/reference/types.md:2: {}", wrong("bind.let", "bind")),
-                format!("spec/reference/types.md:3: {}", wrong("nope.x", "nope")),
+                format!("spec/reference/types.md:4: {}", wrong("bind.let", "bind")),
+                format!("spec/reference/types.md:7: {}", wrong("nope.x", "nope")),
             ]
         );
     }
@@ -825,11 +1070,14 @@ mod tests {
     #[test]
     fn constructs_must_be_listed() {
         assert_eq!(
-            messages(
-                "r[lit.int.hex] a\nr[lit.float] b\nr[lit.str.raw] c\nr[lit.int.hex.upper] d\n"
-            ),
+            messages(&tagged(&[
+                "lit.int.hex",
+                "lit.float",
+                "lit.str.raw",
+                "lit.int.hex.upper"
+            ])),
             [
-                "line 3: rule ID `lit.str.raw` names the construct `str`, which chapter `lit` \
+                "line 7: rule ID `lit.str.raw` names the construct `str`, which chapter `lit` \
                  doesn't list in spec/chapters.txt; use a listed construct, or list this one \
                  under `lit` with the subject it covers"
             ]
@@ -838,7 +1086,7 @@ mod tests {
 
     #[test]
     fn unused_construct() {
-        let found = rules("r[lit.int.hex] a\nr[lit.float] b\n");
+        let found = rules(&tagged(&["lit.int.hex", "lit.float"]));
         let errors = unused_constructs(&found, &chapters());
         assert_eq!(
             errors,
@@ -850,10 +1098,26 @@ mod tests {
     }
 
     #[test]
-    fn strip_removes_only_tags() {
-        let untagged = "## 2. Syntax\n\n- `let` binds. `var` too.\n| A | B |\n```\nxs[i]\n```\n(r[bind.x] kept) End";
-        let tagged = "## 2. Syntax\n\n- r[bind.let] `let` binds. r[bind.var] `var` too.\n| A | r[lit.a] B |\n```\nxs[i]\n```\n(r[bind.x] kept) End";
+    fn strip_removes_only_tag_lines() {
+        let untagged = "## 2. Syntax\n\n- `let` binds.\n\n`var` too.\n```\nr[bind.x]\nxs[i]\n```\n(r[bind.y] kept) End";
+        let tagged = "## 2. Syntax\n\nr[bind.let]\n- `let` binds.\n\nr[bind.var]\n`var` too.\n```\nr[bind.x]\nxs[i]\n```\n(r[bind.y] kept) End";
         assert_eq!(strip(tagged), untagged);
         assert_eq!(strip(untagged), untagged);
+    }
+
+    #[test]
+    fn candidates_skip_inline_code() {
+        let found: Vec<_> = candidates("r[a.b] `r[c.d]` x(r[e.f] arr[i] r[g")
+            .into_iter()
+            .map(|c| (c.id, c.start, c.terminated, c.glued))
+            .collect();
+        assert_eq!(
+            found,
+            [
+                ("a.b".to_string(), 0, true, false),
+                ("e.f".to_string(), 18, true, true),
+                ("g".to_string(), 32, false, false),
+            ]
+        );
     }
 }

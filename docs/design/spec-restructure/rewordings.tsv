@@ -1,5 +1,27 @@
-# Tagged text whose wording changed beyond its references (docs/design/spec-restructure.md, decision 6).
-# rule ID	old text	new text
+# Text whose wording changed beyond its references (docs/design/spec-restructure.md, decisions 6 and 13).
+# rule ID, or the baseline line of an untagged unit (L120)	old text	new text
 prelude.only	lists every one with its signature	lists every one
 prelude.tagged-values	build these values at compile time	build `Duration`, `Timestamp`, `Url` and `Regex` values at compile time
 effect.handler.receiver	The one exception is a handler, which implements	Unlike an interface's impl, a handler implements
+# Decision 13: rules split mid-sentence, each ending its sentence.
+diag.code-stable	stable across editions;	stable across editions.
+effect.unused-pub	), and	).
+# Decision 13: later rules in converted table rows, named their subject.
+expr.op.range.parens	Must be parenthesized as an operand	A range must be parenthesized as an operand
+expr.op.logic.no-mix	The two can't be mixed without parentheses	`&&` and `||` can't be mixed without parentheses
+expr.op.bits.parens	No level: must be parenthesized as an operand of any other operator, and its own operands	`&`, `|`, `^`, `<<` and `>>` have no level: each must be parenthesized as an operand of any other operator, and its own operands
+expr.op.shift.panic	Panics when the count	A shift panics when the count
+lex.lit.int.default	Default type `Int`	An integer literal's default type is `Int`
+lex.lit.int.context	Takes another integer type from context	An integer literal takes another integer type from context
+lex.lit.float.default	Default type `Float`	A float literal's default type is `Float`
+lex.lit.float.context	Takes Float32 from context the same way	A float literal takes Float32 from context the same way
+lex.lit.string.escapes	Escapes:	String escapes:
+lex.lit.char.escapes	Same escapes as strings	A char literal takes the same escapes as strings
+lex.lit.tagged.raw	The body is raw	A tagged literal's body is raw
+type.float.total-order	Arithmetic follows IEEE	Float arithmetic follows IEEE
+# Decision 13: text that pointed into a converted table.
+L547	whose row in the	whose item in the
+L547	table needs it	list needs it
+ffi.cbind.returns	Return types follow the same table:	Return types follow the same mapping:
+type.mut.shared-in-ref	except where its row in the Reference types table below says otherwise	except where its item in the Reference types list below says otherwise
+expr.op.parens-required	Where a row says an expression must be parenthesized	Where an item in the list below says an expression must be parenthesized

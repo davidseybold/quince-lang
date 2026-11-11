@@ -606,11 +606,11 @@ One `gh stack`, a PR per layer (decision 11). Tick each box as it lands on its b
   - [x] `spec-compare` takes `docs/design-principles.md` and the repo plan's Pipeline section as landing files (first PR, `move-tooling-tables`)
   - [x] chapters 18 to 20; `docs/design-principles.md`; Pipeline to `docs/repo-plan.md`; `quince-spec.md` and `legacy` deleted; every baseline heading has a row; diagnostics example test path; README lists Part II and notes the split (second PR, `move-tooling`)
 - [x] 11. `cleanup-docs`: `docs/repo-plan.md` layout; `docs/milestones.md`: chapter names instead of section numbers, the stale v0.4 mentions, M9's notes from decision 12
-- [ ] 12. `tag-format`, one PR (decision 13)
-  - [ ] `spec-rules` and `--strip` read the own-line form; placement check, with tests
-  - [ ] inline parser moved into `spec_compare`; `spec-compare` reads the own-line form; labels split on both sides; `tables.tsv` with exact row rebuilds; final targets through converted tables; planted-failure tests
-  - [ ] every chapter in the own-line form; tables converted; text pointing into tables reworded; `rewordings.tsv` and `tables.tsv` rows
-  - [ ] the tag rule in `compiler/spec/README.md` and `AGENTS.md`
+- [x] 12. `tag-format`, one PR (decision 13)
+  - [x] `spec-rules` and `--strip` read the own-line form; placement check, with tests
+  - [x] inline parser moved into `spec_compare`; `spec-compare` reads the own-line form; labels split on both sides; `tables.tsv` with exact row rebuilds; final targets through converted tables; planted-failure tests
+  - [x] every chapter in the own-line form; tables converted; text pointing into tables reworded; `rewordings.tsv` and `tables.tsv` rows (`rewordings.tsv` also takes `L<line>` units, for the one untagged cell that pointed into a table)
+  - [x] the tag rule in `compiler/spec/README.md` and `AGENTS.md`
 - [ ] 13. `cleanup`, as two PRs: `cleanup` and `cleanup-legacy`
   - [ ] `spec-compare`, its inline tag parser, its `ci` step and the baseline deleted (`cleanup`)
   - [ ] the `legacy` chapter support in `quince_spec` and its README deleted; status "done" (`cleanup-legacy`)

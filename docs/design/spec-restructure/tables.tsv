@@ -1,0 +1,18 @@
+# The baseline's tagged tables that became lists (docs/design/spec-restructure.md, decision 13).
+# chapter file	baseline line of the header row	pattern each row's item is built by
+# In a pattern, {n} is column n's text: an untagged cell, or the row's first rule. A piece in
+# brackets drops out when every column in it is empty. Later rules in a row are items of their own.
+spec/reference/effects.md	L537	{1}: {2}
+spec/reference/expressions.md	L130	{1}: {2}. Grouping: {3}[. {4}]
+spec/reference/expressions.md	L152	Operands of {1}: {2}[. Failure: {3}]
+spec/reference/interop.md	L1153	{1}: {2}
+spec/reference/interop.md	L1167	{1}: {2}
+spec/reference/introduction.md	L28	{1}: {2}
+spec/reference/items.md	L208	{1} ({2}): {3}
+spec/reference/lexical.md	L82	{1}: {2}[. {3}]
+spec/reference/types.md	L231	{1}: {2}
+spec/reference/types.md	L318	{1}: {2}. Needs `uses State`: {3}. Crosses a task boundary: {4}
+spec/tooling/diagnostics.md	L895	{1}: {2}
+spec/tooling/toolchain.md	L845	{1}: {2}
+spec/tooling/toolchain.md	L1075	{1}. LLVM optimization: {2}. Overflow checks: {3}. Contracts: {4}. Debug info: {5}
+spec/tooling/toolchain.md	L1084	Tier {1}: {2}. {3}

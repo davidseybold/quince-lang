@@ -1,7 +1,23 @@
 //! Splits a Markdown file into the units that `spec-compare` matches: one per tagged rule,
 //! and one per untagged paragraph, list item, table row, code declaration and heading.
+//!
+//! The baseline writes tags inline, and the chapters on their own line (decision 13 of
+//! docs/design/spec-restructure.md), so the segmenter reads both. The inline parser lives here
+//! rather than in `quince_spec`, because only the baseline still uses that form; it goes with
+//! `spec-compare`.
 
-use quince_spec::rules::tag_spans;
+use quince_spec::rules::{candidates, is_valid_id};
+
+/// How a file writes its rule tags.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Form {
+    /// Directly before the text a tag covers, which runs to the next tag or the end of its
+    /// paragraph, list item or table cell, as the baseline does.
+    Inline,
+    /// On a line of its own, covering the paragraph or `-` or `*` item after it, as the
+    /// chapters do.
+    OwnLine,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Kind {
@@ -42,18 +58,61 @@ pub struct Unit {
     pub id: Option<String>,
     /// Trimmed at both ends.
     pub text: String,
-    /// 1-based line where the unit starts.
+    /// 1-based line where the unit starts: for a tag on its own line, the tag's line.
     pub line: usize,
+    /// For a tagged unit in a table row, the 1-based column of its cell.
+    pub cell: Option<usize>,
 }
 
-/// Every unit of `text`, in file order.
-pub fn segment(text: &str) -> Vec<Unit> {
+/// Every unit of `text`, in file order. In the own-line form, a tag line followed by anything
+/// but a paragraph or a `-` or `*` item gives a tagged unit with no text.
+pub fn segment(text: &str, form: Form) -> Vec<Unit> {
     let lines: Vec<&str> = text.lines().collect();
     let mut units = Vec::new();
     let mut i = 0;
     while i < lines.len() {
         let line = lines[i];
-        if line.trim().is_empty() {
+        if form == Form::OwnLine
+            && let Some(id) = tag_line(line)
+        {
+            let next = lines.get(i + 1).copied().unwrap_or_default();
+            let covers = !next.trim().is_empty()
+                && !next.starts_with(char::is_whitespace)
+                && tag_line(next).is_none()
+                && !is_fence(next)
+                && !is_heading(next)
+                && !is_table_row(next)
+                && list_marker(next).is_none_or(|(kind, _)| kind == Kind::Item);
+            if !covers {
+                units.push(Unit {
+                    kind: Kind::Paragraph,
+                    id: Some(id.to_string()),
+                    text: String::new(),
+                    line: i + 1,
+                    cell: None,
+                });
+                i += 1;
+                continue;
+            }
+            let end = continuation_end(&lines, i + 2, form);
+            let (kind, first) = match list_marker(next) {
+                Some((kind, marker_len)) => (kind, &next.trim_start()[marker_len..]),
+                None => (Kind::Paragraph, next),
+            };
+            let mut covered = first.to_string();
+            for continued in &lines[i + 2..end] {
+                covered.push('\n');
+                covered.push_str(continued);
+            }
+            units.push(Unit {
+                kind,
+                id: Some(id.to_string()),
+                text: covered.trim().to_string(),
+                line: i + 1,
+                cell: None,
+            });
+            i = end;
+        } else if line.trim().is_empty() {
             i += 1;
         } else if is_fence(line) {
             let close = (i + 1..lines.len())
@@ -67,6 +126,7 @@ pub fn segment(text: &str) -> Vec<Unit> {
                 id: None,
                 text: line.trim().to_string(),
                 line: i + 1,
+                cell: None,
             });
             i += 1;
         } else if is_table_row(line) {
@@ -76,7 +136,7 @@ pub fn segment(text: &str) -> Vec<Unit> {
             table_units(&lines[i..end], i + 1, &mut units);
             i = end;
         } else if let Some((kind, marker_len)) = list_marker(line) {
-            let end = continuation_end(&lines, i + 1);
+            let end = continuation_end(&lines, i + 1, form);
             let numbered = kind == Kind::Numbered;
             let mut item = if numbered {
                 line.trim_start().to_string()
@@ -87,14 +147,15 @@ pub fn segment(text: &str) -> Vec<Unit> {
                 item.push('\n');
                 item.push_str(continued);
             }
-            split_tags(&item, kind, i + 1, &mut units);
+            block_units(&item, kind, i + 1, form, &mut units);
             i = end;
         } else {
-            let end = continuation_end(&lines, i + 1);
-            split_tags(
+            let end = continuation_end(&lines, i + 1, form);
+            block_units(
                 &lines[i..end].join("\n"),
                 Kind::Paragraph,
                 i + 1,
+                form,
                 &mut units,
             );
             i = end;
@@ -104,8 +165,9 @@ pub fn segment(text: &str) -> Vec<Unit> {
 }
 
 /// The index of the first line from `from` on that doesn't continue the current paragraph or
-/// list item: a blank line or the start of another block.
-fn continuation_end(lines: &[&str], from: usize) -> usize {
+/// list item: a blank line or the start of another block, including, in the own-line form, a
+/// tag line.
+fn continuation_end(lines: &[&str], from: usize, form: Form) -> usize {
     (from..lines.len())
         .find(|&j| {
             let line = lines[j];
@@ -114,8 +176,46 @@ fn continuation_end(lines: &[&str], from: usize) -> usize {
                 || is_heading(line)
                 || is_table_row(line)
                 || list_marker(line).is_some()
+                || (form == Form::OwnLine && tag_line(line).is_some())
         })
         .unwrap_or(lines.len())
+}
+
+/// The ID of a tag on its own line: `r[<id>]` from column 0, perhaps with trailing whitespace.
+fn tag_line(line: &str) -> Option<&str> {
+    let inner = line.trim_end().strip_prefix("r[")?.strip_suffix(']')?;
+    (!inner.contains(']')).then_some(inner)
+}
+
+/// An untagged block in the own-line form, or a block split at its inline tags.
+fn block_units(text: &str, kind: Kind, first_line: usize, form: Form, units: &mut Vec<Unit>) {
+    match form {
+        Form::Inline => split_tags(text, kind, first_line, units),
+        Form::OwnLine => push_untagged(kind, text, first_line, units),
+    }
+}
+
+/// A well-formed inline tag on a prose line: `r[<id>]` from byte `start` up to `end`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct TagSpan {
+    id: String,
+    start: usize,
+    /// Just past the `]`.
+    end: usize,
+}
+
+/// The well-formed inline tags on one prose line, outside inline code spans, in order.
+/// Malformed and glued tag-shaped text is skipped; the baseline has none.
+fn tag_spans(line: &str) -> Vec<TagSpan> {
+    candidates(line)
+        .into_iter()
+        .filter(|tag| !tag.glued && tag.terminated && is_valid_id(&tag.id))
+        .map(|tag| TagSpan {
+            id: tag.id,
+            start: tag.start,
+            end: tag.end,
+        })
+        .collect()
 }
 
 fn is_fence(line: &str) -> bool {
@@ -162,6 +262,7 @@ fn split_tags(text: &str, kind: Kind, first_line: usize, units: &mut Vec<Unit>) 
             id: Some(id.clone()),
             text: text[*end..covers_to].trim().to_string(),
             line: line_at(*start),
+            cell: None,
         });
     }
 }
@@ -174,6 +275,7 @@ fn push_untagged(kind: Kind, text: &str, line: usize, units: &mut Vec<Unit>) {
             id: None,
             text: text.to_string(),
             line,
+            cell: None,
         });
     }
 }
@@ -193,6 +295,7 @@ fn table_units(rows: &[&str], first_line: usize, units: &mut Vec<Unit>) {
             id: None,
             text: format!("{}\n{}", rows[0].trim(), rows[1].trim()),
             line: first_line,
+            cell: None,
         });
     }
     for (index, row) in rows.iter().enumerate().skip(header_rows) {
@@ -210,6 +313,7 @@ fn table_units(rows: &[&str], first_line: usize, units: &mut Vec<Unit>) {
                 id: Some(tag.id.clone()),
                 text: row[tag.end..covers_to].trim().to_string(),
                 line,
+                cell: Some(cell_number(row, tag.start)),
             });
             rest.push_str(&row[copied_to..tag.start]);
             copied_to = covers_to;
@@ -224,8 +328,40 @@ fn table_units(rows: &[&str], first_line: usize, units: &mut Vec<Unit>) {
 fn cell_end(row: &str, from: usize) -> usize {
     let bytes = row.as_bytes();
     (from..bytes.len())
-        .find(|&i| bytes[i] == b'|' && (i == 0 || bytes[i - 1] != b'\\'))
+        .find(|&i| is_cell_pipe(bytes, i))
         .unwrap_or(row.len())
+}
+
+/// The 1-based column of the cell holding byte `at` of a row that starts with `|`.
+fn cell_number(row: &str, at: usize) -> usize {
+    let bytes = row.as_bytes();
+    (0..at).filter(|&i| is_cell_pipe(bytes, i)).count()
+}
+
+fn is_cell_pipe(bytes: &[u8], at: usize) -> bool {
+    bytes[at] == b'|' && (at == 0 || bytes[at - 1] != b'\\')
+}
+
+/// The cells of a table row, trimmed, without the empty text outside its first and last `|`.
+/// Escaped `\|` stays escaped.
+pub fn cells(row: &str) -> Vec<String> {
+    let bytes = row.as_bytes();
+    let mut cells = Vec::new();
+    let mut start = 0;
+    for at in 0..bytes.len() {
+        if is_cell_pipe(bytes, at) {
+            cells.push(row[start..at].trim().to_string());
+            start = at + 1;
+        }
+    }
+    cells.push(row[start..].trim().to_string());
+    if row.trim_start().starts_with('|') {
+        cells.remove(0);
+    }
+    if row.trim_end().ends_with('|') && !row.trim_end().ends_with("\\|") {
+        cells.pop();
+    }
+    cells
 }
 
 fn is_delimiter_row(row: &str) -> bool {
@@ -249,6 +385,7 @@ fn code_units(lines: &[&str], first_line: usize, units: &mut Vec<Unit>) {
                 id: None,
                 text: current.join("\n").trim().to_string(),
                 line: start,
+                cell: None,
             });
             current.clear();
         }
@@ -282,7 +419,11 @@ mod tests {
     use super::*;
 
     fn summary(text: &str) -> Vec<(Kind, Option<String>, String, usize)> {
-        segment(text)
+        summary_in(text, Form::Inline)
+    }
+
+    fn summary_in(text: &str, form: Form) -> Vec<(Kind, Option<String>, String, usize)> {
+        segment(text, form)
             .into_iter()
             .map(|u| (u.kind, u.id, u.text, u.line))
             .collect()
@@ -364,6 +505,81 @@ mod tests {
                     "struct S { a: Int }\n  r[in.code] stays code\n)",
                     15
                 ),
+            ]
+        );
+    }
+
+    #[test]
+    fn table_cells_and_columns() {
+        let row = "| Int | r[lit.a] A. | `a\\|b` | r[lit.b] B. |";
+        let columns: Vec<_> = segment(row, Form::Inline)
+            .into_iter()
+            .map(|u| (u.id, u.cell))
+            .collect();
+        assert_eq!(
+            columns,
+            [
+                (Some("lit.a".to_string()), Some(2)),
+                (Some("lit.b".to_string()), Some(4)),
+                (None, None),
+            ]
+        );
+        assert_eq!(cells("| Int | | `a\\|b` | |"), ["Int", "", "`a\\|b`", ""]);
+        assert_eq!(cells("| a \\|"), ["a \\|"]);
+    }
+
+    #[test]
+    fn own_line_tags_cover_the_next_block() {
+        let text = "## Bindings\n\nIntro text.\n\nr[bind.let]\n`let` binds\nover lines. r[not.inline] here.\n\nr[bind.var]\n- `var` too,\n  continued.\n- Untagged sibling.\n\nr[bind.x]\n* Starred.\n";
+        assert_eq!(
+            summary_in(text, Form::OwnLine),
+            [
+                unit(Kind::Heading, None, "## Bindings", 1),
+                unit(Kind::Paragraph, None, "Intro text.", 3),
+                unit(
+                    Kind::Paragraph,
+                    Some("bind.let"),
+                    "`let` binds\nover lines. r[not.inline] here.",
+                    5
+                ),
+                unit(Kind::Item, Some("bind.var"), "`var` too,\n  continued.", 9),
+                unit(Kind::Item, None, "Untagged sibling.", 12),
+                unit(Kind::Item, Some("bind.x"), "Starred.", 14),
+            ]
+        );
+    }
+
+    #[test]
+    fn own_line_tags_over_nothing_cover_no_text() {
+        for after in [
+            "",
+            "\n\nText.",
+            "\nr[b.c]\nText.",
+            "\n## H",
+            "\n```\nx\n```",
+            "\n| a |",
+            "\n1. One.",
+            "\n  Indented.",
+        ] {
+            let text = format!("r[a.b]{after}\n");
+            let units = segment(&text, Form::OwnLine);
+            assert_eq!(
+                (
+                    units[0].kind,
+                    units[0].id.as_deref(),
+                    units[0].text.as_str(),
+                    units[0].line
+                ),
+                (Kind::Paragraph, Some("a.b"), "", 1),
+                "{after:?}: {units:?}"
+            );
+        }
+        // A tag line ends the paragraph before it.
+        assert_eq!(
+            summary_in("Text.\nr[a.b]\nRule.\n", Form::OwnLine),
+            [
+                unit(Kind::Paragraph, None, "Text.", 1),
+                unit(Kind::Paragraph, Some("a.b"), "Rule.", 2),
             ]
         );
     }

@@ -26,11 +26,22 @@ The spec is a folder of Markdown chapters. `spec/README.md` is its index, and `s
 
 Every normative statement in the spec's chapter files carries an ID that conformance fixtures cite, so coverage can be counted per rule.
 
-**Tags.**
-- A rule ID is written `r[<id>]` directly before the sentence or sentences it covers. A tag covers text up to the next tag, or to the end of its paragraph, list item or table cell.
-- Tags never go in code blocks or headings, or before non-normative text such as rationale or examples.
-- A tag starts a line or follows whitespace (including a list marker or a table bar), and is followed by a space. Tag-shaped text anywhere else outside inline code is an error, so a misplaced tag can never silently drop out of coverage: `(r[bind.var] y)` and `**r[bind.var]**` both fail.
-- Inline code spans are ignored. A backtick run left open at the end of a line is literal text, as in CommonMark.
+**Tags.** The format follows the Rust Reference:
+
+```markdown
+r[expr.op.plus-numeric]
+`+` is numeric only.
+
+r[effect.net]
+- `Net`: Outbound network connections
+```
+
+- A tag is a line holding only `r[<id>]`, at column 0. A blank line, a heading or the start of the file comes before it, and the block it covers comes directly after it: a paragraph, or a top-level `-` or `*` list item.
+- A tag covers exactly that block: the paragraph, or the item's own text and its lazy continuation lines. A tagged item has no indented content after a blank line, so a rule never extends into a nested block. An untagged item directly after a tagged one, in the same list, is not covered by the tag.
+- Every other block is untagged: examples, code, tables, rationale and lead-in text. No tag sits inside a paragraph, a table, a nested list item, a blockquote or a code block. A rule that needs several blocks is several rules, each with its own tag.
+- A tag line can't be followed by a numbered item, a table, a heading, a code block, a blockquote, an HTML block, a thematic break, a blank line or another tag line. A tagged paragraph has no setext underline (`---` or `===`), which would make it and its tag a heading.
+- `r[` anywhere but a tag line, outside code blocks and inline code spans, is an error, so a misplaced tag can never silently drop out of coverage: `Text r[bind.var] more`, `(r[bind.var] y)`, `**r[bind.var]**` and an indented tag line all fail. A backtick run left open at the end of a line is literal text, as in CommonMark.
+- GitHub shows a tag line joined to its paragraph ("r[x] Text…"), or on its own line above a bullet item.
 
 **Format.**
 - An ID is `chapter.construct.rule`, with an optional fourth segment for detail, such as `stmt.bind.shadow.same-scope`. It has 2 to 4 dot-separated segments, each matching `[a-z0-9]+(-[a-z0-9]+)*`.
@@ -54,7 +65,7 @@ Every normative statement in the spec's chapter files carries an ID that conform
 - A change that only adds tags, or rewords without changing meaning, doesn't bump the version.
 - A change that adds normative text tags it in the same pull request. No check can tell a rule from prose, so review enforces this.
 
-**Stripping.** `cargo xtask spec-rules --strip <file>` prints one chapter file with every tag, and the single space after it, removed, so a wording diff can ignore tags. The file is given relative to the repo root or as the manifest lists it. With no file, it prints every chapter file in manifest order, each after a line `<!-- spec/<path> -->`.
+**Stripping.** `cargo xtask spec-rules --strip <file>` prints one chapter file with every tag line removed, so a wording diff can ignore tags. The file is given relative to the repo root or as the manifest lists it. With no file, it prints every chapter file in manifest order, each after a line `<!-- spec/<path> -->`.
 
 `cargo xtask spec-rules` checks all of the above that a tool can check, and names the file and line of every problem.
 
