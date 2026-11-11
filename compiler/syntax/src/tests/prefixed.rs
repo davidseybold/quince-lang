@@ -82,6 +82,9 @@ fn bytes_escapes() {
     );
     // A `"` after the `\` would be escaped, so E0004 has no fix.
     assert_eq!(errors("b\"ab\\\n"), ["E0004 0..2", "E0006 4..5"]);
+    // Deleting the `\` of `\{` would complete the `\u` before it.
+    assert_eq!(errors(r#"b"\u\{a}""#), ["E0006 2..4", "E0006 4..6"]);
+    assert_eq!(errors(r#"b"\u{41\'}""#), ["E0006 2..7", "E0006 7..9"]);
 }
 
 #[test]
@@ -146,7 +149,15 @@ fn unknown_tags() {
         message(r#"URL"x""#),
         "literal prefixes are lowercase: write `url\"`"
     );
-    assert!(message(r#"br"x""#).starts_with("Quince has no raw bytes literals"));
+    assert!(message(r#"F"x""#).starts_with("Quince has no `F\"` strings"));
+    assert!(message(r#"u"x""#).contains("every `\"` string is Unicode already"));
+    assert!(message(r#"Rf"x""#).starts_with("Quince has no `Rf\"` strings"));
+    for text in [r#"br"x""#, r#"BR"x""#, r#"rB"x""#] {
+        assert!(
+            message(text).starts_with("Quince has no raw bytes literals"),
+            "{text}"
+        );
+    }
     assert_eq!(
         message(r#"u8"x""#),
         "`u8\"` isn't a literal: the tags are `url`, `re`, `dur` and `ts`, and `r\"` and `b\"` \
@@ -158,6 +169,39 @@ fn unknown_tags() {
         message(r#""say "hi" now""#),
         "`hi\"` reads as a literal tag, since it is glued to the closing quote before it: if \
          that quote is part of the text, write `\\\"`; the tags are `url`, `re`, `dur` and `ts`"
+    );
+}
+
+/// The hint for a word glued to closing quotes depends on the literal they close, since a
+/// raw or tagged literal can't escape a quote.
+#[test]
+fn glued_quote_hints() {
+    let hint = |text: &str| {
+        let lexed = lex_str(text);
+        // The last, since the literal before the quotes may have an unknown tag too.
+        let error = lexed
+            .errors
+            .iter()
+            .rev()
+            .find(|e| e.code == "E0010")
+            .unwrap();
+        error.message.clone()
+    };
+    assert!(hint(r#"b"say "hi" now""#).contains("write `\\\"`"));
+    assert!(hint(r#"r"say "hi" now""#).contains("a raw string can't hold a `\"`"));
+    assert!(hint(r#"re"a"hi" "#).contains("a tagged literal can't hold a `\"`"));
+    assert!(hint(r#"foo"a"hi" "#).contains("a tagged literal can't hold a `\"`"));
+    assert!(hint(r#""{a}"hi" "#).contains("write `\\\"`"));
+    let multiline = "\"\"\"\n  say \"\"\"hi\"\"\"\n  \"\"\"";
+    assert!(hint(multiline).contains("write `\\\"\"\"`"));
+    let raw = "r\"\"\"\n  say \"\"\"hi\"\"\"\n  \"\"\"";
+    assert!(hint(raw).contains("text with them is a `\"\"\"` string that writes `\\\"\"\"`"));
+    let bytes = "b\"\"\"\n  say \"\"\"hi\"\"\"\n  \"\"\"";
+    assert!(hint(&bytes[1..]).contains("write `\\\"\"\"`"));
+    assert!(
+        lex_str(bytes).errors[2]
+            .message
+            .contains("close the string they follow")
     );
 }
 
@@ -176,6 +220,13 @@ fn prefixed_multiline_forms_dont_exist() {
         "tagged literals have no multi-line form: write `re\"...\"` on one line"
     );
     assert!(message("f\"\"\"\n\"\"\"").starts_with("Quince has no `f\"` strings"));
+    // An uppercase prefix gets the advice for its form.
+    assert!(message("B\"\"\"\n\"\"\"").starts_with("bytes literals have no multi-line form"));
+    assert!(message("URL\"\"\"\n\"\"\"").contains("write `url\"...\"` on one line"));
+    assert_eq!(
+        message("R\"\"\"\n\"\"\""),
+        "literal prefixes are lowercase: write `r\"\"\"`"
+    );
     // `r"""` is the one prefixed multi-line form.
     assert_eq!(errors("r\"\"\"\n  \\q\n  \"\"\""), Vec::<String>::new());
     // With no closing line, E0005 spans the opening quotes, and E0010 only the prefix.

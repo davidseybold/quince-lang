@@ -1,9 +1,8 @@
 // rule: lex.lit.tagged
 // mode: parse
 // The tags are url, re, dur and ts. Any other identifier glued to a quote is an unknown
-// tag, including f, since every " string already interpolates, and a word right after a
-// closing quote, as when a quote inside a string isn't escaped. A keyword is never a
-// tag, so test"name" is a test.
+// tag, including f, since every " string already interpolates. A keyword is never a tag,
+// so test"name" is a test.
 fn f() -> List<String> {
   let site = url"https://api.example.com/orders"
   let email = re"^[^@]+@[^@]+$"
@@ -12,8 +11,8 @@ fn f() -> List<String> {
   let name = "Ada"
   let greeting = f"hello {name}" //~ E0010
   let unknown = foo"x" //~ E0010
-  let quoted = "say "hi" now" //~ E0010
-  let open = bar"never closed //~ E0010
+  let open = bar"never closed
+  //~^ E0010
   [greeting]
 }
 

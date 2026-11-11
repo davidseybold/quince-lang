@@ -45,6 +45,7 @@ impl Lexer<'_> {
         let rest = &self.text[start..end];
         let mut len = 0;
         let mut dangling = false;
+        let mut open_unicode_end = None;
         let ends: &[char] = match (interpolates, quote_ends) {
             (true, true) => &['\\', '{', '"'],
             (true, false) => &['\\', '{'],
@@ -60,14 +61,15 @@ impl Lexer<'_> {
                         dangling = problem == BadEscape::Dangling;
                         let text = &rest[len..len + escape.len];
                         let after = &rest[len + escape.len..];
-                        self.errors.push(escape_error(
-                            text,
-                            after,
-                            start + len,
-                            problem,
-                            interpolates,
-                            false,
-                        ));
+                        let mut error =
+                            escape_error(text, after, start + len, problem, interpolates, false);
+                        if open_unicode_end == Some(len) {
+                            error.fixes.clear();
+                        }
+                        if opens_unicode(text) {
+                            open_unicode_end = Some(len + escape.len);
+                        }
+                        self.errors.push(error);
                     }
                     len += escape.len;
                 }
@@ -307,6 +309,12 @@ fn space_deletions(at: usize, body: &str) -> Option<Vec<(Range<usize>, String)>>
         i = run_end;
     }
     (!edits.is_empty()).then_some(edits)
+}
+
+/// True when the invalid escape `text` is a `\u` with no closing `}`. Deleting the `\` of a
+/// needless escape right after it would join the two into one escape, so that one gets no fix.
+pub(super) fn opens_unicode(text: &str) -> bool {
+    text.starts_with("\\u") && !text.ends_with('}')
 }
 
 /// The E0006 for the escape `text`, at `at`, which the text `after` follows, in a string

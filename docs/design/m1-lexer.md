@@ -331,6 +331,7 @@ Found while writing this. None of them block the lexer.
 - **Negative literals.** `r[lex.lit.int.neg]` says the minus is "directly before" the literal. Whether `- 1` counts decides whether the parser checks adjacency.
 - **Rules this doc hands over** (decision 11): fixtures for `lex.keywords`, `lex.no-contextual`, `lex.no-shift-token`, `lex.grammar-rules`, `lex.ident-classes`, `lex.indentation`, `lex.comment.doc` and `lex.comment.doc-exact`. The formatter doc takes `lex.source.canonical`.
 - **Coverage ratchet.** M0 left this for M1. Decide it once the parser adds real coverage.
+- **Adjacent literals** (layer 6b). A quote in a string that isn't escaped can leave two literals side by side with no lexical error: `"press "b" now"` is a string and then a bytes literal, and `"the "r" key"` a string and then a raw string. With an unknown tag, as in `"say "hi" now"`, the lexer reports E0010 and suggests `\"`. The parser's error for two adjacent literals should give the same hint when the second's prefix is glued to the first's closing quote. Likewise `r"a\"b"` is a raw string, `r"a\"`, then an unclosed bytes literal: the parser can say that `\` doesn't escape in a raw string.
 
 ## For later milestones
 

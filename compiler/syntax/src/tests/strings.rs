@@ -23,8 +23,8 @@ pub(super) fn message(text: &str) -> String {
 
 /// Every text of up to four characters from those that matter to literals keeps the
 /// invariants, reports its errors in order, never puts two errors on one span, and decodes.
-/// A safe E0006, E0007 or E0011 fix removes its error, adds none, and keeps the bytes of every
-/// bytes literal.
+/// A safe E0006, E0007 or E0011 fix removes its error, leaves the others as they were, moved
+/// by its edits, and keeps the bytes of every bytes literal.
 #[test]
 fn every_short_text() {
     let alphabet: Vec<char> = "\"{}\\ux.0arb# '\u{e9}\n\r".chars().collect();
@@ -53,7 +53,7 @@ fn every_short_text() {
                     string_value(&text[range]);
                 }
             }
-            for error in &lexed.errors {
+            for (i, error) in lexed.errors.iter().enumerate() {
                 let string_code = ["E0006", "E0007", "E0011"].contains(&error.code);
                 let Some(fix) = error.fixes.first().filter(|_| string_code) else {
                     continue;
@@ -63,11 +63,22 @@ fn every_short_text() {
                 for (range, with) in fix.edits.iter().rev() {
                     fixed.replace_range(range.start as usize..range.end as usize, with);
                 }
-                assert_eq!(
-                    lex_str(&fixed).errors.len(),
-                    lexed.errors.len() - 1,
-                    "{text:?} fixed to {fixed:?}"
-                );
+                // Where an offset after the edits was before them.
+                let moved = |at: u32| {
+                    let shift: i64 = (fix.edits.iter())
+                        .filter(|(range, _)| range.end <= at)
+                        .map(|(range, with)| with.len() as i64 - i64::from(range.end - range.start))
+                        .sum();
+                    (i64::from(at) + shift) as u32
+                };
+                let others: Vec<_> = (lexed.errors.iter().enumerate())
+                    .filter(|&(j, _)| j != i)
+                    .map(|(_, e)| (e.code, moved(e.range.start)..moved(e.range.end)))
+                    .collect();
+                let after: Vec<_> = (lex_str(&fixed).errors.iter())
+                    .map(|e| (e.code, e.range.clone()))
+                    .collect();
+                assert_eq!(after, others, "{text:?} fixed to {fixed:?}");
                 assert_eq!(
                     all_bytes(&fixed),
                     all_bytes(text),
@@ -176,15 +187,18 @@ fn escapes() {
     assert_eq!(errors(r#""\u0041 \u""#), ["E0006 1..7", "E0006 8..10"]);
     // One error with no fix: deleting the backslash would make a valid escape, changing the value.
     assert_eq!(errors(r#""\u{ab\}""#), ["E0006 1..8"]);
-    // Only hex digits merge with a `\}`, so the `\'` fix can't regroup the escape.
-    let text = r#""\u{AB\'\}""#;
-    let lexed = lex_str(text);
-    assert_eq!(lexed.errors.len(), 3);
-    let quote = lexed.errors.iter().find(|e| e.range == (6..8)).unwrap();
-    let mut fixed = text.to_string();
-    fixed.replace_range(6..7, "");
-    assert_eq!(quote.fixes[0].edits[0].0, 6..7);
-    assert_eq!(lex_str(&fixed).errors.len(), 2, "{fixed}");
+    // Right after a `\u` with no closing `}`, deleting a backslash would join the two escapes
+    // into one, so that escape has no fix. The `\}` after the `\'` keeps its fix.
+    assert_eq!(
+        errors(r#""\u{AB\'\}""#),
+        [
+            "E0006 1..6",
+            "E0006 6..8",
+            r#"E0006 8..10 => "\"\\u{AB\\'}\"""#
+        ]
+    );
+    assert_eq!(errors(r#""\u{4\'1}""#), ["E0006 1..5", "E0006 5..7"]);
+    assert_eq!(errors(r#""\u\}""#), ["E0006 1..3", "E0006 3..5"]);
     assert_eq!(
         lex_str(r#""\'""#).errors[0].fixes[0].applicability,
         Applicability::Safe
