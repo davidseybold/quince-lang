@@ -224,8 +224,8 @@ fn messages() {
         (
             "r\"\u{7}\"",
             "U+0007 can't appear in a raw string, which can't hold a control or \
-             bidirectional-format character: a `\"` string writes one as an escape, as in \
-             `\\u{7}`",
+             bidirectional-format character: a `\"` or `\"\"\"` string writes one as an \
+             escape, as in `\\u{7}`",
         ),
         (
             "url\"\u{7}\"",
@@ -241,6 +241,13 @@ fn messages() {
     for (text, expected) in cases {
         assert_eq!(message(text), expected, "{text:?}");
     }
+    // In an interpolation's braces, after the E0007, an escape would still be an error, so the
+    // message gives none.
+    let lexed = lex_str("\"{a\u{7}}\"");
+    assert_eq!(
+        lexed.errors[1].message,
+        "U+0007 can't appear in an interpolation, which holds only a path"
+    );
 }
 
 /// No message, for any form E0015 can appear in, holds one of these characters itself.

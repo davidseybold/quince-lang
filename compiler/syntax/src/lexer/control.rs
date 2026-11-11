@@ -80,10 +80,13 @@ fn control_error(run: &str, range: Range<usize>, within: ControlIn) -> LexError 
     let unicode = format!("\\u{{{:X}}}", u32::from(first));
     let what = "a control or bidirectional-format character";
     let message = match within {
-        ControlIn::String | ControlIn::Interpolation => format!(
+        ControlIn::String => format!(
             "{shown} can't appear in a string: a string writes {what} as an escape, as in \
              `{unicode}`"
         ),
+        ControlIn::Interpolation => {
+            format!("{shown} can't appear in an interpolation, which holds only a path")
+        }
         ControlIn::Char => format!(
             "{shown} can't appear in a char literal: a char literal writes {what} as an escape, \
              as in `'{unicode}'`"
@@ -94,8 +97,8 @@ fn control_error(run: &str, range: Range<usize>, within: ControlIn) -> LexError 
             u32::from(first)
         ),
         ControlIn::Raw => format!(
-            "{shown} can't appear in a raw string, which can't hold {what}: a `\"` string \
-             writes one as an escape, as in `{unicode}`"
+            "{shown} can't appear in a raw string, which can't hold {what}: a `\"` or \
+             `\"\"\"` string writes one as an escape, as in `{unicode}`"
         ),
         ControlIn::Tagged => {
             format!("{shown} can't appear in a tagged literal, which can't hold {what}")

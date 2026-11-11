@@ -58,12 +58,7 @@ fn every_short_text() {
                 }
             }
             for error in &lexed.errors {
-                assert!(
-                    !error
-                        .message
-                        .contains(|c: char| c.is_control() || is_bidi(c)),
-                    "{text:?}: {error:?}"
-                );
+                assert!(!error.message.contains(is_control), "{text:?}: {error:?}");
             }
             for (i, error) in lexed.errors.iter().enumerate() {
                 let char_fix = error.code == "E0009";
@@ -142,8 +137,11 @@ fn string_at(text: &str, at: usize) -> Option<String> {
     None
 }
 
-fn is_bidi(c: char) -> bool {
-    ('\u{202A}'..='\u{202E}').contains(&c) || ('\u{2066}'..='\u{2069}').contains(&c)
+/// The characters `r[lex.source.control]` names, other than a tab and line endings.
+fn is_control(c: char) -> bool {
+    (c.is_ascii_control() && !matches!(c, '\t' | '\n' | '\r'))
+        || ('\u{202A}'..='\u{202E}').contains(&c)
+        || ('\u{2066}'..='\u{2069}').contains(&c)
 }
 
 /// Each `"` or `"""` string in `text`, as its tokens with each `StringText` decoded, and each
