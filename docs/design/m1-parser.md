@@ -464,7 +464,7 @@ Revert the stack's PRs. Nothing changes outside `quince_syntax`, the conformance
 
 ## Tasks
 
-Rule IDs in brackets are what each task's fixtures cite. Grammar productions are cited as `grammar.<production>`. Rules the spec questions add are cited once their layer puts them in the spec. A rule a question retires (`lex.continue.signature` under question 12, and `item.struct.unit` under question 11) is cited by its replacement, since the runner rejects a retired ID.
+Rule IDs in brackets are what each task's fixtures cite. Grammar productions are cited as `grammar.<production>`. Rules the spec questions add are cited once their layer puts them in the spec. A rule a question retires (`lex.continue.signature` under question 12, and `item.struct.unit` under question 11) is cited by its replacement, since the runner rejects a retired ID. The productions the questions change (`type`, `place`, `struct_decl`, `impl_item`, `interface_decl`, `effect_decl`, `foreign_decl`) keep their grammar IDs, since a widened or narrowed production isn't retired (`compiler/spec/README.md`, decided by David, 2026-11-11).
 
 **Before building**
 - [x] David decides questions A, B and C (2026-11-11).

@@ -58,6 +58,7 @@ r[effect.net]
 - A wording change that keeps the meaning keeps the ID.
 
 **Grammar productions** have the derived ID `grammar.<production-name>`, with no written tag. A production whose derived ID is retired fails the grammar check.
+- A grammar ID is retired only when its production's name is to be reused for a different construct. A production that is widened or narrowed keeps its ID, since a fixture that cites it passes or fails on what the parser accepts now (decided by David, 2026-11-11).
 
 **Spec changes.**
 - A change to what the spec means bumps its minor draft version (v0.5 to v0.6) in `spec/README.md` in the same pull request, retires the IDs whose meaning changed, and tags the new text.
