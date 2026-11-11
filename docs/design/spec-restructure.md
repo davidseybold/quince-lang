@@ -347,7 +347,8 @@ lex        reference/lexical.md           Lexical structure
   - every manifest file, including the leftover `quince-spec.md`;
   - `docs/design-principles.md`;
   - the Pipeline section of `docs/repo-plan.md`;
-  - `std/API.md`, as a place where spec units may land.
+  - `std/API.md`, as a place where spec units may land;
+  - `spec/README.md`, as a place where untagged spec units may land. It took the version header in layer 2. Its other text isn't compared, and a tag in it fails the check.
 - `std/API.md` contributes to "after" only its `to-std` units and its units carrying a `removed` ID, matched by content. Its other text is ignored, so it can't fail the check or inflate the multiset.
 - `std-api.md`'s own text isn't compared, because `std/API.md` has no approval gate. Its references are still rewritten, and `spec-links` checks its links into `spec/`. Edits to its own text, such as fixing the sentences that say the spec holds the prelude signatures, are listed in the PR that makes them.
 
@@ -379,6 +380,8 @@ The segmenter that extracts the text a tag covers is new code (`rules::parse` on
   - `README.md`;
   - the Introduction's link;
   - the units in `removed.tsv` (removed outright, or `to-std`).
+
+**Each table arrives with its layer.** `spec-compare` reads `id-map.tsv` and `removed.tsv` from layer 5, `refs.tsv` and `rewordings.tsv` from layer 7, and `headings.tsv` from layer 8. Until then, IDs, text and headings must match exactly.
 
 **Output.**
 - each unmatched unit, with its location;
@@ -505,7 +508,7 @@ One `gh stack`, a PR per layer (decision 11). Tick each box as it lands on its b
   - [x] pointers to `spec/quince-spec.md` moved to `spec/README.md`; `compiler/spec/README.md` and the testdata README updated
   - [x] `AGENTS.md`: Conventional Commits section
 - [x] 3. `links`: `spec-links` with github-slugger anchors, its subcommand and `ci` step, tests on awkward headings
-- [ ] 4. `compare`: baseline committed; segmenter with planted-failure tests; production and declaration units; placement and count checks; `ci` step
+- [x] 4. `compare`: baseline committed; segmenter with planted-failure tests; production and declaration units; placement and count checks; `ci` step
 - [ ] 5. `move-library`
   - [ ] `std/API.md` from `spec/std-api.md`, plus the Prelude's library material, tags stripped
   - [ ] `id-map.tsv` with 34 `removed` rows; `removed.tsv` `to-std` rows; `std` out of `rule-topics.txt`

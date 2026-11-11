@@ -57,6 +57,10 @@ pub fn steps() -> Vec<Step> {
             run: crate::spec_links::check,
         },
         Step {
+            name: "spec-compare",
+            run: crate::spec_compare::check,
+        },
+        Step {
             name: "diagnostics",
             run: crate::diagnostics::check,
         },

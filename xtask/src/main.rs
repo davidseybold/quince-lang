@@ -3,6 +3,7 @@
 mod ci;
 mod conformance;
 mod diagnostics;
+mod spec_compare;
 mod spec_grammar;
 mod spec_links;
 mod spec_rules;
@@ -21,6 +22,7 @@ commands:
   spec-grammar          check spec/grammar.ebnf against the spec's `ebnf` blocks
   spec-grammar --write  regenerate spec/grammar.ebnf from the spec
   spec-links            check that the spec's relative links and their #fragments resolve
+  spec-compare          check the spec against the pre-restructure baseline (temporary)
   diagnostics           check every diagnostic code has explain text and a conformance test
   conformance           run the conformance fixtures and write the spec coverage report
 ";
@@ -37,6 +39,7 @@ fn main() -> ExitCode {
         ["spec-grammar"] => exit(spec_grammar::check(&root)),
         ["spec-grammar", "--write"] => exit(spec_grammar::write(&root)),
         ["spec-links"] => exit(spec_links::check(&root)),
+        ["spec-compare"] => exit(spec_compare::check(&root)),
         ["diagnostics"] => exit(diagnostics::check(&root)),
         ["conformance"] => exit(conformance::check(&root)),
         ["help" | "--help" | "-h"] => {
