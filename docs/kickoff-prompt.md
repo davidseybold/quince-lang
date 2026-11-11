@@ -2,6 +2,8 @@
 
 Paste this into `claude` from the repo root to start M0.
 
+Historical: this started M0 on 2026-11-10. OpenSpec has since been dropped; design docs live in `docs/design/`.
+
 ---
 
 Read CLAUDE.md, then docs/repo-plan.md and docs/milestones.md, then the spec (spec/quince-spec.md) in full.

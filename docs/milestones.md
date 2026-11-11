@@ -7,7 +7,7 @@ Based on spec Draft v0.4 (2026-11-10). The doc this was copied from is the edita
 Fifteen milestones in five phases take Quince from an empty repo to 1.0. **The checker and agent tooling come before code generation**, because a Quince that type-checks but can't yet run already lets agents write code against the spec and get JSON diagnostics and fixes back. That is the core promise, and it gets tested earliest.
 
 - **Each milestone ends in a demo, not a percentage.** Its exit criterion is a command that works on real code, plus conformance tests for the spec sections it covers.
-- **Each milestone is a set of OpenSpec changes** that cite the spec rule IDs they implement, so coverage of the spec can be measured as work proceeds.
+- **Each milestone is a set of design docs** (`docs/design/`) whose tasks cite the spec rule IDs they implement, so coverage of the spec can be measured as work proceeds.
 - **No dates yet.** The order and the dependencies are firm; durations are worth estimating after M1.
 - The repo layout and crate names come from `docs/repo-plan.md`.
 
@@ -35,7 +35,7 @@ Phase 1 ends when `quince check` parses and resolves a multi-file project, and `
 
 **M0. Repo and harness.** Spec sections 1 and 8 (diagnostics format).
 
-- Cargo workspace, `AGENTS.md`, `cargo xtask ci`, and the `openspec/` folder with its first specs.
+- Cargo workspace, `AGENTS.md`, `cargo xtask ci`, and the M0 design (`docs/design/m0-repo-harness.md`).
 - `spec/` with stable rule IDs added to v0.4, plus `spec/grammar.ebnf` extracted from the grammar appendices, with a CI check that the two match.
 - The conformance runner: reads `.qnc` files in `testdata/` folders, matches inline expectations (`//~ E0412`, expected output), and reports coverage by rule ID.
 - The diagnostics crate: error-code registry, JSON schema, and a CI rule that every code has `explain` text and a test.
