@@ -18,7 +18,8 @@ How to build and check this repo. `CLAUDE.md` holds the working rules and the de
 | `cargo xtask spec-grammar --write` | Regenerates `spec/grammar.ebnf` from the spec. Run it after the spec's grammar changes. Only the file's header (its terminal list) is edited by hand. |
 | `cargo xtask spec-links` | Checks that every relative link in `spec/`, and every link from `std/API.md` into `spec/`, names a file that exists, and that each `#fragment` names a heading there (GitHub's anchor rules). Also fails on a positional reference such as "section 5" or "(below)" in the spec's prose. |
 | `cargo xtask diagnostics` | Checks that every registered diagnostic code has explain text, and every code that isn't retired has a conformance test. To add a code, see `compiler/diagnostics/src/registry.rs`. |
-| `cargo xtask conformance` | Runs the `.qnc` fixtures in `tests/conformance/testdata/` and writes spec coverage by rule ID to `target/conformance/coverage.json`. The fixture format is in that folder's README. |
+| `cargo xtask conformance` | Runs the `.qnc` fixtures in `tests/conformance/testdata/` and writes spec coverage by rule ID to `target/conformance/coverage.json`. Fails when the covered rules differ from `tests/conformance/covered.txt` in either direction. The fixture format is in that folder's README. |
+| `cargo xtask conformance --write` | Rewrites `tests/conformance/covered.txt` from a run where every fixture passes. Run it when a change covers or uncovers rules on purpose, so the PR's diff shows which. |
 
 The toolchain is pinned in `rust-toolchain.toml`, and rustup installs it the first time you run `cargo` in the repo.
 

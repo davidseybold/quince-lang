@@ -313,7 +313,7 @@ M0 left this to M1, and the parser brings the first real coverage. `tests/confor
 - a rule in the list that no passing fixture covers means coverage fell;
 - a covered rule missing from the list means the list is stale.
 
-`cargo xtask conformance --write` rewrites the list. Each PR's diff then shows the rules it covers or uncovers, which review can check against its fixtures. It's the same pattern as `spec-grammar --write`. It lands in layer 0, so every parser layer shows its coverage this way.
+`cargo xtask conformance --write` rewrites the list. Each PR's diff then shows the rules it covers or uncovers, which review can check against its fixtures. It's the same pattern as `spec-grammar --write`. It lands first, in its own PR below layer 0 (`m1/coverage-ratchet`, split out to keep layer 0 under 900 lines), so every parser layer shows its coverage this way.
 
 *Alternative:* a number that may only go up. Rejected: a PR could uncover one rule and cover another, and the number wouldn't show it.
 
@@ -324,7 +324,7 @@ Each layer builds and passes `cargo xtask ci` on its own.
 - Layer 1 wires the parser into `SyntaxBackend`, so from then on every fixture, `lex/` included, must parse. So layer 1 parses everything the 38 `lex/` fixtures use (Context), and fixes any fixture that turns out not to be valid syntax. Later layers complete each area.
 
 The layers:
-0. `m1/parser-cst`: `rowan`, pinned; `SyntaxError`, and `codes::ALL` split; events, the tree builder, the CST and trivia placement, tested on hand-built events; the tree dumps; the coverage ratchet; the repo plan's step 3 corrected.
+0. `m1/parser-cst`: `rowan`, pinned; `SyntaxError`, and `codes::ALL` split; events, the tree builder, the CST and trivia placement, tested on hand-built events; the tree dumps; the repo plan's step 3 corrected. The coverage ratchet comes before it, in its own PR, `m1/coverage-ratchet`.
 1. `m1/parser-core`: the parser's core, wired in. It covers:
    - significant tokens, breaks and `at_break()` in line contexts;
    - recovery, E0016 and E0017;
@@ -471,11 +471,13 @@ Rule IDs in brackets are what each task's fixtures cite. Grammar productions are
 - [x] Design review passes (six passes, the last two over the decisions recorded after approval).
 - [x] David decides spec questions 1 to 14 (2026-11-11).
 
+**Before layer 0: `m1/coverage-ratchet`**
+- [x] The coverage ratchet and `cargo xtask conformance --write`; `AGENTS.md`.
+
 **Layer 0: `m1/parser-cst`**
 - [ ] Add `rowan`, pinned after checking its dependencies and minimum Rust version.
 - [ ] `SyntaxError` replaces `LexError`; split `codes::ALL` so the lexer's mutation test requires the lexer's codes.
 - [ ] Events, the tree builder and the CST; trivia placement (decision 3); the tree dumps, with and without trivia; tests on hand-built events.
-- [ ] The coverage ratchet and `cargo xtask conformance --write`; `AGENTS.md`.
 - [ ] Correct the repo plan's step 3 to match decision 11.
 
 **Layer 1: `m1/parser-core`**
