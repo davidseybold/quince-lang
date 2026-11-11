@@ -299,6 +299,21 @@ fn closing_quotes_after_text() {
     );
     // A closing line later on wins.
     assert_eq!(errors("\"\"\"\na\"\"\"\n\"\"\""), Vec::<String>::new());
+    // Unless the lines before it break the indentation rule after the quotes, as a later
+    // string's opening line does when its closing line ends this one.
+    let two = "  a = \"\"\"\n    x\"\"\"\n  b = \"\"\"\n    y\n    \"\"\"\n";
+    assert_eq!(
+        errors(two),
+        [r#"E0005 15..18 => "  a = \"\"\"\n    x\n    \"\"\"\n  b = \"\"\"\n    y\n    \"\"\"\n""#]
+    );
+    // Fixing one E0005 leaves the other.
+    let both = "a = \"\"\"\n  x\"\"\"\nb = \"\"\"\n  y\"\"\"\n";
+    assert_eq!(errors(both).len(), 2, "{:?}", errors(both));
+    let fixed = both.replacen("  y\"\"\"", "  y\n  \"\"\"", 1);
+    assert_eq!(
+        errors(&fixed),
+        [r#"E0005 11..14 => "a = \"\"\"\n  x\n  \"\"\"\nb = \"\"\"\n  y\n  \"\"\"\n""#]
+    );
 }
 
 #[test]

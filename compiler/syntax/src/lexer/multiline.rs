@@ -40,6 +40,19 @@ impl Lexer<'_> {
             return self.unclosed_multiline(open..open + open_len, first_error, &content);
         };
         let indent_text = &self.text[indent.clone()];
+        // A later string's closing line can end this one, which then breaks the indentation
+        // rule at a line of code, such as that string's opening line. When a line before the
+        // first that breaks it holds `"""` after text, that was the closing slip. A valid
+        // program breaks no rule, so this can't change one.
+        let first_bad = content.iter().position(|line| {
+            let text = &self.text[line.clone()];
+            !is_blank(text) && !text.starts_with(indent_text)
+        });
+        if let Some(bad) = first_bad
+            && let Some((last, at)) = quotes_after_text(self.text, &content[..bad], raw)
+        {
+            return self.closed_after_text(&content[..=last], at, raw, interpolates);
+        }
         let leads: Vec<&str> = (content.iter())
             .map(|line| &self.text[line.clone()])
             .filter(|line| !is_blank(line))
@@ -96,8 +109,9 @@ impl Lexer<'_> {
         }
     }
 
-    /// A string with no closing line whose last line of `lines` holds `"""` after text, at
-    /// `at`, as Java and Kotlin close one. That `"""` is text (`r[lex.lit.multiline-close]`),
+    /// A string with no closing line, or one whose closing line comes after a line that breaks
+    /// the indentation rule, whose last line of `lines` holds `"""` after text, at `at`, as
+    /// Java and Kotlin close one. That `"""` is text (`r[lex.lit.multiline-close]`),
     /// but the string ends there, with an E0005, so the rest of the file is still checked.
     /// The fix moves the quotes to a line of their own, with the indentation the lines share,
     /// which is what the lines drop here too.
