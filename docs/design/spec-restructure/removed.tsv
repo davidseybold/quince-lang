@@ -12,3 +12,6 @@ to-std	2038-2040	ProcessError, ProcessOutput and Metadata
 to-std	2049-2071	the Standard library index
 removed	1387	This appendix is the single source for each prelude signature; the standard library API doc cites these lines and adds cost, failure and example notes.
 removed	1403	This appendix also gives the signatures of the std types and functions that the spec's own sections and the prelude's signatures use, so the spec alone is enough to write code.
+removed	1269	The grammar of expressions and statements, as section 2 describes them.
+removed	1269	Generic arguments (`type_args`) and the rule for reading `<` after a path are in section 2, Type arguments and construction; patterns are in section 4.
+removed	1322	The rest of the grammar, as sections 2 to 11 describe it.

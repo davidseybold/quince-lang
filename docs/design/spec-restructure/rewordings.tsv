@@ -1,0 +1,4 @@
+# Tagged text whose wording changed beyond its references (docs/design/spec-restructure.md, decision 6).
+# rule ID	old text	new text
+prelude.only	lists every one with its signature	lists every one
+prelude.tagged-values	build these values at compile time	build `Duration`, `Timestamp`, `Url` and `Regex` values at compile time
