@@ -1,7 +1,6 @@
 // rule: lex.lit.int.leading-zero
 // mode: parse
 // A decimal number, or a float's integer part, starts with `0` only when it is `0`.
-// There are no C-style octal literals.
 fn f() {
   let a = 0
   let b = 0.5

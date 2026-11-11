@@ -106,13 +106,12 @@ pub(crate) enum BadEscape {
     Dangling,
     /// `\'` or `\}`, or `\{` in bytes, whose character needs no escape.
     Needless(char),
-    /// `\x`, with the value of the two hex digits after it, if there are two. In bytes, only
-    /// without them.
-    Hex(Option<u8>),
+    /// `\x` in bytes without two hex digits after it.
+    Hex,
     /// `\u` in bytes, with the character it names, if it is a valid string escape.
     NotInBytes(Option<char>),
-    /// `\u` with no braces, with what `\u` and four hex digits would mean in other languages.
-    UnicodeNoBraces(Option<char>),
+    /// `\u` with no `{` after it.
+    UnicodeNoBraces,
     UnicodeUnclosed,
     /// `\u{...\}`, with the scalar value the digits name, if they name one.
     UnicodeEscapedBrace(Option<char>),
@@ -145,10 +144,6 @@ pub(crate) fn escape(text: &str) -> Escape {
         '\\' | '"' | '{' => ok(2, c),
         '\n' | '\r' => bad(1, BadEscape::Dangling),
         '\'' | '}' => bad(2, BadEscape::Needless(c)),
-        'x' => match hex_run(&text[2..], 2) {
-            2 => bad(4, BadEscape::Hex(u8::from_str_radix(&text[2..4], 16).ok())),
-            _ => bad(2, BadEscape::Hex(None)),
-        },
         'u' => unicode_escape(text),
         c => bad(1 + c.len_utf8(), BadEscape::Unknown(c)),
     }
@@ -165,9 +160,20 @@ pub(crate) struct ByteEscape {
 /// hex digits, `\n`, `\r`, `\t`, `\0`, `\\` or `\"` (`r[lex.lit.bytes]`). It takes as much text
 /// as a string's escape would, so a `\u{...}` is one error.
 pub(crate) fn byte_escape(text: &str) -> ByteEscape {
+    if text[1..].starts_with('x') {
+        return match hex_run(&text[2..], 2) {
+            2 => ByteEscape {
+                len: 4,
+                value: Ok(u8::from_str_radix(&text[2..4], 16).expect("two hex digits")),
+            },
+            _ => ByteEscape {
+                len: 2,
+                value: Err(BadEscape::Hex),
+            },
+        };
+    }
     let Escape { len, value } = escape(text);
     let value = match (text.as_bytes().get(1), value) {
-        (Some(b'x'), Err(BadEscape::Hex(Some(b)))) => Ok(b),
         (Some(b'u'), value) => Err(BadEscape::NotInBytes(value.ok())),
         (Some(b'{'), _) => Err(BadEscape::Needless('{')),
         (_, Ok(c)) => Ok(u8::try_from(c).expect("the other escapes stand for ASCII")),
@@ -183,14 +189,7 @@ fn unicode_escape(text: &str) -> Escape {
         value: Err(problem),
     };
     let Some(inner) = text[2..].strip_prefix('{') else {
-        // `\u0041`, as Java, JavaScript and Python write it.
-        if hex_run(&text[2..], 4) == 4 {
-            let value = u32::from_str_radix(&text[2..6], 16)
-                .ok()
-                .and_then(char::from_u32);
-            return bad(6, BadEscape::UnicodeNoBraces(value));
-        }
-        return bad(2, BadEscape::UnicodeNoBraces(None));
+        return bad(2, BadEscape::UnicodeNoBraces);
     };
     let end = inner
         .find(['}', '"', '{', '\\', '\n', '\r'])

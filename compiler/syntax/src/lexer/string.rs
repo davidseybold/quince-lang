@@ -60,9 +60,8 @@ impl Lexer<'_> {
                     if let Err(problem) = escape.value {
                         dangling = problem == BadEscape::Dangling;
                         let text = &rest[len..len + escape.len];
-                        let after = &rest[len + escape.len..];
                         let mut error =
-                            escape_error(text, after, start + len, problem, interpolates, false);
+                            escape_error(text, start + len, problem, interpolates, false);
                         if open_unicode_end == Some(len) {
                             error.fixes.clear();
                         }
@@ -177,25 +176,13 @@ fn interpolation_error(start: usize, body: &str, closed: bool) -> LexError {
     let error =
         |message: String| LexError::new(range.clone(), codes::INVALID_INTERPOLATION, message);
     let brace = "a literal brace is written `\\{`";
-    let trimmed = body.trim_matches([' ', '\t']);
     if !closed {
-        return error(if trimmed.is_empty() {
-            format!(
-                "`{{` opens an interpolation, which needs a name and a closing `}}`, as in \
-                 `{{name}}`; {brace}"
-            )
-        } else if is_path(trimmed) {
-            format!(
-                "this `{{` is never closed: write `{{{trimmed}}}`, or `\\{{` for a literal brace"
-            )
-        } else {
-            format!(
-                "this `{{` is never closed, and only a path can go in braces, such as \
-                 `{{user.name}}`; {brace}"
-            )
-        });
+        return error(format!(
+            "this `{{` is never closed: an interpolation is a path in braces, as in \
+             `{{user.name}}`; {brace}"
+        ));
     }
-    if trimmed.is_empty() {
+    if body.trim_matches([' ', '\t']).is_empty() {
         return error(format!(
             "`{{{body}}}` needs a name inside it, as in `{{name}}`; {brace}"
         ));
@@ -216,75 +203,9 @@ fn interpolation_error(start: usize, body: &str, closed: bool) -> LexError {
         ))
         .with_fix("delete the spaces", Applicability::Safe, edits);
     }
-    let bind =
-        |value: &str| format!("bind it first, as in `let value = {value}`, then write `{{value}}`");
-    if trimmed == "Self" {
-        return error(
-            "`Self` is a type, not a value: an interpolation holds a name, `self` or a constant, \
-             as in `{self.name}`"
-                .to_string(),
-        );
-    }
-    // The body is quoted in the message only when it can't break the message's own quoting.
-    let quotable = !trimmed.contains(['`', '{']);
-    if trimmed.starts_with("Self.") && quotable {
-        return error(format!(
-            "a path in braces can't start with a type: {}",
-            bind(trimmed)
-        ));
-    }
-    let words: Vec<&str> = (trimmed.split([' ', '\t']))
-        .filter(|w| !w.is_empty())
-        .collect();
-    if words.len() > 1 && words.iter().all(|w| is_path(w)) {
-        let each: Vec<String> = words.iter().map(|w| format!("{{{w}}}")).collect();
-        return error(format!(
-            "an interpolation holds one path, with no spaces: write each in its own braces, as \
-             in `{}`",
-            each.join(" ")
-        ));
-    }
-    if let Some((value, spec)) = trimmed.split_once(':') {
-        let value = value.trim_end_matches([' ', '\t']);
-        let decimals = spec
-            .strip_prefix('.')
-            .map(|d| d.strip_suffix('f').unwrap_or(d));
-        return error(match decimals {
-            Some(d) if is_path(value) && !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit()) => {
-                format!(
-                    "Quince strings have no format specifiers: format the value first, as in \
-                     `let value = {value}.to_fixed({d})`, then write `{{value}}`"
-                )
-            }
-            _ => "Quince strings have no format specifiers: format the value with a method, \
-                  such as `to_fixed` or `pad_start`, bind the result with `let`, and write \
-                  its name in the braces"
-                .to_string(),
-        });
-    }
-    if trimmed.bytes().all(|b| is_word(b) || b == b'.') {
-        return error(if trimmed.starts_with(|c: char| c.is_ascii_digit()) {
-            "an interpolation starts with a name, not a number: Quince strings have no \
-             positional placeholders, so write the value's name, as in `{name}`"
-                .to_string()
-        } else {
-            format!(
-                "`{{{body}}}` isn't a path: a path is a name, `self` or a constant, then any \
-                 number of `.` and a field name or tuple position, as in `{{user.name}}` or \
-                 `{{id.0}}`"
-            )
-        });
-    }
-    if !quotable {
-        return error(
-            "only a path can go in braces, such as `{user.name}`: bind an expression with `let` \
-             first, and write its name in the braces"
-                .to_string(),
-        );
-    }
     error(format!(
-        "only a path can go in braces, such as `{{user.name}}`: to show `{trimmed}`, {}",
-        bind(trimmed)
+        "only a path can go in braces: a name, `self` or a constant, then any number of `.` and \
+         a field name or tuple position, as in `{{user.name}}` or `{{id.0}}`; {brace}"
     ))
 }
 
@@ -317,11 +238,10 @@ pub(super) fn opens_unicode(text: &str) -> bool {
     text.starts_with("\\u") && !text.ends_with('}')
 }
 
-/// The E0006 for the escape `text`, at `at`, which the text `after` follows, in a string
-/// that `interpolates` or in a bytes literal when `bytes` is true.
+/// The E0006 for the escape `text`, at `at`, in a string that `interpolates` or in a bytes
+/// literal when `bytes` is true.
 pub(super) fn escape_error(
     text: &str,
-    after: &str,
     at: usize,
     problem: BadEscape,
     interpolates: bool,
@@ -346,9 +266,7 @@ pub(super) fn escape_error(
                 vec![(at..at + 1, String::new())],
             );
         }
-        BadEscape::Hex(_) if bytes => {
-            "a `\\x` escape takes exactly two hex digits, as in `\\x0A`".to_string()
-        }
+        BadEscape::Hex => "a `\\x` escape takes exactly two hex digits, as in `\\x0A`".to_string(),
         BadEscape::NotInBytes(Some(c)) => {
             let mut utf8 = [0; 4];
             let escapes: String = (c.encode_utf8(&mut utf8).bytes())
@@ -366,18 +284,7 @@ pub(super) fn escape_error(
         BadEscape::NotInBytes(None) => "a bytes literal takes `\\x` escapes, not `\\u`: write \
                                         each byte as `\\x` and two hex digits, as in `\\xFF`"
             .to_string(),
-        BadEscape::Hex(Some(b)) if b.is_ascii() => format!(
-            "`\\x` escapes appear only in bytes literals: in a string, write `\\u{{{b:X}}}`"
-        ),
-        BadEscape::Hex(_) => format!(
-            "`\\x` escapes appear only in bytes literals: in a string, write the character \
-             itself or its `\\u{{...}}` escape, {example}"
-        ),
-        BadEscape::UnicodeNoBraces(Some(c)) => format!(
-            "a `\\u` escape takes its hex digits in braces: write `\\u{{{:X}}}`",
-            u32::from(c)
-        ),
-        BadEscape::UnicodeNoBraces(None) => {
+        BadEscape::UnicodeNoBraces => {
             format!("a `\\u` escape takes one to six hex digits in braces, {example}")
         }
         BadEscape::UnicodeUnclosed => {
@@ -410,48 +317,14 @@ pub(super) fn escape_error(
         BadEscape::UnicodeTooBig => {
             format!("`{text}` is above `\\u{{10FFFF}}`, the largest Unicode scalar value")
         }
-        BadEscape::Unknown(c) => match c {
-            // C's control-character escapes.
-            'a' | 'b' | 'f' | 'v' | 'e' => {
-                let code = match c {
-                    'a' => 0x7,
-                    'b' => 0x8,
-                    'f' => 0xC,
-                    'v' => 0xB,
-                    _ => 0x1B,
-                };
-                if bytes {
-                    format!("`{text}` isn't a Quince escape: write the byte as `\\x{code:02X}`")
-                } else {
-                    format!(
-                        "`{text}` isn't a Quince escape: write the character as `\\u{{{code:X}}}`"
-                    )
-                }
-            }
-            // Swift's `\(name)`, where the string interpolates.
-            '(' if interpolates => {
-                let path = after
-                    .find(')')
-                    .map(|end| &after[..end])
-                    .filter(|p| is_path(p));
-                match path {
-                    Some(path) => format!(
-                        "`\\(` isn't an escape: Quince interpolates with braces, so write \
-                         `{{{path}}}`"
-                    ),
-                    None => "`\\(` isn't an escape: Quince interpolates with `{name}`".to_string(),
-                }
-            }
-            _ if bytes => format!(
-                "`{text}` isn't an escape: a bytes literal's escapes are `\\x` with two hex \
-                 digits, `\\n`, `\\t`, `\\r`, `\\0`, `\\\\` and `\\\"`, so a backslash is written \
-                 `\\\\`"
-            ),
-            _ => format!(
-                "`{text}` isn't an escape: a string's escapes are `\\n`, `\\t`, `\\r`, `\\0`, \
-                 `\\\\`, `\\\"`, `\\{{` and `\\u{{...}}`, so a backslash is written `\\\\`"
-            ),
-        },
+        BadEscape::Unknown(_) if bytes => format!(
+            "`{text}` isn't an escape: a bytes literal's escapes are `\\x` with two hex digits, \
+             `\\n`, `\\t`, `\\r`, `\\0`, `\\\\` and `\\\"`, so a backslash is written `\\\\`"
+        ),
+        BadEscape::Unknown(_) => format!(
+            "`{text}` isn't an escape: a string's escapes are `\\n`, `\\t`, `\\r`, `\\0`, `\\\\`, \
+             `\\\"`, `\\{{` and `\\u{{...}}`, so a backslash is written `\\\\`"
+        ),
     };
     error(message)
 }

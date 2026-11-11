@@ -100,10 +100,10 @@ impl Lexer<'_> {
         }
     }
 
-    /// A string whose last line of `lines` holds `"""` after text, at `at`, as Java and Kotlin
-    /// close one. That is an E0012 (`r[lex.lit.multiline-quotes]`), and the string ends there,
-    /// so the rest of the file is still checked. The fix moves the quotes to a line of their
-    /// own, with the indentation the lines share, which is what the lines drop here too.
+    /// A string whose last line of `lines` holds `"""` after text, at `at`. That is an E0012
+    /// (`r[lex.lit.multiline-quotes]`), and the string ends there, so the rest of the file is
+    /// still checked. The fix moves the quotes to a line of their own, with the indentation the
+    /// lines share, which is what the lines drop here too.
     fn closed_after_text(
         &mut self,
         lines: &[Range<usize>],

@@ -139,7 +139,7 @@ StringStart  ( StringText | StringIndent | StringNewline | Interp... )*  [ Strin
 - **A test's name doesn't interpolate** (`r[test.name]`), but it takes a string's escapes (`r[test.name-escapes]`, decided by David, 2026-11-11). So a `"` string whose previous token, skipping spaces, is `test` has no interpolation tokens, and its `{` is text.
 - `}` alone is text (`r[lex.lit.string.lone-brace]`).
 - Raw, bytes and tagged forms produce only `StringText` between start and end, with no escapes (raw and tagged) or a reduced set (bytes, `r[lex.lit.bytes]`).
-- A known tag is one of `url`, `re`, `dur`, `ts`. An identifier glued to `"` that isn't a tag (`foo"x"`, `br"x"`, `f"x"`) is an E0010 listing the tags. A keyword is never a tag, so `test"adds"` is `test` and a string.
+- A known tag is one of `url`, `re`, `dur`, `ts`. An identifier glued to `"` that isn't a tag (`foo"x"`, `br"x"`) is an E0010 listing the tags. A keyword is never a tag, so `test"adds"` is `test` and a string.
 - `b"""` and a tag before `"""` (`re"""`) are E0010 too, since only `"""` and `r"""` are multi-line (`r[lex.lit.multiline-forms]`, decided by David, 2026-11-11).
 - `Char` is one token, `'a'`, with the string escapes plus `\'` (`r[lex.lit.char.escapes]`).
 
@@ -149,12 +149,12 @@ StringStart  ( StringText | StringIndent | StringNewline | Interp... )*  [ Strin
 - A one-line string with no closing quote ends before its line ending (`r[lex.lit.string.one-line]`), with no `StringEnd`, so one missing quote can't swallow the file.
 - A broken interpolation (`{a + b}`, `{}`, `{ name }`, a `{` never closed) becomes an `Error` token up to and including the next `}`, or up to but excluding the next `"` or line ending, and the string goes on. So `"{"` reports one E0007, and its closing quote still ends the string.
 - A char literal with no closing `'` ends before its line ending.
-- An unknown tag is lexed as a tagged literal, with a raw body, so `foo"x"` is one literal and one E0010. When it is also unclosed, E0010 is its only error, since one slip gets one error. Glued to a closing quote, as in `"say "hi" now"`, the E0010 says the quote before it was probably meant as text, written `\"`.
+- An unknown tag is lexed as a tagged literal, with a raw body, so `foo"x"` is one literal and one E0010. When it is also unclosed, E0010 is its only error, since one slip gets one error.
 - `b"""` and a tag before `"""` are lexed as a raw multi-line string, so the closing `"""` line closes it rather than opening a new string, and only E0010 is reported for the prefix.
 - A lone CR is a line ending here too (decision 3), so it ends a one-line string or char literal. Only E0013 is reported then, not E0004 or E0009, since the missing quote is the CR's fault.
 - A multi-line string with no closing `"""` line runs to the end of the file. That one does swallow the file, and Risks covers it. Its lines aren't checked for escapes or interpolation, since they are more likely code than text, so one missing line is one E0005, not an error for every backslash and brace after it.
-- A string ends at its first `"""` that an escape doesn't take. After text on a line, as Java and Kotlin close a string, that is an E0012 (`r[lex.lit.multiline-quotes]`), with a `needs-review` fix that moves the quotes to a line of their own, and the code after them is still checked. So the habit agents bring from those languages neither swallows the file nor joins the next string into this one.
-- Text after the opening `"""` is one E0012 and one unchecked `StringText`. A `"""` later on that line closes the string, so Python's `"""text"""` is one E0012 and can't swallow the file.
+- A string ends at its first `"""` that an escape doesn't take. After text on a line, that is an E0012 (`r[lex.lit.multiline-quotes]`), with a `needs-review` fix that moves the quotes to a line of their own, and the code after them is still checked. So quotes after text neither swallow the file nor join the next string into this one.
+- Text after the opening `"""` is one E0012 and one unchecked `StringText`. A `"""` later on that line closes the string, so `"""text"""` is one E0012 and can't swallow the file.
 - A line that doesn't start with the closing line's indentation is an E0012 at its indentation. When no line starts with it, the closing `"""` is what is out of place, so that is one E0012, at the closing line, not one per line.
 
 ### 9. Diagnostics
@@ -181,13 +181,7 @@ Codes are numbered in the order they are registered, from E0001, skipping the re
 | E0014 | A file that isn't valid UTF-8 | None | Q1 |
 | E0015 | A control or bidirectional-format character in a literal or comment | In a `"` or `"""` string, replace it with its `\u{...}` escape (`safe`). None in raw and tagged bodies or comments | Q8 |
 
-Messages are written for the habits agents bring from other languages, since that costs nothing now:
-- E0001 on `#` suggests `//`, and on a backtick says Quince strings use `"` and interpolate with `{name}`.
-- E0001 on `r#"` says raw text that holds quotes uses `r"""`.
-- E0007 on `{}` says the braces need a name, and that a literal brace is written `\{`. On an expression, it suggests binding it with `let` first.
-- E0010 on `f"` says every `"` string interpolates already.
-
-`"Total: ${amount}"` gets no warning. It is valid text followed by an interpolation, and prices are a real use of it.
+**Messages describe Quince** (decided by David, 2026-11-11). Quince is optimized for AI models, but it is its own language: it borrows constructs from others, and its errors don't account for them. Each message says what Quince expects, the same way for every input, such as the escapes a string takes or what a path is. The lexer never looks for a construct from another language to call it out (`#` comments, `r#"` strings, C or Swift escapes, `\u` with four digits, `f"` strings, type suffixes, format specifiers), and has no per-case hints for one input shape (a word glued to a closing quote, `{Self}`, `{a b}`). Layers 1 to 6b first shipped such messages, and the layer under 6b2 removed them. Each was more code and tests to keep right for every form it could follow, for little gain: an agent that reads what Quince expects can write it.
 
 Consecutive invalid characters make one `Error` token and one E0001, so a pasted line of emoji is one diagnostic, not thirty. A malformed literal keeps its literal kind (decision 2), so nothing reports it again (`r[diag.all-errors]`).
 
@@ -241,6 +235,7 @@ Each layer builds and passes `cargo xtask ci` on its own:
 5. `m1/lexer-strings`: spec questions 2 and 7, and a bump; one-line strings, escapes and interpolation; E0004, E0006 and E0007.
 6a. `m1/lexer-multiline`: spec question 3, and a bump; multi-line and raw multi-line strings; E0005 and E0012.
 6b. `m1/lexer-literals`: raw, bytes and tagged literals; E0010 and E0011; the fallback for prefixed strings is removed.
+6b1. `m1/lexer-plain-errors`: messages describe Quince only (decision 9); no new codes or rules.
 6b2. `m1/lexer-chars`: char literals; E0009; the rest of the fallback rule is removed.
 6c. `m1/lexer-control`: spec question 8, and a bump; control and bidirectional characters; E0015.
 7. `m1/lexer-corpus`: spec question 5 (labels, no bump); the corpus and mutation tests.
@@ -304,7 +299,7 @@ All eight are approved: question 1 in its strict form, the other seven as propos
 ## Risks and trade-offs
 
 - [A multi-line string with no closing line swallows the rest of the file, so the parser reports nothing after it] → E0005 points at the opening `"""`, and fixing it restores everything. Quotes after text end the string with an E0012 (decision 8), which covers the common slip. A heuristic close (the first line that looks like code) would guess wrong in strings that hold code, which is a common use. Accepted.
-- [An unclosed `/*` swallows the rest of the file in the same way] → E0003 points at it. Quince has no block comments, so this only happens to code written from habit, and the message says to use `//`.
+- [An unclosed `/*` swallows the rest of the file in the same way] → E0003 points at it, and its message says to use `//` line comments.
 - [`parse` fixtures pass against a lexer-only backend even when they aren't valid syntax] → Layer 1 puts the rule in the fixture README, review checks it, and the parser layer reruns every fixture.
 - [Acceptance-only fixtures mark a rule covered before its value is tested] → Decision 11 limits what a lexer fixture may cite. Values are unit-tested now, and `run` fixtures cite the same rules from M6. The coverage report can't show the difference. Accepted until a test kind marks partial coverage.
 - [Tokenized interpolation makes the lexer stateful] → One state, entered at `{` in an interpolating string and left at `}`, `"` or a line end. The invariant tests run through it, seeded from fixtures that use it.
@@ -331,7 +326,7 @@ Found while writing this. None of them block the lexer.
 - **Negative literals.** `r[lex.lit.int.neg]` says the minus is "directly before" the literal. Whether `- 1` counts decides whether the parser checks adjacency.
 - **Rules this doc hands over** (decision 11): fixtures for `lex.keywords`, `lex.no-contextual`, `lex.no-shift-token`, `lex.grammar-rules`, `lex.ident-classes`, `lex.indentation`, `lex.comment.doc` and `lex.comment.doc-exact`. The formatter doc takes `lex.source.canonical`.
 - **Coverage ratchet.** M0 left this for M1. Decide it once the parser adds real coverage.
-- **Adjacent literals** (layer 6b). A quote in a string that isn't escaped can leave two literals side by side with no lexical error: `"press "b" now"` is a string and then a bytes literal, and `"the "r" key"` a string and then a raw string. With an unknown tag, as in `"say "hi" now"`, the lexer reports E0010 and suggests `\"`. The parser's error for two adjacent literals should give the same hint when the second's prefix is glued to the first's closing quote. Likewise `r"a\"b"` is a raw string, `r"a\"`, then an unclosed bytes literal: the parser can say that `\` doesn't escape in a raw string.
+- **Adjacent literals** (layer 6b). A quote in a string that isn't escaped can leave two literals side by side with no lexical error: `"press "b" now"` is a string and then a bytes literal, and `"the "r" key"` a string and then a raw string. With an unknown tag, as in `"say "hi" now"`, the lexer reports E0010. The parser reports two adjacent literals as it reports any two expressions with nothing between them, with no hint for this shape (decision 9). Likewise `r"a\"b"` is a raw string, `r"a\"`, then an unclosed bytes literal.
 
 ## For later milestones
 
@@ -385,6 +380,9 @@ Rule IDs in brackets are what each task's fixtures cite. Rules added by spec que
 - [x] Tagged literals; E0010. [`lex.lit.tagged`, `lex.lit.tagged.raw`]
 - [x] `b"""` and tagged multi-line literals don't exist; E0010. [`lex.lit.multiline-forms`]
 - [x] Remove the fallback for prefixed strings (decision 12) and its part of the README's "Literals not lexed yet".
+
+**Layer 6b1: `m1/lexer-plain-errors`**
+- [x] Remove the messages that call out other languages' constructs, and the per-case hints, from E0001, E0006, E0007, E0008 and E0010; reword E0012's docs (decision 9).
 
 **Layer 6b2: `m1/lexer-chars`**
 - [ ] Char literals; E0009. [`lex.lit.char`, `lex.lit.char.escapes`]

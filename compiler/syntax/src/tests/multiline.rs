@@ -259,7 +259,7 @@ fn indentation() {
 }
 
 /// Quotes after text are an E0012 (`r[lex.lit.multiline-quotes]`), and they end the string,
-/// as Java and Kotlin close one, so the rest of the file is still checked as code.
+/// so the rest of the file is still checked as code.
 #[test]
 fn closing_quotes_after_text() {
     let text = "f(\"\"\"\n    a\n      b\"\"\") \\";

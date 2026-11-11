@@ -172,7 +172,7 @@ fn escapes() {
     assert_eq!(errors(r#""a\}""#), [r#"E0006 2..4 => "\"a}\"""#]);
     assert_eq!(errors(r#""\q""#), ["E0006 1..3"]);
     assert_eq!(errors("\"\\\u{E9}\""), ["E0006 1..4"]);
-    assert_eq!(errors(r#""\x41\x4""#), ["E0006 1..5", "E0006 5..7"]);
+    assert_eq!(errors(r#""\x41\x4""#), ["E0006 1..3", "E0006 5..7"]);
     assert_eq!(
         errors(r#""\u{} \u{D800} \u{110000} \u{1234567} \u{12G} \u{12" "#),
         [
@@ -184,7 +184,7 @@ fn escapes() {
             "E0006 46..51"
         ]
     );
-    assert_eq!(errors(r#""\u0041 \u""#), ["E0006 1..7", "E0006 8..10"]);
+    assert_eq!(errors(r#""\u0041 \u""#), ["E0006 1..3", "E0006 8..10"]);
     // One error with no fix: deleting the backslash would make a valid escape, changing the value.
     assert_eq!(errors(r#""\u{ab\}""#), ["E0006 1..8"]);
     // Right after a `\u` with no closing `}`, deleting a backslash would join the two escapes
@@ -205,23 +205,17 @@ fn escapes() {
     );
 }
 
-/// Each message says what to write instead, where the lexer can tell.
 #[test]
 fn escape_messages() {
     assert!(message(r#""\q""#).starts_with("`\\q` isn't an escape: a string's escapes are"));
+    assert!(message(r#""\x41""#).starts_with("`\\x` isn't an escape: a string's escapes are"));
     assert!(message(r#""\'""#).starts_with("`'` needs no escape in a string"));
     assert!(message(r#""\}""#).contains("a lone `}` is text"));
-    assert!(message(r#""\x41""#).ends_with("in a string, write `\\u{41}`"));
-    assert!(message(r#""\xE9""#).contains("write the character itself"));
-    assert!(message(r#""\u0041""#).ends_with("write `\\u{41}`"));
+    assert!(message(r#""\u0041""#).starts_with("a `\\u` escape takes one to six hex digits"));
     assert!(message(r#""\u{0000041}""#).ends_with("write `\\u{41}`"));
     assert!(message(r#""\u{D800}""#).starts_with("`\\u{D800}` is a surrogate"));
     assert!(message(r#""\u{110000}""#).contains("the largest Unicode scalar value"));
     assert!(message(r#""\u{12""#).starts_with("this `\\u{` escape needs a closing `}`"));
-    assert!(message(r#""\a""#).ends_with("write the character as `\\u{7}`"));
-    assert!(message(r#""\e""#).ends_with("write the character as `\\u{1B}`"));
-    assert!(message(r#""\(total)""#).ends_with("so write `{total}`"));
-    assert!(message(r#""\(a + b)""#).contains("Quince interpolates with `{name}`"));
     assert!(message(r#""\u{ab\}""#).ends_with("takes no backslash: write `\\u{AB}`"));
     assert!(message(r#""\u{D800\}""#).contains("one to six hex digits naming"));
     assert_eq!(
@@ -296,47 +290,32 @@ fn spaces_in_braces() {
     );
 }
 
+/// Apart from spaces, which have a fix, there is one message for a closed interpolation that
+/// isn't a path, whatever is in it, and one for an unclosed one.
 #[test]
 fn interpolation_messages() {
     assert_eq!(
         message(r#""{}""#),
         "`{}` needs a name inside it, as in `{name}`; a literal brace is written `\\{`"
     );
-    assert_eq!(
-        message(r#""{a + b}""#),
-        "only a path can go in braces, such as `{user.name}`: to show `a + b`, bind it first, \
-         as in `let value = a + b`, then write `{value}`"
-    );
-    assert_eq!(
-        message(r#""{Self.MAX}""#),
-        "a path in braces can't start with a type: bind it first, as in \
-         `let value = Self.MAX`, then write `{value}`"
-    );
-    assert!(message(r#""{total:.2}""#).contains("`let value = total.to_fixed(2)`"));
-    assert!(message(r#""{x:?}""#).contains("such as `to_fixed` or `pad_start`"));
-    // Only a path gets the `to_fixed` form: `a + b.to_fixed(2)` would round only `b`.
-    assert!(message(r#""{a + b:.2}""#).contains("such as `to_fixed` or `pad_start`"));
-    assert_eq!(
-        message(r#""{ a b }""#),
-        "an interpolation holds one path, with no spaces: write each in its own braces, as in \
-         `{a} {b}`"
-    );
-    assert!(message(r#""{Self}""#).starts_with("`Self` is a type, not a value"));
-    // A body that would break the message's quoting isn't quoted.
-    for text in [r#""{a{b}""#, "\"{a`b}\""] {
-        assert!(
-            message(text).ends_with("and write its name in the braces"),
-            "{text}"
-        );
+    let not_a_path = "only a path can go in braces: a name, `self` or a constant, then any number \
+                      of `.` and a field name or tuple position, as in `{user.name}` or `{id.0}`; \
+                      a literal brace is written `\\{`";
+    for text in [
+        r#""{a + b}""#,
+        r#""{Self}""#,
+        r#""{x:.2}""#,
+        r#""{0}""#,
+        r#""{a b}""#,
+        r#""{a.}""#,
+    ] {
+        assert_eq!(message(text), not_a_path, "{text}");
     }
-    assert!(message(r#""{0}""#).contains("no positional placeholders"));
-    assert!(message(r#""{a.}""#).starts_with("`{a.}` isn't a path"));
-    assert_eq!(
-        message(r#""{name""#),
-        "this `{` is never closed: write `{name}`, or `\\{` for a literal brace"
-    );
-    assert!(message(r#""{""#).starts_with("`{` opens an interpolation, which needs a name"));
-    assert!(message(r#""{a + b""#).starts_with("this `{` is never closed, and only a path"));
+    let unclosed = "this `{` is never closed: an interpolation is a path in braces, as in \
+                    `{user.name}`; a literal brace is written `\\{`";
+    for text in [r#""{name""#, r#""{""#, r#""{a + b""#] {
+        assert_eq!(message(text), unclosed, "{text}");
+    }
 }
 
 /// A test's name doesn't interpolate, so `{` is text in it, but its escapes are checked.
@@ -352,15 +331,4 @@ fn test_names() {
     assert_eq!(errors(r#"test(x, "{}")"#), ["E0007 9..11"]);
     // Messages about interpolation don't apply in a test name.
     assert_eq!(message(r#"test "\}" {"#), "`}` needs no escape in a string");
-    assert!(message(r#"test "\(x)" {"#).starts_with("`\\(` isn't an escape: a string's escapes"));
-}
-
-/// E0001's hint for a Rust raw string still reads the tokens around the `#`.
-#[test]
-fn raw_string_hint_around_checked_strings() {
-    let lexed = lex_str("r#\"{a b}\"#");
-    let codes: Vec<_> = lexed.errors.iter().map(|e| e.code).collect();
-    assert_eq!(codes, ["E0001", "E0007", "E0001"]);
-    assert!(lexed.errors[0].message.contains("`r\"\"\"`"));
-    assert!(lexed.errors[2].message.contains("`r\"\"\"`"));
 }
