@@ -2,7 +2,7 @@
 
 Nov 10, 2026 · @David · Draft v0.5
 
-The spec says what Quince programs mean, and what the tools guarantee about them. It is being split from one file into chapters ([design](../docs/design/spec-restructure.md)). Until the split is done, the chapters below and the file being split hold the whole spec between them.
+The spec says what Quince programs mean, and what the tools guarantee about them. On 2026-11-10 it was split from one file into chapters, and its rule IDs were renamed once to name their chapter ([design](../docs/design/spec-restructure.md)); [`id-map.tsv`](../docs/design/spec-restructure/id-map.tsv) maps each old ID to its new one. No meaning changed.
 
 ## Chapters
 
@@ -26,10 +26,12 @@ Part I, the language:
 - [Program execution](reference/execution.md): the capabilities behind effects, and how `main` starts and ends a program.
 - [Interop with C](reference/interop.md): foreign blocks and generated bindings, C types, trust, linking, C memory, pools, callbacks and foreign calls.
 
-Still being split:
+Part II, the tools the language guarantees:
 
-- [Quince Language Spec (being split)](quince-spec.md): every rule not yet moved to a chapter.
+- [Dependencies and publishing](tooling/dependencies.md): the `quince.toml` manifest, the lockfile, minimal version selection, content addressing, and the semantic versioning `publish` enforces.
+- [Toolchain](tooling/toolchain.md): the `quince` commands, performance targets, formatting rules, compilation and its backend, build profiles, targets, incremental builds and debugging.
+- [Diagnostics and queries](tooling/diagnostics.md): structured diagnostics and their fixes, and the query API.
 
-Read the chapters in the order listed. [`chapters.txt`](chapters.txt) lists them with their rule-ID prefixes.
+Read Part I in the order listed, and Part II as needed. [`chapters.txt`](chapters.txt) lists them with their rule-ID prefixes.
 
 The standard library's API isn't part of the spec. It is in [`std/API.md`](../std/API.md), which isn't normative and needs no approval to change.

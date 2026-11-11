@@ -227,12 +227,12 @@ pub struct Edit {
 mod tests {
     use super::*;
 
-    /// The example diagnostic from spec section 8, read from the spec itself so the two can't
-    /// drift.
+    /// The example diagnostic from the spec's Diagnostics and queries chapter, read from the
+    /// spec itself so the two can't drift.
     pub(crate) fn spec_example() -> String {
-        let spec = include_str!("../../../spec/quince-spec.md");
+        let spec = include_str!("../../../spec/tooling/diagnostics.md");
         let section = &spec[spec
-            .find("### Structured diagnostics")
+            .find("## Structured diagnostics")
             .expect("spec has a Structured diagnostics section")..];
         let open = section.find("```\n").expect("code block") + 4;
         let close = open + section[open..].find("```").expect("closed code block");

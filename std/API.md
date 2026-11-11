@@ -422,7 +422,7 @@ The operator interfaces `Add`, `Sub`, `Mul`, `Div`, `Rem` and `Neg` ([Operators 
 | Signature | What | Notes |
 | --- | --- | --- |
 | `fn assert(condition: Bool, message: String = "")` | Panics when `condition` is false | A failed `assert(a == b)` prints both sides ([Testing](../spec/reference/testing.md)), so there is no `assert_eq` |
-| `fn todo(reason: String) -> Never` | Marks unfinished code | Panics. `quince publish` refuses a library that contains `todo` or `dbg` ([Dependencies and publishing](../spec/quince-spec.md#enforced-semantic-versioning)) |
+| `fn todo(reason: String) -> Never` | Marks unfinished code | Panics. `quince publish` refuses a library that contains `todo` or `dbg` ([Dependencies and publishing](../spec/tooling/dependencies.md)) |
 | `fn unreachable(reason: String) -> Never` | Marks a case the author has proved can't happen | Panics |
 | `fn dbg<T>(value: T) -> T` | Prints the debug form and source location to standard error, returns `value` | Not an effect; rejected in release builds ([Prelude and special interfaces](../spec/reference/prelude.md)) |
 | `fn with_timeout<T, uses E>(limit: Duration, body: fn() -> T uses E) -> Result<T, TimedOut> uses E, Clock` | Cancels `body` after `limit` ([Cancellation](../spec/reference/concurrency.md#cancellation)) | Waits. Needs `Clock` because it reads a timer |

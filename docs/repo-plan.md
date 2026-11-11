@@ -80,3 +80,13 @@ The parser lives in `compiler/syntax` (`quince_syntax`). It has no dependencies 
    - Snapshot tests of the CST and of parse errors.
    - A fuzzer that checks the parser never panics, and that printing the CST gives back the exact input.
 4. Next, `quince fmt`, since the formatter only needs the CST. After that, name resolution.
+
+## Pipeline
+
+The compiler's stages, moved here from the spec when it was split into chapters. Once the crate that runs the pipeline exists, its README takes this over.
+
+1. **Parse** source into a syntax tree.
+2. **Check** types, effects, exhaustiveness, and formatting. `quince` `check` stops here.
+3. **Lower** to Quince IR, a mid-level representation where generics are monomorphized, contracts become explicit checks, reference-count operations are inserted and optimized, and `concurrent` blocks become runtime calls.
+4. **Generate** LLVM IR, with reference counting already explicit, so no GC stack maps or LLVM statepoints are needed.
+5. **Optimize and emit** native object code, then link with the runtime.
