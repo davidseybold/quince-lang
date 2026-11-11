@@ -1,0 +1,15 @@
+// rule: lex.lit.string.multiline
+// mode: parse
+// A multi-line string sits between """ lines and interpolates. A quote inside it is text,
+// so its lines aren't one-line strings, and an interpolation in it is checked.
+fn f(name: String) -> String {
+  let greeting = """
+    Hello, {name}!
+    She said "hi and left.
+    """
+  let broken = """
+    {name + 1}
+    """
+  //~^^ E0007
+  greeting
+}

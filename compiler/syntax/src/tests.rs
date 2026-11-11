@@ -4,6 +4,7 @@ use crate::{Lexed, SyntaxKind, lex_str};
 use std::path::Path;
 
 mod errors;
+mod multiline;
 mod numbers;
 mod strings;
 
@@ -130,9 +131,10 @@ fn tokens_for_errors() {
 #[test]
 fn literal_fallbacks() {
     assert_eq!(
-        dump("\"a b\" \"\"\"x"),
+        dump("\"a b\" b\"\"\"x"),
         "StringStart \"\\\"\"\nStringText \"a b\"\nStringEnd \"\\\"\"\nWhitespace \" \"\n\
-         StringStart \"\\\"\"\nStringEnd \"\\\"\"\nStringStart \"\\\"\"\nStringText \"x\"\n"
+         Ident \"b\"\nStringStart \"\\\"\"\nStringEnd \"\\\"\"\nStringStart \"\\\"\"\n\
+         StringText \"x\"\n"
     );
     assert_eq!(
         dump("re\"[a]\""),

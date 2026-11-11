@@ -21,19 +21,23 @@ pub mod codes {
     pub const SEMICOLON: &str = "E0002";
     pub const BLOCK_COMMENT: &str = "E0003";
     pub const UNCLOSED_STRING: &str = "E0004";
+    pub const UNCLOSED_MULTILINE: &str = "E0005";
     pub const INVALID_ESCAPE: &str = "E0006";
     pub const INVALID_INTERPOLATION: &str = "E0007";
     pub const MALFORMED_NUMBER: &str = "E0008";
+    pub const MULTILINE_LAYOUT: &str = "E0012";
     pub const LONE_CARRIAGE_RETURN: &str = "E0013";
     pub const INVALID_UTF8: &str = "E0014";
-    pub const ALL: [&str; 9] = [
+    pub const ALL: [&str; 11] = [
         UNKNOWN_CHARACTER,
         SEMICOLON,
         BLOCK_COMMENT,
         UNCLOSED_STRING,
+        UNCLOSED_MULTILINE,
         INVALID_ESCAPE,
         INVALID_INTERPOLATION,
         MALFORMED_NUMBER,
+        MULTILINE_LAYOUT,
         LONE_CARRIAGE_RETURN,
         INVALID_UTF8,
     ];

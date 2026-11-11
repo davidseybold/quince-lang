@@ -33,6 +33,10 @@ syntax_kinds! {
         /// Characters that start no token. Trivia to the parser.
         Error,
         Ident, Int, Float, Char, StringStart, StringText, StringEnd,
+        /// A line ending inside a multi-line string.
+        StringNewline,
+        /// Spaces and tabs in a multi-line string that aren't part of its value.
+        StringIndent,
         /// The `{` and `}` around an interpolated path in a string.
         InterpStart, InterpEnd,
         /// Reported as E0002, and read by the parser as a line break.

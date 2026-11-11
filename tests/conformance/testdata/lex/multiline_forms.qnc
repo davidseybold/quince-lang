@@ -1,0 +1,16 @@
+// rule: lex.lit.multiline-forms
+// rule: lex.lit.string.raw-multiline
+// mode: parse
+// A """ string takes the same escapes as a " string. Its raw form, r""", has no escapes or
+// interpolation, so it may contain backslashes, quotes and braces freely.
+fn f() -> List<String> {
+  let a = """
+    tab\tquote\"brace\{smile\u{1F600}
+    not an escape: \q
+    """
+  //~^^ E0006
+  let b = r"""
+    C:\path\to "{file}" and \q
+    """
+  [a, b]
+}

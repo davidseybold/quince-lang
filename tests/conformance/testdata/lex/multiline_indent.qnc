@@ -1,0 +1,24 @@
+// rule: lex.lit.multiline-indent
+// mode: parse
+// Every line between starts with exactly the closing line's indentation, except a line
+// that holds only whitespace. A line indented less, or with a tab where the closing line
+// has spaces, is an error.
+fn f() -> List<String> {
+  let a = """
+      extra indentation is kept
+
+    a whitespace-only line, even a short one, becomes empty:
+  
+    """
+  let b = """
+    fine
+  less
+    """
+  //~^^ E0012
+  let c = """
+    spaces
+	tab
+    """
+  //~^^ E0012
+  [a, b, c]
+}
