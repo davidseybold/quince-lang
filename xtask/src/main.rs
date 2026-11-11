@@ -17,7 +17,7 @@ commands:
   spec-rules            check spec/chapters.txt and the rule-ID tags in every chapter
   spec-rules --strip [<file>]
                         print one chapter file, or every one, with its rule-ID tags removed
-  spec-grammar          check spec/grammar.ebnf against the spec's grammar appendices
+  spec-grammar          check spec/grammar.ebnf against the spec's `ebnf` blocks
   spec-grammar --write  regenerate spec/grammar.ebnf from the spec
   diagnostics           check every diagnostic code has explain text and a conformance test
   conformance           run the conformance fixtures and write the spec coverage report

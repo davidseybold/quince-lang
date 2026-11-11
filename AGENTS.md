@@ -14,7 +14,7 @@ How to build and check this repo. `CLAUDE.md` holds the working rules and the de
 | `cargo run -p quince_cli -- --version` | Runs the `quince` binary. Only `--version` works so far. |
 | `cargo xtask spec-rules` | Checks the chapter manifest `spec/chapters.txt`, the chapter list in `spec/README.md`, and the rule-ID tags in every chapter: format, placement, topics, uniqueness, retired IDs. |
 | `cargo xtask spec-rules --strip [<file>]` | Prints one spec chapter, or every chapter in order, with every tag removed, so you can diff the wording without the tags. |
-| `cargo xtask spec-grammar` | Checks that `spec/grammar.ebnf` matches the spec's grammar appendices, that every name it uses is defined and every production is used, and that no production reuses a retired name. Errors give the spec line to fix. |
+| `cargo xtask spec-grammar` | Checks that `spec/grammar.ebnf` matches the spec's `ebnf` code blocks, that every name it uses is defined and every production is used, and that no production reuses a retired name. Errors give the chapter file and line to fix. |
 | `cargo xtask spec-grammar --write` | Regenerates `spec/grammar.ebnf` from the spec. Run it after the spec's grammar changes. Only the file's header (its terminal list) is edited by hand. |
 | `cargo xtask diagnostics` | Checks that every registered diagnostic code has explain text, and every code that isn't retired has a conformance test. To add a code, see `compiler/diagnostics/src/registry.rs`. |
 | `cargo xtask conformance` | Runs the `.qnc` fixtures in `tests/conformance/testdata/` and writes spec coverage by rule ID to `target/conformance/coverage.json`. The fixture format is in that folder's README. |
@@ -38,7 +38,7 @@ A spec change that adds normative text tags it in the same PR. No check can tell
 | `spec/` | The language spec and std API. The source of truth for what Quince means. Don't edit it without David's approval. |
 | `compiler/<name>/` | One crate per compiler stage, named `quince_<name>`. Each crate's `lib.rs` says what it holds, and its `README.md`, when it has one, holds the formats and rules it enforces. |
 | `compiler/cli/` | The single `quince` binary. |
-| `compiler/spec/` | `quince_spec`: reads the spec (chapter manifest, rule tags, grammar appendices) for xtask and the conformance runner. |
+| `compiler/spec/` | `quince_spec`: reads the spec (chapter manifest, rule tags, `ebnf` grammar blocks) for xtask and the conformance runner. |
 | `runtime/` | The runtime, built as a static library linked into every Quince binary. |
 | `std/` | The standard library in Quince (from M6). |
 | `tests/conformance/` | The conformance runner (`quince_conformance`); fixtures live in its `testdata/`. |

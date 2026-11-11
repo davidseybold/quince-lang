@@ -1266,7 +1266,7 @@ Only the name remains open. Every design question raised in the v0.1 and v0.2 re
 
 The grammar of expressions and statements, as section 2 describes them. `{ x }` means zero or more, `[ x ]` optional. Generic arguments (`type_args`) and the rule for reading `<` after a path are in section 2, Type arguments and construction; patterns are in section 4. r[lex.grammar-rules] Three lexer rules apply: `>>` is never one token (the parser joins two adjacent `>` for a shift), `..=` is one token, and `|` inside a pattern is alternation, so `x is A | B` tests for either variant.
 
-```
+```ebnf
 expr        = jump | logic | range | bits
 jump        = "return" [ expr ] | "break" | "continue"
             | "spawn" [ "in" postfix ] expr   // a TaskScope value: bg, self.bg
@@ -1319,7 +1319,7 @@ assign_op   = "=" | "+=" | "-=" | "*=" | "/=" | "%="
 
 The rest of the grammar, as sections 2 to 11 describe it. r[lex.ident-classes] `name` is a `snake_case` identifier, `Name` a `PascalCase` one and `NAME` a `SCREAMING_SNAKE_CASE` one. r[lex.ident-not-keyword] None of them can be a keyword. r[lex.c-name] `c_name` is any C identifier, kept in its C spelling, and appears only for what a `foreign` block declares. `path` is `name { "." name }`, a package path such as `std.http`. `literal`, `string`, `int` and `doc_comment` are the tokens of section 2.
 
-```
+```ebnf
 file         = { import NEWLINE } { decl NEWLINE }
 import       = "import" path ( "." names | [ "as" name ] )   // as: packages only
 names        = "{" name_ref { "," name_ref } [ "," ] "}"

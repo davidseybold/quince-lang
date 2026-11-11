@@ -1,6 +1,6 @@
 # quince_spec
 
-Reads the language spec for `cargo xtask` and the conformance runner: its chapter manifest, its rule-ID tags and its grammar appendices. This file defines the formats it checks. The spec itself says what Quince means, so nothing here restates it.
+Reads the language spec for `cargo xtask` and the conformance runner: its chapter manifest, its rule-ID tags and its grammar. This file defines the formats it checks. The spec itself says what Quince means, so nothing here restates it.
 
 ## Chapters
 
@@ -57,16 +57,16 @@ Every normative statement in the spec's chapter files carries an ID that conform
 
 `spec/grammar.ebnf` is a machine-readable copy of the spec's grammar that the parser is tested against.
 
-- **Contents:** a header of `//` comment lines, then the code block under `## Appendix: Expression grammar`, one blank line, and the code block under `### Declarations, types and patterns`, each copied verbatim.
-- **Code blocks:** each of those headings must be followed by exactly one code block before the next heading.
+- **Grammar blocks:** grammar lives in fenced code blocks whose info string is `ebnf`, each next to the prose it formalizes. A chapter may hold any number of them. Any other code block is an example.
+- **Contents:** a header of `//` comment lines, then every `ebnf` block in manifest order (document order within a chapter), copied verbatim and separated by one blank line.
 - **Editing:** the header (its terminal list) is the only hand-edited part. `cargo xtask spec-grammar --write` regenerates everything after it, keeping the existing header, or writing the default header when the file doesn't exist.
 
 `cargo xtask spec-grammar` fails when:
 - the file doesn't match the spec, printing a unified diff and naming `--write` as the fix;
-- either heading is missing, or is followed by more than one code block;
+- no chapter has an `ebnf` block, or one is never closed;
 - an identifier on the right-hand side of a production, outside string literals and comments, is neither defined by a production nor listed as a terminal in the header;
 - a production is defined twice;
 - a production other than `file` is never referenced;
 - a production's derived ID is retired.
 
-Errors give the line in `spec/quince-spec.md`, because the grammar is fixed in the spec and then regenerated, never edited in the generated file.
+Errors give the chapter file and line, because the grammar is fixed in the spec and then regenerated, never edited in the generated file.
