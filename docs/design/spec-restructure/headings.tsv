@@ -1,2 +1,6 @@
-# Headings the restructure adds (`new`, the file, the heading line). The move layers add old-to-new rows.
+# What became of the baseline's headings, and the headings the restructure adds (docs/design/spec-restructure.md, decision 8).
+# new	file	heading line it adds
+# moved	baseline line (L120)	baseline heading	file	heading line it became (one row per part when a section splits)
+# dropped	baseline line	baseline heading
+# A baseline heading without a row must still be in quince-spec.md, unchanged.
 new	spec/quince-spec.md	### Prelude names
