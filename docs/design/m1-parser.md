@@ -1,6 +1,6 @@
 # M1: Parser
 
-Status: passed design review (four passes). On 2026-11-11 David decided the three dependency questions, approved spec questions 2 to 12 as proposed, and chose parentheses for question 14. Questions 1 and 13 wait on him. This is the second design doc of M1 (Syntax), after [the lexer](m1-lexer.md). The formatter doc (`quince fmt`) follows it.
+Status: passed design review (four passes). On 2026-11-11 David decided the three dependency questions, approved spec questions 2 to 12 as proposed, chose parentheses for question 14, and allowed tuple positions as places for question 13. Question 1 waits on him. This is the second design doc of M1 (Syntax), after [the lexer](m1-lexer.md). The formatter doc (`quince fmt`) follows it.
 
 ## Why
 
@@ -348,7 +348,7 @@ Each spec question lands in the layer that enforces it, with a minor version bum
 
 ## Spec questions
 
-**Decided by David, 2026-11-11:** questions 2 to 12 are approved as proposed, and question 14 with parentheses for function types, as written below. Questions 1 and 13 are open.
+**Decided by David, 2026-11-11:** questions 2 to 12 are approved as proposed, question 13 allows tuple positions as places, and question 14 uses parentheses for function types, as written below. Question 1 is open.
 
 Questions 1 to 5 come from the lexer doc's handover. The rest came up while reading the grammar. Each gives proposed wording and the tag it would have. Every ID uses a construct already listed in `spec/chapters.txt`, and a question that changes a rule's meaning retires its ID and adds a new one (`AGENTS.md`, "Rule IDs").
 
@@ -404,11 +404,13 @@ This gives one way to write it.
 
 **12. Line breaks in closure headers and function types (layer 4).** `r[lex.continue.signature]` says "inside a `fn` signature". Proposed: retire it, and add `r[lex.continue.fn-header]` "Inside any `fn` header, whether a declaration's signature, a closure's or a function type, a line that starts with `->`, `uses`, `requires`, `ensures` or `{` continues the header." So `fn(x: Int)` followed by a line `-> Int {` works the same in a closure as in a declaration, and there is one rule.
 
-**13. Tuple positions as places (layer 4).** `grammar.place` allows field names and indexes, but not tuple positions. So `t.0 = 1` on a `var` tuple, or `id.0 = 2` on a `var` newtype (`r[item.newtype.access]`), is a syntax error, while `r[stmt.assign.place]` says "a field path from one". Proposed, one of:
-- add `"." int` to `place`, if a position counts as a field;
-- retire `stmt.assign.place`, and add `r[stmt.assign.place-forms]` with its text plus "A tuple or newtype position isn't a place: build a new value."
+**13. Tuple positions as places (layer 4).** `grammar.place` allows field names and indexes, but not tuple positions. So `t.0 = 1` on a `var` tuple, or `id.0 = 2` on a `var` newtype (`r[item.newtype.access]`), is a syntax error, while `r[stmt.assign.place]` says "a field path from one". Decided by David, 2026-11-11: allow it. A position counts as a field, so the prose's "field path" already covers it. `r[stmt.assign.place]` keeps its ID, and only the grammar changes, to match it:
+```
+place       = ( name | "self" ) { "." name | "." int | "[" expr "]" }   // self only under var self
+```
+So `t.0 = 1` and `pair.0.1 = 2` assign one position of a `var` tuple, and `id.0 = 2` the inner value of a `var` newtype, as `user.name = "New"` assigns a field (`r[item.struct.field-assign]`).
 
-No preference beyond saying which. Allowing it is the reversible direction, since forbidding it later breaks code.
+*Alternative:* forbid it, retiring `stmt.assign.place` for a rule that says to build a new value. Rejected: allowing it is the reversible direction, since forbidding it later breaks code.
 
 **14. Whose effects follow a returned function type (layer 2).** In `fn make() -> fn(Int) -> Int uses Io {`, the `uses Io` can belong to the returned function type or to `make`. The grammar has no parenthesized type, so neither reading can be forced. Decided by David, 2026-11-11:
 - `r[effect.uses-return]` "When a function's return type is a function type written without parentheses, a `uses` after it belongs to the outer function." The same holds for closures, and for a function type whose return type is a function type.
@@ -462,13 +464,13 @@ Revert the stack's PRs. Nothing changes outside `quince_syntax`, the conformance
 
 ## Tasks
 
-Rule IDs in brackets are what each task's fixtures cite. Grammar productions are cited as `grammar.<production>`. Rules added by spec questions are cited only once approved. A rule a question retires (`lex.continue.signature` under question 12, and `stmt.assign.place` under question 13's second option) is cited by its replacement once that is approved, since the runner rejects a retired ID.
+Rule IDs in brackets are what each task's fixtures cite. Grammar productions are cited as `grammar.<production>`. Rules added by spec questions are cited only once approved. A rule a question retires (`lex.continue.signature` under question 12, and `item.struct.unit` under question 11) is cited by its replacement, since the runner rejects a retired ID.
 
 **Before building**
 - [x] David decides questions A, B and C (2026-11-11).
 - [ ] Design review passes.
-- [x] David decides spec questions 2 to 12 and 14 (2026-11-11).
-- [ ] David decides spec questions 1 and 13.
+- [x] David decides spec questions 2 to 14 (2026-11-11).
+- [ ] David decides spec question 1.
 
 **Layer 0: `m1/parser-cst`**
 - [ ] Add `rowan`, pinned after checking its dependencies and minimum Rust version.
