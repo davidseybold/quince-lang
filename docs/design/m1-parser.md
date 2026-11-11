@@ -101,7 +101,7 @@ The parser reads a list of significant tokens: everything but `Whitespace`, `New
 - the previous token's kind `continues_line()`;
 - the previous token is a `>` or `*` the parser took as a binary operator. Those two depend on their role (lexer decision 4), and the parser knows the role when it takes them;
 - the next token is `.` (`r[lex.continue.more]`);
-- the parser is in a `fn` header and the next token is `->`, `uses`, `requires`, `ensures` or `{` (`r[lex.continue.signature]`). Spec question 12 asks whether closures and function types count.
+- the parser is in a `fn` header and the next token is `->`, `uses`, `requires`, `ensures` or `{` (`r[lex.continue.fn-header]`, which replaces `r[lex.continue.signature]` under spec question 12). That covers a declaration's signature, a closure's header and a function type.
 
 The parser checks that one function, `at_break()`, wherever a construct may end or go on: before a binary operator, a postfix operator, `else`, an optional part of a signature, and the operand of `return`. So `let x = a` followed by a line `- b` is two statements, and `return` on a line of its own is a bare return.
 
@@ -156,7 +156,7 @@ Parsing ahead discards its events. The parser remembers the answer for every `<`
 
 **Calls and struct literals** have one shape, `Call`, whatever is called. `User(id: 1)`, `UserId(1)`, `Some(x)` and `f(x)` all parse as a callee and an argument list, because only name resolution can tell a struct from a function. A `..base` argument is allowed only first (`r[item.struct.update]`).
 
-**Assignment** is parsed as an expression followed by `=` or a compound assignment, then checked. The left side must be a place: a `var` binding's name or `self`, followed by field names and indexes (`grammar.place`, `r[stmt.assign.place]`). Anything else is E0026. `x = y = z` and `if x = 1` are an E0016 at the second `=`, since assignment is a statement (`r[stmt.assign.no-chain]`).
+**Assignment** is parsed as an expression followed by `=` or a compound assignment, then checked. The left side must be a place: a `var` binding's name or `self`, followed by field names, tuple or newtype positions, and indexes (`grammar.place`, `r[stmt.assign.place]`, spec question 13). Anything else is E0026. `x = y = z` and `if x = 1` are an E0016 at the second `=`, since assignment is a statement (`r[stmt.assign.no-chain]`).
 
 ### 7. Names and case
 
@@ -179,8 +179,8 @@ A keyword where a name goes is an E0016 that names the keyword (`r[lex.keyword-n
 
 ### 8. Declarations, doc comments and attributes
 
-- **Declarations.** A declaration is its doc comments, its attributes, `pub`, and the item (`grammar.decl`). The doc comments are tokens in a `DocComments` node at its start, and the attributes are `Attribute` nodes. Fields, variants and variant fields take the same (`grammar.field`, `grammar.evariant`, `grammar.vfield`). So do impl items, interface methods, effect operations and foreign items, if spec question 9 is approved.
-- **Stray doc comments.** A doc comment that comes before nothing it can document is E0023, with a fix that makes it an ordinary comment (`safe`), if spec question 10 is approved. Until E0023 lands in layer 7, or for good if question 10 is rejected, such a doc comment is read as an ordinary comment, with no error. `lex/control.qnc` has one in a function body. Layer 7 adds its expectation, or turns it into a `//` comment if the fixture is about something else.
+- **Declarations.** A declaration is its doc comments, its attributes, `pub`, and the item (`grammar.decl`). The doc comments are tokens in a `DocComments` node at its start, and the attributes are `Attribute` nodes. Fields, variants and variant fields take the same (`grammar.field`, `grammar.evariant`, `grammar.vfield`). So do impl items, interface methods, effect operations and foreign items (spec question 9).
+- **Stray doc comments.** A doc comment that comes before nothing it can document is E0023, with a fix that makes it an ordinary comment (`safe`, spec question 10). Until E0023 lands in layer 7, such a doc comment is read as an ordinary comment, with no error. `lex/control.qnc` has one in a function body. Layer 7 adds its expectation, or turns it into a `//` comment if the fixture is about something else.
 - **Attributes.** An attribute goes on its own line (`r[item.attr.placement]`). One on its declaration's line is an E0016 whose fix inserts a line break (`safe`). Whether the attribute's name is known (`r[item.attr.unknown]`) is checked by a later stage, since the set depends on the edition.
 - **Imports** come before declarations (`grammar.file`). An import after a declaration is an E0016.
 - **What the grammar rejects is an E0016:** `pub` on a variant field (`grammar.vfield`, `r[item.enum.field-visibility]`), a `const` in an interface (`grammar.interface_decl`, `r[item.const.assoc.no-interface]`), and a wildcard import (`r[intro.excl.wildcard-imports]`).
@@ -247,15 +247,15 @@ Doc comments and attributes aren't member starts: they belong to the declaration
 
 ### 10. Diagnostics
 
-Codes continue from E0016 in the order they are registered, as the lexer's do. They are provisional until each one's layer merges, and a code whose rule waits on a spec question is registered only after approval. Messages describe Quince, the same way for every input (lexer decision 9).
+Codes continue from E0016 in the order they are registered, as the lexer's do. They are provisional until each one's layer merges. Messages describe Quince, the same way for every input (lexer decision 9).
 
 The operators Quince leaves out (`r[expr.op.excluded]`) get no code or hint of their own: each is an E0016 that says what may go there. That covers `x++`, `a ** b`, `c ? a : b`, `x as Int` and `a ?? b`. `x?.y` and `--x` aren't errors at all: they are `?` followed by a field, and a double negation.
 
-| Code | Problem | Fix | Waits on |
+| Code | Problem | Fix | Rule from |
 | --- | --- | --- | --- |
 | E0016 | A token that can't go here: "expected X, found Y" | Insert a line break after an attribute on its declaration's line (`safe`); insert a missing `,` between list items on separate lines (`needs-review`); remove parentheses around a type that isn't a function type (`safe`, Q14). Otherwise none | |
 | E0017 | An opening bracket with no closing one, at the opener | None | |
-| E0018 | A line break that ends a statement too early, including before `else` or a body's `{` (decision 4) | Replace the break and the indentation after it with a space (`safe`), unless a comment ends the line | Q3, Q12 |
+| E0018 | A line break that ends a statement too early, including before `else` or a body's `{` (decision 4) | Replace everything between the two tokens with a space (`safe`), unless a comment lies between them | Q3, Q12 |
 | E0019 | Operators that need parentheses (decision 6) | Add the parentheses for the usual reading (`needs-review`) | |
 | E0020 | A chained comparison or range | For comparisons, `a < b && b < c` (`needs-review`) | |
 | E0021 | A name of the wrong case, or of no case, where it's declared | None in M1 | Q1 |
@@ -352,7 +352,7 @@ Each spec question lands in the layer that enforces it, with a minor version bum
 
 Questions 1 to 5 come from the lexer doc's handover. The rest came up while reading the grammar. Each gives proposed wording and the tag it would have. Every ID uses a construct already listed in `spec/chapters.txt`, and a question that changes a rule's meaning retires its ID and adds a new one (`AGENTS.md`, "Rule IDs").
 
-**1. Naming classes (layer 8).** `r[lex.name.case]` names the styles but doesn't define them, and `r[lex.name.enforced]` makes the answer a compile error. `T` and `URL` fit two classes. Proposed, in Lexical structure's Naming section:
+**1. Naming classes (layer 8).** `r[lex.name.case]` names the styles but doesn't define them, and `r[lex.name.enforced]` makes the answer a compile error. `T` and `URL` fit two classes. Approved, in Lexical structure's Naming section:
 - `r[lex.name.snake]` "A `snake_case` name is lowercase letters, digits and single underscores between them, and starts with a letter: `x2`, `utf8_len`. `_unused`, `trailing_` and `a__b` aren't `snake_case`."
 - `r[lex.name.pascal]` "A `PascalCase` name starts with an uppercase letter and has no underscores. A single uppercase letter, such as `T`, is `PascalCase`. Capitals may follow each other, as in `HTTPServer`, but a name of two or more letters with no lowercase letter is `SCREAMING_SNAKE_CASE`, so a type is `Url`, not `URL`."
 - `r[lex.name.screaming]` "A `SCREAMING_SNAKE_CASE` name is uppercase letters, digits and single underscores between them, starts with a letter, and has at least two letters: `MAX_RETRIES`, `HTTP2`."
@@ -366,43 +366,43 @@ Questions 1 to 5 come from the lexer doc's handover. The rest came up while read
 
 The grammar's `primary` and `alt` list `name` and `NAME` but no `c_name`, so today a foreign function such as `SDL_Init` can be declared but not called. The last bullet fixes that in prose. Changing `primary` itself is optional, and the grammar's comment can say it.
 
-**2. Booleans (layer 1).** `true` and `false` are keywords, and the grammar's `literal` doesn't say it includes them, but a pattern `true =>` needs it to. Proposed: `r[lex.lit.bool]` "`true` and `false` are the literals of `Bool`", in Literals, so `literal` covers them.
+**2. Booleans (layer 1).** `true` and `false` are keywords, and the grammar's `literal` doesn't say it includes them, but a pattern `true =>` needs it to. Approved: `r[lex.lit.bool]` "`true` and `false` are the literals of `Bool`", in Literals, so `literal` covers them.
 
-**3. Line breaks inside lists (layer 4).** `r[lex.line-end]` is Go's rule. But `r[tool.fmt.check]` says unformatted code compiles, so `f(\n  a,\n  b\n)` without its trailing comma must parse. The spec doesn't say what a line break means where no statement can end. Proposed, after `r[lex.continue.signature]`:
+**3. Line breaks inside lists (layer 4).** `r[lex.line-end]` is Go's rule. But `r[tool.fmt.check]` says unformatted code compiles, so `f(\n  a,\n  b\n)` without its trailing comma must parse. The spec doesn't say what a line break means where no statement can end. Approved, after `r[lex.continue.fn-header]` (question 12):
 - `r[lex.continue.lists]` "Inside parentheses, square brackets, angle brackets and the braces of a comma-separated list, such as fields, variants, map entries and match arms, a line break is only spacing. A block inside them is a line context again, where the rules above apply. `else` still goes on the line of the closing `}`."
 
 *Alternative:* Go's rule, which makes `f(a\n)` an error. Rejected because of `r[tool.fmt.check]`.
 
-**4. C names that are keywords (layer 7).** A C function named `select` can't be declared. `r[ffi.cbind.keyword-param]` covers parameters only, and `r[lex.no-contextual]` rules out reading `select` as a name inside `foreign`. Proposed: `r[ffi.cbind.keyword-name]` "A C function or type whose name is a Quince keyword can't be declared in v1. Wrap it in a C function with another name, built from `[native] sources`." This is the reversible choice: a renaming attribute can come later without breaking anything, and M12's `quince bind` doc can take it up.
+**4. C names that are keywords (layer 7).** A C function named `select` can't be declared. `r[ffi.cbind.keyword-param]` covers parameters only, and `r[lex.no-contextual]` rules out reading `select` as a name inside `foreign`. Approved: `r[ffi.cbind.keyword-name]` "A C function or type whose name is a Quince keyword can't be declared in v1. Wrap it in a C function with another name, built from `[native] sources`." This is the reversible choice: a renaming attribute can come later without breaking anything, and M12's `quince bind` doc can take it up.
 
-**5. Negative literals (layer 3).** `r[lex.lit.int.neg]` says the minus is "directly before" the literal, but not whether a space may come between, or what a postfix operator after the literal does. Proposed: `r[lex.lit.neg-adjacent]` "Directly before means with nothing between them, not even a space, and the literal isn't followed by a postfix operator. So `- 1` is the prefix minus applied to `1`, and `-2.pow(2)` is `-(2.pow(2))`, as `-x.abs()` is." So `Int.MIN` is written `-9_223_372_036_854_775_808`, and postfix still binds tighter than prefix everywhere.
+**5. Negative literals (layer 3).** `r[lex.lit.int.neg]` says the minus is "directly before" the literal, but not whether a space may come between, or what a postfix operator after the literal does. Approved: `r[lex.lit.neg-adjacent]` "Directly before means with nothing between them, not even a space, and the literal isn't followed by a postfix operator. So `- 1` is the prefix minus applied to `1`, and `-2.pow(2)` is `-(2.pow(2))`, as `-x.abs()` is." So `Int.MIN` is written `-9_223_372_036_854_775_808`, and postfix still binds tighter than prefix everywhere.
 
-**6. Type arguments in expressions (layer 3).** `r[expr.op.compare.no-chain]` says `json.decode<Order>(body)` "has only one reading", but not how a parser finds it. Case can't settle it, since a type can be a C name (`Ptr<sqlite3>`). Proposed: `r[expr.op.type-args]` "In an expression, `<` after a name or path starts type arguments when what follows parses as type arguments closed by `>`, and the token after the `>` is `(`, `.`, `?`, `,`, `)`, `]`, `}` or a line break, and not a `=` directly after the `>`. Otherwise `<` is less-than."
+**6. Type arguments in expressions (layer 3).** `r[expr.op.compare.no-chain]` says `json.decode<Order>(body)` "has only one reading", but not how a parser finds it. Case can't settle it, since a type can be a C name (`Ptr<sqlite3>`). Approved: `r[expr.op.type-args]` "In an expression, `<` after a name or path starts type arguments when what follows parses as type arguments closed by `>`, and the token after the `>` is `(`, `.`, `?`, `,`, `)`, `]`, `}` or a line break, and not a `=` directly after the `>`. Otherwise `<` is less-than."
 
 So `a < b > c` stays a chained comparison with its fix, as the spec's example wants. One case still reads as type arguments: `f(a < b, c > (d))` calls `a<b, c>`. That reading then has to type-check as a generic call, and `f((a < b), c > (d))` gives the other one.
 
-**7. The `ensures` binder (layer 6).** `contract = "requires" expr | "ensures" [ "(" name ")" ] expr` can read `ensures (x) - 1 > 0` two ways: as a condition on `x`, or as naming the result `x` with the condition `-1 > 0`. Proposed: `r[contract.ensures-binder]` "`ensures` followed by a name in parentheses always names the return value. A condition that starts with a parenthesized name is written without the parentheses."
+**7. The `ensures` binder (layer 6).** `contract = "requires" expr | "ensures" [ "(" name ")" ] expr` can read `ensures (x) - 1 > 0` two ways: as a condition on `x`, or as naming the result `x` with the condition `-1 > 0`. Approved: `r[contract.ensures-binder]` "`ensures` followed by a name in parentheses always names the return value. A condition that starts with a parenthesized name is written without the parentheses."
 
-**8. Where a `uses` list ends (layer 2).** `effects = "*" | effect_ref { "," effect_ref }`, and `type_path` includes `c_name`, so in `handler: fn(Request) -> Response uses E, host: String` (`std/API.md`, `http.serve`), `host` could be read as a second effect. The same goes for `Pool.new`'s `open:` parameter, struct fields, and `Output = T` in a bound. Proposed: `r[effect.uses-list]` "A comma continues a `uses` list only when a type path follows it that isn't followed by `:` or `=`. So a parameter, a field or a named bound argument after a function type ends its effects. In a list of types, a function type's effects take every type path after them. That applies to type arguments, tuple types and a function type's parameters, so `Map<String, fn() uses Io, Db>` gives the function both effects."
+**8. Where a `uses` list ends (layer 2).** `effects = "*" | effect_ref { "," effect_ref }`, and `type_path` includes `c_name`, so in `handler: fn(Request) -> Response uses E, host: String` (`std/API.md`, `http.serve`), `host` could be read as a second effect. The same goes for `Pool.new`'s `open:` parameter, struct fields, and `Output = T` in a bound. Approved: `r[effect.uses-list]` "A comma continues a `uses` list only when a type path follows it that isn't followed by `:` or `=`. So a parameter, a field or a named bound argument after a function type ends its effects. In a list of types, a function type's effects take every type path after them. That applies to type arguments, tuple types and a function type's parameters, so `Map<String, fn() uses Io, Db>` gives the function both effects."
 
 *Consequence:* a function type with effects that another type follows in such a list is written in parentheses (question 14). `(fn() uses Io, Int)` reads `Int` as a second effect, which is an error, so it is written `((fn() uses Io), Int)`, and `fn(fn() uses Io, Int) -> T` is written `fn((fn() uses Io), Int) -> T`. Neither the spec nor `std/API.md` has such a type today.
 
-**9. Doc comments and attributes on members (layer 7).** In the grammar, `impl_item`, the members of `interface_decl` and `effect_decl`, and the items of `foreign_decl` take no doc comments, and the first three take no attributes. But `@deprecated` applies to "any public declaration", and `@unchecked` and `@verify` to functions. Proposed: each of the four takes `{ doc_comment } { attribute NEWLINE }` before it, as `decl` does. For the grammar:
+**9. Doc comments and attributes on members (layer 7).** In the grammar, `impl_item`, the members of `interface_decl` and `effect_decl`, and the items of `foreign_decl` take no doc comments, and the first three take no attributes. But `@deprecated` applies to "any public declaration", and `@unchecked` and `@verify` to functions. Approved: each of the four takes `{ doc_comment } { attribute NEWLINE }` before it, as `decl` does. For the grammar:
 ```
 impl_item    = { doc_comment } { attribute NEWLINE } ( [ "pub" ] fn_decl | "type" Name "=" type | [ "pub" ] const_decl )
 interface_decl = "interface" Name [ generics ] "{" { { doc_comment } { attribute NEWLINE } ( "type" Name | fn_sig { contract } ) NEWLINE } "}"
 ```
 and the same for `effect_decl`'s `fn_sig` and `foreign_decl`'s items.
 
-**10. A doc comment that documents nothing (layer 7).** `r[lex.comment.doc]` says doc comments attach to the next declaration, but not what happens when there's none, as with one inside a function body or at the end of a file. Proposed: `r[lex.comment.doc-placement]` "A doc comment must come before a declaration, a field, a variant or a member. Anywhere else it is a compile error, whose fix makes it an ordinary comment." So documentation can't be lost quietly.
+**10. A doc comment that documents nothing (layer 7).** `r[lex.comment.doc]` says doc comments attach to the next declaration, but not what happens when there's none, as with one inside a function body or at the end of a file. Approved: `r[lex.comment.doc-placement]` "A doc comment must come before a declaration, a field, a variant or a member. Anywhere else it is a compile error, whose fix makes it an ordinary comment." So documentation can't be lost quietly.
 
-**11. `struct S {}` (layer 2).** `grammar.struct_decl` accepts empty braces, but `r[item.struct.unit]` says a struct with no fields "is declared without braces". Proposed:
+**11. `struct S {}` (layer 2).** `grammar.struct_decl` accepts empty braces, but `r[item.struct.unit]` says a struct with no fields "is declared without braces". Approved:
 - retire `item.struct.unit`, and add `r[item.struct.no-fields]` "A struct with no fields is declared without braces, as in `pub struct ChannelClosed`, and its one value is written as its name, `ChannelClosed`. Writing `{}` is a compile error, whose fix removes the braces."
 - change the grammar to `[ "{" field { "," field } [ "," ] "}" [ "requires" expr ] ]`. A fieldless struct then can't have a `requires`, which has nothing to constrain.
 
 This gives one way to write it.
 
-**12. Line breaks in closure headers and function types (layer 4).** `r[lex.continue.signature]` says "inside a `fn` signature". Proposed: retire it, and add `r[lex.continue.fn-header]` "Inside any `fn` header, whether a declaration's signature, a closure's or a function type, a line that starts with `->`, `uses`, `requires`, `ensures` or `{` continues the header." So `fn(x: Int)` followed by a line `-> Int {` works the same in a closure as in a declaration, and there is one rule.
+**12. Line breaks in closure headers and function types (layer 4).** `r[lex.continue.signature]` says "inside a `fn` signature". Approved: retire it, and add `r[lex.continue.fn-header]` "Inside any `fn` header, whether a declaration's signature, a closure's or a function type, a line that starts with `->`, `uses`, `requires`, `ensures` or `{` continues the header." So `fn(x: Int)` followed by a line `-> Int {` works the same in a closure as in a declaration, and there is one rule.
 
 **13. Tuple positions as places (layer 4).** `grammar.place` allows field names and indexes, but not tuple positions. So `t.0 = 1` on a `var` tuple, or `id.0 = 2` on a `var` newtype (`r[item.newtype.access]`), is a syntax error, while `r[stmt.assign.place]` says "a field path from one". Decided by David, 2026-11-11: allow it. A position counts as a field, so the prose's "field path" already covers it. `r[stmt.assign.place]` keeps its ID, and only the grammar changes, to match it:
 ```
@@ -419,7 +419,7 @@ So `t.0 = 1` and `pair.0.1 = 2` assign one position of a `var` tuple, and `id.0 
 ```
 type         = type_path [ type_args ] | "(" ")" | "(" type "," type { "," type } [ "," ] ")"
              | fn_type | "(" fn_type ")"
-fn_type      = "fn" "(" [ type { "," type } ] ")" [ "->" type ] [ "uses" effects ]
+fn_type      = "fn" "(" [ type { "," type } ] ")" [ "->" type ] [ "uses" effects ]   // a trailing uses after a bare fn_type return belongs to the outer fn
 ```
 
 So the three cases read:
@@ -446,7 +446,7 @@ fn make_logged() -> (fn(Int) -> Int uses Io) uses Net { // both
 - [The nesting limit rejects a valid program] → It also bounds left-associative chains, so a sum of a few hundred terms on one line is an E0022. No hand-written code comes near that. Generated code that does can split it across bindings. The limit is in the README, and raising it changes nothing else.
 - [The fuzzer isn't in CI, so a panic can land between fuzz runs] → Unit tests, the slip table and the lexer's mutation test still run on every change. Every crash a fuzz run finds becomes a CI test.
 - [Nothing builds the fuzz crate, so it can stop compiling unnoticed] → The check is in `quince_syntax` and CI runs it on every fixture (decision 11), so only the few-line wrapper can break. No scheduled build guards it (decided by David, 2026-11-11). Accepted.
-- [Eleven codes, two waiting on spec questions] → Each names one problem an agent can fix from the message. Review the table before layer 1.
+- [Eleven codes] → Each names one problem an agent can fix from the message. Review the table before layer 1.
 - [Layer 1 is large] → Decision 13 gives the split if it runs past 1,000 lines.
 - [`rowan` changes or is abandoned] → It's rust-analyzer's own tree, and the events keep the parser independent of it.
 
@@ -464,7 +464,7 @@ Revert the stack's PRs. Nothing changes outside `quince_syntax`, the conformance
 
 ## Tasks
 
-Rule IDs in brackets are what each task's fixtures cite. Grammar productions are cited as `grammar.<production>`. Rules added by spec questions are cited only once approved. A rule a question retires (`lex.continue.signature` under question 12, and `item.struct.unit` under question 11) is cited by its replacement, since the runner rejects a retired ID.
+Rule IDs in brackets are what each task's fixtures cite. Grammar productions are cited as `grammar.<production>`. Rules the spec questions add are cited once their layer puts them in the spec. A rule a question retires (`lex.continue.signature` under question 12, and `item.struct.unit` under question 11) is cited by its replacement, since the runner rejects a retired ID.
 
 **Before building**
 - [x] David decides questions A, B and C (2026-11-11).
@@ -489,7 +489,7 @@ Rule IDs in brackets are what each task's fixtures cite. Grammar productions are
 
 **Layer 2: `m1/parser-types`**
 - [ ] Spec: questions 8, 11 and 14, and a bump.
-- [ ] Types, generics, bounds, effect lists; parenthesized function types (question 14); joined `>>` and `>=`. [`grammar.type`, `grammar.fn_type` once approved, `grammar.type_args`, `grammar.generics`, `grammar.bounds`, `grammar.effects`, `lex.no-shift-token`]
+- [ ] Types, generics, bounds, effect lists; parenthesized function types (question 14); joined `>>` and `>=`. [`grammar.type`, `grammar.fn_type`, `grammar.type_args`, `grammar.generics`, `grammar.bounds`, `grammar.effects`, `lex.no-shift-token`]
 - [ ] Struct, enum, newtype, alias and import declarations; attributes; doc comments; E0024. [`grammar.struct_decl`, `grammar.enum_decl`, `grammar.newtype_decl`, `grammar.alias_decl`, `grammar.import`, `grammar.attribute`, `item.attr.placement`, `item.enum.field-visibility`, `lex.comment.doc`, `intro.excl.wildcard-imports`]
 
 **Layer 3: `m1/parser-exprs`**
@@ -501,7 +501,7 @@ Rule IDs in brackets are what each task's fixtures cite. Grammar productions are
 **Layer 4: `m1/parser-stmts`**
 - [ ] Spec: questions 3, 12 and 13, and a bump.
 - [ ] Statements, places, E0026. [`grammar.stmt`, `grammar.place`, `stmt.assign.stmt`, `stmt.assign.place`, `stmt.assign.no-chain`, `stmt.loop.forms`]
-- [ ] Line and list contexts, E0018, `if` and `else`. [`lex.line-end`, `lex.continue.more`, `lex.continue.signature`, `lex.else-same-line`, `expr.block.no-bare`]
+- [ ] Line and list contexts, E0018, `if` and `else`. [`lex.line-end`, `lex.continue.more`, `lex.continue.fn-header`, `lex.continue.lists`, `lex.else-same-line`, `expr.block.no-bare`]
 
 **Layer 5: `m1/parser-patterns`**
 - [ ] Patterns, `match`, guards, `is`, `for`. [`grammar.pattern`, `grammar.match_expr`, `expr.match.arm-syntax`, `expr.match.arm-comma`, `pat.negative`, `pat.const`, `expr.range.pattern`, `lex.grammar-rules`]
