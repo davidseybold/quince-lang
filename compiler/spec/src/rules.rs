@@ -6,11 +6,12 @@
 //! coverage. A backtick run with no closing run on the same line is literal text, as in
 //! CommonMark.
 
-use crate::{ChapterFile, FileError, SpecError};
+use crate::manifest::{Chapter, LEGACY_PREFIX};
+use crate::{CHAPTERS_PATH, ChapterFile, FileError, SpecError};
 use std::collections::{HashMap, HashSet};
 
-/// The topic reserved for IDs derived from grammar productions, such as `grammar.fn_decl`.
-pub const GRAMMAR_TOPIC: &str = "grammar";
+/// The prefix reserved for IDs derived from grammar productions, such as `grammar.fn_decl`.
+pub const GRAMMAR_PREFIX: &str = "grammar";
 
 /// One tag found in a file.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,11 +33,8 @@ pub struct SpecRule {
     pub chapter: String,
 }
 
-/// The topics listed in `spec/rule-topics.txt`, each with its 1-based line in that file.
-pub type Topics = HashMap<String, usize>;
-
 /// An ID is 2 to 4 dot-separated segments, each lowercase letters and digits joined by
-/// single hyphens: `bind.shadow.same-scope`.
+/// single hyphens: `stmt.bind.shadow.same-scope`.
 pub fn is_valid_id(id: &str) -> bool {
     let segments: Vec<&str> = id.split('.').collect();
     (2..=4).contains(&segments.len()) && segments.iter().all(|s| is_valid_segment(s))
@@ -51,8 +49,8 @@ pub fn is_grammar_id(id: &str) -> bool {
     })
 }
 
-/// The first segment of an ID.
-pub fn topic(id: &str) -> &str {
+/// The first segment of an ID: the prefix of the chapter that holds the rule.
+pub fn prefix(id: &str) -> &str {
     id.split('.').next().unwrap_or(id)
 }
 
@@ -66,12 +64,13 @@ pub fn is_valid_segment(segment: &str) -> bool {
     })
 }
 
-/// Parses every tag in every chapter file and checks format, placement, topics and uniqueness
-/// across them. Returns every rule found, even when there are problems, and every problem.
+/// Parses every tag in every chapter file and checks format, placement, chapter, construct and
+/// uniqueness across them. `chapters` is the manifest. Returns every rule found, even when there
+/// are problems, and every problem.
 pub fn check(
     files: &[ChapterFile],
     retired: &HashSet<String>,
-    topics: &Topics,
+    chapters: &[Chapter],
 ) -> (Vec<SpecRule>, Vec<FileError>) {
     let mut rules = Vec::new();
     let mut errors = Vec::new();
@@ -99,19 +98,8 @@ pub fn check(
                     rule.id
                 ));
             }
-            let topic = topic(&rule.id);
-            if topic == GRAMMAR_TOPIC {
-                error(format!(
-                    "rule ID `{}` uses the reserved topic `grammar`, which belongs to IDs derived \
-                     from grammar productions; pick another topic",
-                    rule.id
-                ));
-            } else if !topics.contains_key(topic) {
-                error(format!(
-                    "rule ID `{}` has the topic `{topic}`, which spec/rule-topics.txt doesn't list; \
-                     reuse a listed topic, or add this one there with the subject it covers",
-                    rule.id
-                ));
+            if let Some(message) = chapter_problem(&rule.id, &file.prefix, chapters) {
+                error(message);
             }
         }
         file_errors.sort_by_key(|e| e.line);
@@ -130,19 +118,69 @@ pub fn check(
     (rules, errors)
 }
 
-/// Listed topics that no rule uses, as errors on their lines in `spec/rule-topics.txt`.
-pub fn unused_topics(rules: &[SpecRule], topics: &Topics) -> Vec<SpecError> {
-    let used: HashSet<&str> = rules.iter().map(|rule| topic(&rule.id)).collect();
-    let mut errors: Vec<SpecError> = topics
+/// Why `id`, tagged in a file of the chapter `file_prefix`, doesn't fit the manifest, if it
+/// doesn't. Its first segment must be that chapter's prefix (in the legacy file, any chapter's),
+/// and in an ID of 3 or 4 segments the second must be a construct listed under that chapter.
+fn chapter_problem(id: &str, file_prefix: &str, chapters: &[Chapter]) -> Option<String> {
+    let first = prefix(id);
+    if first == GRAMMAR_PREFIX {
+        return Some(format!(
+            "rule ID `{id}` uses the reserved prefix `grammar`, which belongs to IDs derived from \
+             grammar productions; start it with its chapter's prefix"
+        ));
+    }
+    if file_prefix != LEGACY_PREFIX && first != file_prefix {
+        return Some(format!(
+            "rule ID `{id}` starts with `{first}`, but this file holds chapter `{file_prefix}` \
+             ({CHAPTERS_PATH}); start the ID with `{file_prefix}.`"
+        ));
+    }
+    let Some(chapter) = chapters
         .iter()
-        .filter(|(topic, _)| !used.contains(topic.as_str()))
-        .map(|(topic, &line)| SpecError {
-            line,
-            message: format!("topic `{topic}` is listed, but no rule tag uses it; remove it"),
+        .find(|chapter| chapter.prefix == first && chapter.prefix != LEGACY_PREFIX)
+    else {
+        return Some(format!(
+            "rule ID `{id}` starts with `{first}`, which isn't a chapter prefix in \
+             {CHAPTERS_PATH}; start it with the prefix of the chapter the rule belongs to"
+        ));
+    };
+    let segments: Vec<&str> = id.split('.').collect();
+    let construct = segments[1];
+    (segments.len() >= 3 && !chapter.constructs.iter().any(|c| c.name == construct)).then(|| {
+        format!(
+            "rule ID `{id}` names the construct `{construct}`, which chapter `{first}` doesn't list \
+             in {CHAPTERS_PATH}; use a listed construct, or list this one under `{first}` with the \
+             subject it covers"
+        )
+    })
+}
+
+/// Constructs listed in the manifest that no rule names as its second segment, as errors on
+/// their lines in the manifest.
+pub fn unused_constructs(rules: &[SpecRule], chapters: &[Chapter]) -> Vec<SpecError> {
+    let used: HashSet<(&str, &str)> = rules
+        .iter()
+        .filter_map(|rule| {
+            let segments: Vec<&str> = rule.id.split('.').collect();
+            (segments.len() >= 3).then(|| (segments[0], segments[1]))
         })
         .collect();
-    errors.sort_by_key(|e| e.line);
-    errors
+    chapters
+        .iter()
+        .flat_map(|chapter| {
+            chapter
+                .constructs
+                .iter()
+                .filter(|c| !used.contains(&(chapter.prefix.as_str(), c.name.as_str())))
+                .map(|c| SpecError {
+                    line: c.line,
+                    message: format!(
+                        "construct `{}` of chapter `{}` is listed, but no rule ID names it; remove it",
+                        c.name, chapter.prefix
+                    ),
+                })
+        })
+        .collect()
 }
 
 /// Parses `spec/retired-rules.txt`: one ID per line; blank lines and `#` comments are ignored.
@@ -162,40 +200,6 @@ pub fn parse_retired(text: &str) -> (HashSet<String>, Vec<SpecError>) {
         }
     }
     (ids, errors)
-}
-
-/// Parses `spec/rule-topics.txt`: a topic and the subject it covers on each line; blank lines
-/// and `#` comments are ignored. Returns the valid topics and an error for each bad line.
-pub fn parse_topics(text: &str) -> (Topics, Vec<SpecError>) {
-    let mut topics = Topics::new();
-    let mut errors = Vec::new();
-    for (line, entry) in entries(text) {
-        let (topic, subject) = entry
-            .split_once(char::is_whitespace)
-            .map_or((entry, ""), |(topic, subject)| (topic, subject.trim()));
-        let problem = if !is_valid_segment(topic) {
-            Some(format!(
-                "`{topic}` is not a valid topic: use lowercase letters and digits joined by single hyphens"
-            ))
-        } else if topic == GRAMMAR_TOPIC {
-            Some("`grammar` is reserved for IDs derived from grammar productions".to_string())
-        } else if subject.is_empty() {
-            Some(format!(
-                "topic `{topic}` needs the subject it covers after it, such as `bind  Bindings`"
-            ))
-        } else if let Some(first) = topics.get(topic) {
-            Some(format!(
-                "topic `{topic}` is listed twice; it is first listed on line {first}"
-            ))
-        } else {
-            topics.insert(topic.to_string(), line);
-            None
-        };
-        if let Some(message) = problem {
-            errors.push(SpecError { line, message });
-        }
-    }
-    (topics, errors)
 }
 
 /// The non-blank, non-comment lines of a list file, trimmed, with their 1-based line numbers.
@@ -256,7 +260,7 @@ pub fn tag_spans(line: &str) -> Vec<TagSpan> {
 }
 
 /// Finds every tag in one file and reports misplaced or malformed ones, without the uniqueness
-/// and topic checks.
+/// and chapter checks.
 pub fn parse(spec: &str) -> (Vec<Rule>, Vec<SpecError>) {
     let mut rules = Vec::new();
     let mut errors = Vec::new();
@@ -306,7 +310,7 @@ pub fn parse(spec: &str) -> (Vec<Rule>, Vec<SpecError>) {
             } else if !is_valid_id(&tag.id) {
                 error(format!(
                     "invalid rule ID `{}`: use 2 to 4 dot-separated segments of lowercase letters, \
-                     digits and hyphens, such as `bind.shadow.same-scope`",
+                     digits and hyphens, such as `stmt.bind.shadow.same-scope`",
                     tag.id
                 ));
             } else if !line[tag.end..].starts_with(' ') {
@@ -422,21 +426,23 @@ fn inline_code_mask(line: &str) -> Vec<bool> {
 mod tests {
     use super::*;
 
-    fn topics(names: &[&str]) -> Topics {
-        names
-            .iter()
-            .enumerate()
-            .map(|(i, name)| (name.to_string(), i + 1))
-            .collect()
+    /// A manifest for the tests. The legacy file may hold any chapter's tags.
+    fn chapters() -> Vec<Chapter> {
+        let (chapters, errors) = crate::manifest::parse(
+            "bind  reference/bindings.md  Bindings\n\
+             lit  reference/literals.md  Literals\n\
+             \x20 int  Integer literals\n\
+             \x20 float  Float literals\n\
+             type  reference/types.md  Types\n\
+             legacy  quince-spec.md  Being split\n",
+        );
+        assert_eq!(errors, Vec::new());
+        chapters
     }
 
-    fn test_topics() -> Topics {
-        topics(&["bind", "lit", "type", "a", "ok"])
-    }
-
-    fn file(path: &str, title: &str, text: &str) -> ChapterFile {
+    fn file(prefix: &str, path: &str, title: &str, text: &str) -> ChapterFile {
         ChapterFile {
-            prefix: "x".into(),
+            prefix: prefix.into(),
             title: title.into(),
             path: path.into(),
             file: path.into(),
@@ -445,7 +451,11 @@ mod tests {
     }
 
     fn check_one(spec: &str, retired: &HashSet<String>) -> (Vec<SpecRule>, Vec<FileError>) {
-        check(&[file("spec.md", "Spec", spec)], retired, &test_topics())
+        check(
+            &[file(LEGACY_PREFIX, "spec.md", "Spec", spec)],
+            retired,
+            &chapters(),
+        )
     }
 
     fn rules(spec: &str) -> Vec<SpecRule> {
@@ -467,7 +477,7 @@ mod tests {
     fn id_format() {
         for ok in [
             "bind.let",
-            "bind.shadow.same-scope",
+            "stmt.bind.shadow.same-scope",
             "lit.int.neg",
             "a.b.c.d",
             "op.2x",
@@ -495,17 +505,19 @@ mod tests {
     fn finds_tags_with_their_chapters() {
         let files = [
             file(
+                "bind",
                 "spec/reference/a.md",
                 "Syntax",
                 "# Syntax\n\n- r[bind.let] `let` binds. r[bind.var] `var` too.\n",
             ),
             file(
+                "type",
                 "spec/reference/b.md",
                 "Types",
                 "# Types\n\nr[type.int] Int.\n",
             ),
         ];
-        let (found, errors) = check(&files, &HashSet::new(), &test_topics());
+        let (found, errors) = check(&files, &HashSet::new(), &chapters());
         assert_eq!(errors, Vec::new());
         let found: Vec<_> = found
             .into_iter()
@@ -525,18 +537,23 @@ mod tests {
     #[test]
     fn errors_name_their_file() {
         let files = [
-            file("spec/reference/a.md", "A", "r[bind.let] a\n"),
-            file("spec/reference/b.md", "B", "\nr[bind.let] b\nr[nope.x] c\n"),
+            file(LEGACY_PREFIX, "spec/a.md", "A", "r[bind.let] a\n"),
+            file(
+                LEGACY_PREFIX,
+                "spec/b.md",
+                "B",
+                "\nr[bind.let] b\nr[nope.x] c\n",
+            ),
         ];
-        let (found, errors) = check(&files, &HashSet::new(), &test_topics());
+        let (found, errors) = check(&files, &HashSet::new(), &chapters());
         assert_eq!(found.len(), 3);
         let errors: Vec<_> = errors.into_iter().map(|e| e.to_string()).collect();
         assert_eq!(errors.len(), 2, "{errors:?}");
         assert_eq!(
             errors[0],
-            "spec/reference/b.md:2: duplicate rule ID `bind.let`; it is first used at spec/reference/a.md:1"
+            "spec/b.md:2: duplicate rule ID `bind.let`; it is first used at spec/a.md:1"
         );
-        assert!(errors[1].starts_with("spec/reference/b.md:3: rule ID `nope.x` has the topic"));
+        assert!(errors[1].starts_with("spec/b.md:3: rule ID `nope.x` starts with `nope`"));
     }
 
     #[test]
@@ -629,45 +646,69 @@ mod tests {
     }
 
     #[test]
-    fn topics_must_be_listed() {
-        let errors = messages("r[types.nominal] a\nr[grammar.block] b\n");
-        assert_eq!(errors.len(), 2, "{errors:?}");
-        assert!(
-            errors[0].contains("topic `types`, which spec/rule-topics.txt doesn't list"),
-            "{errors:?}"
-        );
-        assert!(errors[1].contains("reserved topic `grammar`"), "{errors:?}");
-    }
-
-    #[test]
-    fn topic_file() {
-        let (listed, errors) = parse_topics(
-            "# topics\n\nbind  Bindings\nlit Literals\nBad_Topic x\nnone\ngrammar Grammar\nbind again\n",
-        );
+    fn legacy_tags_need_a_chapter_prefix() {
         assert_eq!(
-            listed,
-            Topics::from([("bind".to_string(), 3), ("lit".to_string(), 4)])
-        );
-        let lines: Vec<_> = errors.iter().map(|e| e.line).collect();
-        assert_eq!(lines, [5, 6, 7, 8], "{errors:?}");
-        assert!(errors[1].message.contains("needs the subject"));
-        assert!(
-            errors[3]
-                .message
-                .contains("listed twice; it is first listed on line 3")
+            messages("r[types.nominal] a\nr[grammar.block] b\nr[legacy.x] c\nr[type.int] d\n"),
+            [
+                "line 1: rule ID `types.nominal` starts with `types`, which isn't a chapter prefix \
+                 in spec/chapters.txt; start it with the prefix of the chapter the rule belongs to",
+                "line 2: rule ID `grammar.block` uses the reserved prefix `grammar`, which belongs \
+                 to IDs derived from grammar productions; start it with its chapter's prefix",
+                "line 3: rule ID `legacy.x` starts with `legacy`, which isn't a chapter prefix in \
+                 spec/chapters.txt; start it with the prefix of the chapter the rule belongs to",
+            ]
         );
     }
 
     #[test]
-    fn unused_topic() {
-        let found = rules("r[bind.let] a\n");
-        let errors = unused_topics(&found, &topics(&["bind", "lit"]));
-        assert_eq!(errors.len(), 1);
-        assert_eq!(errors[0].line, 2);
-        assert!(
-            errors[0]
-                .message
-                .contains("`lit` is listed, but no rule tag uses it")
+    fn chapter_tags_need_their_chapters_prefix() {
+        let files = [file(
+            "type",
+            "spec/reference/types.md",
+            "Types",
+            "r[type.int] a\nr[bind.let] b\nr[nope.x] c\n",
+        )];
+        let (_, errors) = check(&files, &HashSet::new(), &chapters());
+        let errors: Vec<_> = errors.into_iter().map(|e| e.to_string()).collect();
+        let wrong = |id: &str, first: &str| {
+            format!(
+                "rule ID `{id}` starts with `{first}`, but this file holds chapter `type` \
+                 (spec/chapters.txt); start the ID with `type.`"
+            )
+        };
+        assert_eq!(
+            errors,
+            [
+                format!("spec/reference/types.md:2: {}", wrong("bind.let", "bind")),
+                format!("spec/reference/types.md:3: {}", wrong("nope.x", "nope")),
+            ]
+        );
+    }
+
+    #[test]
+    fn constructs_must_be_listed() {
+        assert_eq!(
+            messages(
+                "r[lit.int.hex] a\nr[lit.float] b\nr[lit.str.raw] c\nr[lit.int.hex.upper] d\n"
+            ),
+            [
+                "line 3: rule ID `lit.str.raw` names the construct `str`, which chapter `lit` \
+                 doesn't list in spec/chapters.txt; use a listed construct, or list this one \
+                 under `lit` with the subject it covers"
+            ]
+        );
+    }
+
+    #[test]
+    fn unused_construct() {
+        let found = rules("r[lit.int.hex] a\nr[lit.float] b\n");
+        let errors = unused_constructs(&found, &chapters());
+        assert_eq!(
+            errors,
+            [SpecError {
+                line: 4,
+                message: "construct `float` of chapter `lit` is listed, but no rule ID names it; remove it".into()
+            }]
         );
     }
 

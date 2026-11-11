@@ -85,7 +85,7 @@ pub fn parse(text: &str) -> (Vec<Chapter>, Vec<SpecError>) {
             Some(format!(
                 "`{first}` is not a valid chapter prefix: use lowercase letters and digits joined by single hyphens"
             ))
-        } else if first == crate::rules::GRAMMAR_TOPIC {
+        } else if first == crate::rules::GRAMMAR_PREFIX {
             Some("`grammar` is reserved for IDs derived from grammar productions".to_string())
         } else if let Some(first_line) = prefixes.get(first) {
             Some(format!(

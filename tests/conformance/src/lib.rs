@@ -9,7 +9,7 @@ pub mod fixture;
 
 use fixture::{Fixture, Mode};
 use quince_diagnostics::{Diagnostic, Severity};
-use quince_spec::{GRAMMAR_PATH, README_PATH, RETIRED_PATH, Spec, TOPICS_PATH};
+use quince_spec::{GRAMMAR_PATH, README_PATH, RETIRED_PATH, Spec};
 use std::collections::{BTreeMap, HashSet};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -93,16 +93,14 @@ pub fn load_rules(root: &Path) -> Result<Rules, Vec<String>> {
     let spec = Spec::load(root)
         .map_err(|errors| errors.iter().map(ToString::to_string).collect::<Vec<_>>())?;
     let (retired, retired_errors) = quince_spec::rules::parse_retired(&read(RETIRED_PATH)?);
-    let (topics, topic_errors) = quince_spec::rules::parse_topics(&read(TOPICS_PATH)?);
     let mut errors = located(RETIRED_PATH, retired_errors);
-    errors.extend(located(TOPICS_PATH, topic_errors));
     let version = spec_version(&spec.readme).map(str::to_string);
     if version.is_none() {
         errors.push(format!(
             "{README_PATH}: the header has no `Draft vX.Y` version line in its first 10 lines"
         ));
     }
-    let (rules, spec_errors) = quince_spec::rules::check(&spec.files, &retired, &topics);
+    let (rules, spec_errors) = quince_spec::rules::check(&spec.files, &retired, &spec.chapters);
     errors.extend(spec_errors.iter().map(ToString::to_string));
     if !errors.is_empty() {
         return Err(errors);
@@ -738,7 +736,10 @@ let x = 1 //~ E0100
             Some(GRAMMAR_SECTION)
         );
         assert_eq!(
-            rules.ids.get("bind.shadow.same-scope").map(String::as_str),
+            rules
+                .ids
+                .get("stmt.bind.shadow.same-scope")
+                .map(String::as_str),
             Some("Quince Language Spec (being split)")
         );
         assert_eq!(

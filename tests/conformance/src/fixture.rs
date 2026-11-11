@@ -210,9 +210,9 @@ mod tests {
 
     #[test]
     fn header_and_expectations() {
-        let source = "// rule: bind.shadow.same-scope\n// rule: bind.let-var\n// Shadowing in one scope is an error.\nfn f() {\n  let x = 1\n  let x = 2 //~ E0100\n}\n//~^^ W0003\n";
+        let source = "// rule: stmt.bind.shadow.same-scope\n// rule: bind.let-var\n// Shadowing in one scope is an error.\nfn f() {\n  let x = 1\n  let x = 2 //~ E0100\n}\n//~^^ W0003\n";
         let f = parse("bindings/shadow", source, None).unwrap();
-        assert_eq!(f.rules, ["bind.shadow.same-scope", "bind.let-var"]);
+        assert_eq!(f.rules, ["stmt.bind.shadow.same-scope", "bind.let-var"]);
         assert_eq!(f.mode, Mode::Check);
         assert_eq!(lines_and_codes(&f), [(6, "E0100"), (6, "W0003")]);
     }

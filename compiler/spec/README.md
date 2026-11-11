@@ -8,7 +8,7 @@ The spec is a folder of Markdown chapters. `spec/README.md` is its index, and `s
 
 **The manifest.**
 - A chapter line starts at column 0 and gives the chapter's rule-ID prefix, its file relative to `spec/`, and its title: `lex  reference/lexical.md  Lexical structure`.
-- An indented line under a chapter gives one construct of that chapter and the subject it covers: `  if  If expressions`. Construct names are scoped by chapter, so two chapters may list the same name.
+- An indented line under a chapter gives one construct of that chapter and the subject it covers: `  if  If expressions`. A construct is what the second segment of a longer rule ID names (below). Construct names are scoped by chapter, so two chapters may list the same name.
 - Blank lines and `#` comments are ignored.
 - The order of the chapter lines is the reading order, the coverage order and the order the grammar is assembled in.
 - A prefix follows the ID segment format below. `grammar` is reserved, and no prefix or file is listed twice.
@@ -33,12 +33,15 @@ Every normative statement in the spec's chapter files carries an ID that conform
 - Inline code spans are ignored. A backtick run left open at the end of a line is literal text, as in CommonMark.
 
 **Format.**
-- An ID has 2 to 4 dot-separated segments, each matching `[a-z0-9]+(-[a-z0-9]+)*`, such as `bind.shadow.same-scope`.
-- The first segment is a topic listed in `spec/rule-topics.txt`, never a section number. Every listed topic must be used by at least one tag. Reuse a listed topic before adding one.
-- The topic `grammar` is reserved for derived production IDs and can't appear in a written tag.
+- An ID is `chapter.construct.rule`, with an optional fourth segment for detail, such as `stmt.bind.shadow.same-scope`. It has 2 to 4 dot-separated segments, each matching `[a-z0-9]+(-[a-z0-9]+)*`.
+- The first segment is the prefix of a chapter in `spec/chapters.txt`, so an ID says which chapter holds its rule. In a chapter file it must be that file's chapter. In the `legacy` file it may be any chapter's prefix.
+- In an ID of 3 or 4 segments, the second segment is a construct listed under that chapter. Every listed construct must be named by at least one ID. Reuse a listed construct before adding one.
+- An ID of 2 segments is about the chapter's own subject or the chapter as a whole, such as `lex.braces` or `type.float`.
+- The prefix `grammar` is reserved for derived production IDs and can't appear in a written tag.
 
 **Stability.**
 - No ID appears in two tags, in the same chapter file or in different ones. An ID is never renamed or reused.
+- **The one-time rename.** When the spec was split into chapters (2026-11-10), every ID merged before then was renamed once, by script, from `topic.rule` to `chapter.topic.rule`, or kept when its topic was its chapter's prefix. `docs/design/spec-restructure/id-map.tsv` maps each old ID to its new one. No ID is renamed again.
 - When a rule's meaning changes, its old ID goes in `spec/retired-rules.txt` and the new text gets a new ID. A retired ID can never be a tag again. The retired list may hold `grammar.*` IDs.
 - A wording change that keeps the meaning keeps the ID.
 
