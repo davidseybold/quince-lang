@@ -1,6 +1,6 @@
 # M1: Parser
 
-Status: draft, after one design-review pass. David decided the three dependency questions on 2026-11-11. The spec questions wait on him. This is the second design doc of M1 (Syntax), after [the lexer](m1-lexer.md). The formatter doc (`quince fmt`) follows it.
+Status: draft, after three design-review passes. David decided the three dependency questions on 2026-11-11. The spec questions wait on him. This is the second design doc of M1 (Syntax), after [the lexer](m1-lexer.md). The formatter doc (`quince fmt`) follows it.
 
 ## Why
 
@@ -193,11 +193,12 @@ Every error goes through one rule: report it, then skip to a sync point, reporti
 **Sync points.** Each open construct has its own:
 - A list syncs at its next `,` and at its closing bracket.
 - A line context syncs at its next break.
+- Any construct syncs at a member start of a container around it (below), which closes it.
 
 **A member start closes what can't hold it.** Some tokens, at the start of a line, can only start a member of a certain container. Such a token closes every open construct inside the innermost open container that can hold it, and each construct it closes that has an opening bracket gets an E0017 at that bracket. The member starts are:
-- for the file: `fn` followed by a name, `struct`, `enum`, `type`, `interface`, `impl`, `effect`, `foreign`, `import`, `const`, `test` and `pub`;
-- for an `impl`, `interface`, `effect` or `foreign` body: `fn` followed by a name, `type`, `const` and `pub`;
-- for struct braces, enum braces and a variant's field list: `pub`. A field or variant otherwise starts with a name, so these close at any other file member start. Since `pub` is theirs, a `pub` field on its own line never closes a struct, and a `pub` on a variant field stays the one E0016 of decision 8;
+- for the file: `fn` followed by a name, `struct`, `enum`, `type`, `interface`, `impl`, `effect`, `foreign`, `import`, `const` and `test`, and `pub` followed by one of those;
+- for an `impl`, `interface`, `effect` or `foreign` body: `fn` followed by a name, `type` and `const`, and `pub` followed by one of those;
+- for struct braces, enum braces and a variant's field list: `pub` followed by a name. A field or variant otherwise starts with a name, so these close at any other file member start. So a `pub` field on its own line never closes a struct, and a `pub` on a variant field stays the one E0016 of decision 8;
 - for a block: `let`, `var` and `while`. These start statements but never expressions, so inside a block they can only sit in a nested block, never inside a list. `for` isn't one, since `concurrent(limit: 4) for x in xs { ... }` is an expression that can sit in a list.
 
 So a missing `}` gives one E0017 at its `{` when the next declaration starts, rather than an error on every line after it. A missing `)` gives one E0017 when the next statement starts with one of those keywords. A declaration can't go in a block (`grammar.block`, `grammar.stmt`), so this never closes a block that was meant to stay open.
@@ -229,6 +230,7 @@ Doc comments and attributes aren't member starts: they belong to the declaration
 | `f(a, b` followed by a line `let y = 2` | E0017 at `(` |
 | `f(a, b` followed by a line `g()` | E0016 at `g` |
 | `struct S {` with `pub` fields on lines of their own | None |
+| `struct S {` missing its `}`, followed by a line `pub fn g() {` | E0017 at the struct's `{` |
 | `if ok { log("done)` followed by a line `}` | E0004 |
 | `fn f() {` with no `}`, followed later by a line `fn g() {` | E0017 at the first `{` |
 | `f(a` followed by a line `}` | E0017 at `(` |
@@ -299,8 +301,9 @@ Past the limit, E0022 is reported at the token that goes past it, and the parser
 - **The fuzzer** (decided by David, 2026-11-11) is a `cargo-fuzz` target in `compiler/syntax/fuzz/`.
   - That crate is outside the workspace, with its own `[workspace]` table, as `cargo fuzz init` writes. So `cargo xtask ci` and stable builds never build it or its `libfuzzer-sys` dependency. Its `Cargo.lock` is committed, so a run can be reproduced.
   - It runs on nightly Rust, only where someone runs it. `rust-toolchain.toml` pins a stable release, so `AGENTS.md` gives the command as `cargo +nightly fuzz run parse`.
-  - The target decodes the input bytes, parses them and checks the invariants. Its seed corpus is the fixtures.
-  - It isn't a CI step, and no run has a set length (decided by David, 2026-11-11). As in rust-analyzer, which keeps its parser's fuzz targets outside CI the same way, fuzzing is a way to find bugs, and a clean run proves nothing. So M1's exit asks that the target has been run before M1 closes, and that every crash it found is fixed and has a regression test: a unit test or a fixture, so CI guards against it coming back. The milestone's last PR says when the run was and what it found.
+  - The check itself is a function in `quince_syntax`, `fuzz::check_parse(&[u8])`, which decodes the bytes, parses them and checks the invariants. The target is a few lines that call it, and its seed corpus is the fixtures. A unit test calls the same function on every fixture, so CI keeps the check compiling and passing as `quince_syntax` changes, and only the thin wrapper can break unseen. rust-analyzer splits its fuzz targets the same way (`syntax::fuzz`).
+  - Fuzzing isn't a CI step, and no run has a set length (decided by David, 2026-11-11). Fuzzing is a way to find bugs, and a clean run proves nothing. So M1's exit asks that the target has been run before M1 closes, and that every crash it found is fixed and has a regression test: a unit test or a fixture, so CI guards against it coming back. The milestone's last PR records when the run was, how long it ran, the corpus size, and what it found.
+  - rust-analyzer also builds its fuzz targets in a weekly scheduled workflow, without running them, so they can't rot. A scheduled build-only workflow for `compiler/syntax/fuzz/`, outside `cargo xtask ci`, is open for David. Without it, whoever next runs the target may first have to fix the wrapper.
   - The lexer's mutation test stays as it is.
 
 ### 12. The coverage ratchet
@@ -420,6 +423,7 @@ No preference beyond saying which. Allowing it is the reversible direction, sinc
 - [Type arguments in expressions take one reading the author didn't mean] → Spec question 6 limits it to a parenthesized operand after the `>`, where the result must still type-check as a generic call.
 - [The nesting limit rejects a valid program] → It also bounds left-associative chains, so a sum of a few hundred terms on one line is an E0022. No hand-written code comes near that. Generated code that does can split it across bindings. The limit is in the README, and raising it changes nothing else.
 - [The fuzzer isn't in CI, so a panic can land between fuzz runs] → Unit tests, the slip table and the lexer's mutation test still run on every change. Every crash a fuzz run finds becomes a CI test.
+- [Nothing builds the fuzz crate, so it can stop compiling unnoticed] → The check is in `quince_syntax` and CI runs it on every fixture (decision 11), so only the few-line wrapper can break. A scheduled build-only workflow would close the gap, and is David's call.
 - [Eleven codes, two waiting on spec questions] → Each names one problem an agent can fix from the message. Review the table before layer 1.
 - [Layer 1 is large] → Decision 13 gives the split if it runs past 1,000 lines.
 - [`rowan` changes or is abandoned] → It's rust-analyzer's own tree, and the events keep the parser independent of it.
@@ -493,7 +497,7 @@ Rule IDs in brackets are what each task's fixtures cite. Grammar productions are
 - [ ] `validate` and the case check; E0021. [`lex.name.case`, `lex.name.enforced`, `lex.name.foreign-exempt`, `lex.ident-classes`]
 
 **Layer 9: `m1/parser-fuzz`**
-- [ ] The fuzz crate and target, and its command in `AGENTS.md`.
+- [ ] `fuzz::check_parse` and its unit test over every fixture; the fuzz crate and its thin target; the command in `AGENTS.md`.
 - [ ] The nesting limit, measured; E0022; the deep-nesting tests on spawned threads.
 - [ ] Every grammar production cited by a passing fixture.
 - [ ] Before M1 closes: run the fuzz target, and fix every crash it finds, each with a regression test.
