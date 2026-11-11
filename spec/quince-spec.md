@@ -2,8 +2,6 @@
 
 ## 1. Overview and design principles
 
-Quince is a statically typed, automatically memory-managed, general-purpose language designed so that both AI agents and humans can write, read, and verify code with as little hidden context as possible. Every rule below serves one goal: a reader should be able to understand a function correctly from the function itself.
-
 ### Target domain
 
 Quince is built for services and tools: web servers and APIs, command-line tools, data pipelines, and automation. It relies on compiler-inserted reference counting and a green-thread runtime, and accepts their small runtime costs in exchange for never making anyone manage memory by hand.
@@ -21,35 +19,9 @@ Quince is built for services and tools: web servers and APIs, command-line tools
 5. **Nothing changes meaning silently.** Published code never changes behavior under a dependent. Changes to the shape of a public API (types, signatures, effects and contracts) are detected mechanically.
 6. **Familiar surface.** Syntax stays close to TypeScript, Rust, and Go so knowledge transfers. Novelty goes into semantics and tooling, not punctuation.
 
-### Deliberately excluded
-
-| Feature | Why it's out |
-| --- | --- |
-| r[intro.excl.exceptions] Exceptions | Failure must appear in the return type |
-| r[intro.excl.null] `null` / `nil` | Replaced by `Option<T>` |
-| r[intro.excl.macros] Macros and compile-time metaprogramming | Code must mean what it appears to mean |
-| r[intro.excl.user-operators] User-defined operators and impure overloading | Each operator calls one fixed, pure prelude interface ([Prelude and special interfaces](#operators-on-user-types)), so a + b can never do I/O |
-| r[intro.excl.overloading] Function name overloading | Every name resolves to exactly one definition; an interface method resolves through the impl the argument types select |
-| r[intro.excl.implicit-conversions] Implicit conversions | All conversions are explicit calls |
-| r[intro.excl.global-state] Global mutable state | Shared state is passed explicitly as a `Ref<T>` parameter, and reading or writing it requires `uses State` |
-| r[intro.excl.reopen-types] Monkeypatching / reopening types | A type is fully defined in one place |
-| r[intro.excl.wildcard-imports] Wildcard imports | Every imported name is listed |
-| r[intro.excl.inheritance] Inheritance | Composition and interfaces only |
-| r[intro.excl.fmt-config] Formatter configuration | One canonical layout |
-
 ## 2. Lexical structure and syntax
 
-r[lex.braces] Quince uses C-family syntax with braces, semicolon-free statements, and a fixed set of 38 keywords. r[lex.indentation] Indentation never carries meaning, so a misapplied diff can't silently change program structure.
-
-r[lex.line-end] A line break ends a statement unless the line ends with a binary operator, a comma or an opening bracket, as in Go. A long expression therefore breaks after its operator, never before, and `quince` `fmt` always formats it that way: a line that starts with `- b` is a new statement, not a continuation.
-
-r[lex.continue.more] A line also continues when it ends with `=`, a compound assignment such as `+=`, `=>` or `->`, and when the next line's first token is `.`, so a method chain can lead each line with its dot. No statement can start with `.`, so this adds no ambiguity. r[lex.else-same-line] `else` must sit on the line of the closing `}`; a line that starts with `else` is an error whose fix joins it. r[lex.continue.signature] Inside a `fn` signature, a line that starts with `->`, `uses`, `requires`, `ensures` or `{` continues the signature, so `quince` `fmt` breaks a long signature before those words, as in [Effects](#5-effects-and-capabilities) and [Contracts](#requires-and-ensures).
-
 ### Keywords
-
-r[lex.keywords] `fn` `let` `var` `type` `struct` `enum` `interface` `impl` `match` `is` `if` `else` `for` `in` `while` `return` `break` `continue` `import` `pub` `uses` `requires` `ensures` `test` `forall` `with` `concurrent` `spawn` `background` `foreign` `true` `false` `self` `Self` `const` `effect` `select` `as`
-
-r[lex.no-contextual] There are no contextual keywords: every reserved word means the same thing in every position, and no other word is special, apart from main, the tagged-literal prefixes ([Literals](#literals)), the named arguments of keyword forms (limit:, settle:, on\_error:), the case names that @wire(case: ...) takes (camel, snake, kebab, pascal, upper\_snake), and TaskScope in a background header. r[lex.keyword-not-name] A keyword therefore can't name a binding, parameter, field or method. A wire name that is a keyword is written with `@wire` ([Prelude and special interfaces](#serialization)).
 
 r[stmt.loop.forms] There is exactly one loop over collections (`for x in xs`) and one conditional loop (`while`). No `do-while`, no C-style `for`, no `loop`. r[stmt.loop.no-labels] There are no loop labels: to leave nested loops at once, move them into a function and `return`.
 
@@ -61,65 +33,9 @@ r[expr.ret.value] `return expr` ends the function with `expr`. r[expr.ret.bare] 
 - r[stmt.bind.shadow.same-scope] Shadowing a binding in the same scope is a compile error. That rules out let x = x?, so the suggested fix gives the unwrapped value its own name (let user = user\_result?). r[stmt.bind.shadow.nested] Shadowing in a nested scope is allowed but flagged by the linter.
 - r[stmt.bind.var-param] A parameter can be marked `var`, as in `fn sum<I: Iterator<Item = Int>>(var it: I)` `-> Int`. The function gets its own mutable copy, and the caller's value never changes. This is not an inout parameter, and it avoids `var it = it`, which the shadowing rule forbids.
 
-### Constants
-
-```
-const MAX_RETRIES: Int = 3
-const EMAIL_PATTERN: Regex = re"^[^@]+@[^@]+$"
-const DEFAULT_CONFIG: Config = Config.parse(DEFAULT_CONFIG_TEXT).expect("built-in config is valid")
-```
-
-- r[item.const.decl] `const` declares a top-level constant. r[item.const.typed-pure] Its type is always written, and its initializer must be pure ([Effects](#5-effects-and-capabilities)).
-- r[item.const.eval.literal] A literal, including a tagged literal, is evaluated at compile time. r[item.const.eval.lazy] Any other initializer runs once, on first use, and the result is safe to share across tasks. Because initializers are pure, the order in which constants are first used never matters.
-- r[item.const.no-ref] A const's type can't contain a reference type ([Types](#3-type-system)) anywhere inside it, in fields, payloads or closure captures. The compiler derives this the same way it derives whether a type can cross a task boundary, and the error names the field path that holds the reference. State the whole program shares, such as a request counter, a cache or a registry, belongs in an effect handler installed in `main` ([Effects](#5-effects-and-capabilities)), so every function that touches it says so in its `uses` clause.
-- r[item.const.panic.site] A panic in an initializer is reported at the first use site. r[item.const.panic.warn] `quince` `check` warns about any initializer that can panic.
-- r[item.const.assoc] A type's own constants are declared in its `impl` block, in the type's package: `impl Int { pub const MAX: Int = 9_223_372_036_854_775_807 }`. They follow every rule above. r[item.const.assoc.qualified] They are always read through the type's name, as `Int.MAX`, `Float.PI` or `Status.OK`, and inside the impl as `Self.MAX`, never as a bare `MAX`. r[item.const.assoc.no-interface] Interfaces can't declare constants in v1.
-
-### Literals
-
-| Kind | Examples | Notes |
-| --- | --- | --- |
-| Integer | r[lex.lit.int.forms] `42`, `1_000_000`, `0xFF`, `0b1010`, `0o17` | r[lex.lit.int.default] Default type `Int` (64-bit, overflow panics, never wraps). r[lex.lit.int.context] Takes another integer type from context, as in let b: UInt8 = 200, and a literal that doesn't fit that type is a compile error. r[lex.lit.int.neg] A minus sign directly before a literal in prefix position is part of it, so Int.MIN can be written -9\_223\_372\_036\_854\_775\_808 |
-| Float | r[lex.lit.float.forms] `3.14`, `1e-9` | r[lex.lit.float.default] Default type `Float` (64-bit). r[lex.lit.float.context] Takes Float32 from context the same way |
-| String | `"hello {name}"` | r[lex.lit.string.interp] UTF-8; interpolation with {} is the only formatting syntax. r[lex.lit.string.interp-path] Inside braces only a name or a field path is allowed ({name}, {user.name}), never another expression. A field path may read a newtype or tuple position, as in {id.0}. r[lex.lit.string.lone-brace] Only { opens interpolation, so a lone } is plain text and needs no escape. r[lex.lit.string.escapes] Escapes: \\n \\t \\\\ \\" \\{ \\r \\0 \\u{1F600}. r[lex.lit.string.one-line] A "..." string stays on one line. r[lex.lit.string.multiline] A multi-line string sits between """ lines: it interpolates, starts on the line after the opening """, and drops the closing line's indentation from every line, as in Swift and Kotlin. r[lex.lit.string.raw-multiline] r""" ... """ is its raw form, which may contain " and { freely |
-| Raw string | `r"C:\path"` | r[lex.lit.raw-string] No escapes, no interpolation; it can't contain a quote, so text with quotes uses r""" |
-| Char | `'a'`, `'\n'`, `'\u{1F600}'` | r[lex.lit.char] Type Char: one Unicode scalar value. r[lex.lit.char.escapes] Same escapes as strings, plus \\' |
-| Bytes | `b"GET /"`, `b"\x00\xFF"` | r[lex.lit.bytes] Type Bytes: ASCII characters, \\x escapes and the escapes \\n \\r \\t \\0 \\\\ \\". No interpolation |
-| Tagged literal | `url"https://..."`, `re"[a-z]+"`, `dur"30s"` | r[lex.lit.tagged] Validated at compile time; a fixed, language-defined set of tags (v1: url, re, dur, ts). r[lex.lit.tagged.raw] The body is raw, as in a raw string: no escapes and no interpolation, so re"\\d+\\.\\d+" and re"a{2}" mean what they say |
-| Collections | `[1, 2, 3]`, `{"a": 1}` | r[lex.lit.collections] List and Map. r[lex.lit.empty-map] The empty map is {:}, so it can't be mistaken for an empty block. r[lex.lit.no-set] Sets have no literal: Set.from(\[1, 2, 3\]) |
-
-### Naming
-
-- r[lex.name.case] Types and enum variants: `PascalCase`. Functions, bindings, fields, packages, files: `snake_case`. Constants: `SCREAMING_SNAKE_CASE`.
-- r[lex.name.enforced] Naming case is enforced by the compiler, not the linter. r[lex.name.foreign-exempt] Names declared inside a foreign block are exempt and keep their exact C spelling, so they match the library's documentation ([Interop with C](#11-interop)).
-
-### Arguments
-
-```
-counts.update(word, default: 0, fn(n) { n + 1 })
-http.serve(8080, handler: fn(req) { handle(req, bg:) })
-```
-
-- r[item.arg.first-positional] The first argument may be positional. r[item.arg.named] Every later argument is written with its parameter name, except the argument for the last declared parameter when that parameter has a function type: it is written without its name, whether it is a closure or a named function, and quince fmt rewrites either form into this one. r[item.arg.shorthand] As in struct literals, `name:` alone passes the binding of the same name, so `handle(req, bg:)` means `handle(req, bg: bg)`. r[item.arg.fmt-positional] When the first argument may be positional, `quince` `fmt` writes it positionally, so `http.serve(8080``, handler: h)` is the one form. That holds even when the first parameter's name carries meaning: `Channel<Job>.new(16)`, `log.json(cfg.log_level)`.
-- r[item.arg.receiver] On a method call the receiver doesn't count, so the first argument after it may be positional: `counts.update(word, default: 0, ...)`. r[item.arg.fn-value-positional] A call through a function value, such as `handler(req)` or `f(a, b)`, is always positional, because function types have no parameter names.
-- r[item.arg.order] Named arguments are passed in declaration order, so each call has one canonical form.
-- r[item.arg.default] A parameter may have a default value, which must be a literal, an empty list or map literal (`[]` or `{:}`), including a tagged literal such as dur"30s", or the name of a const, including a type's constant such as Int.MAX: `fn retry(times: Int = 3)`. A caller can leave it out.
-- r[item.arg.semver] Adding a parameter with a default is not a breaking change ([Dependencies and publishing](#enforced-semantic-versioning)). Renaming any parameter is.
-
 ### Type arguments and construction
 
-```
-let order = json.decode<Order>(body)?
-let jobs = Channel<Job>.new(16)
-let user = User(id: UserId(1), email:, name: "Ada", created_at: now)
-```
-
-- r[type.type-arg.angle] After a name or path in an expression, `<` starts type arguments when the tokens up to its matching `>` parse as types and that `>` is directly followed by `(` or `.`. Otherwise `<` is less-than. Type names are always `PascalCase`, so in `f(a < b, c > (d))` neither `b` nor `c` can be a type, and the call has two comparison arguments.
 - r[expr.op.compare.no-chain] Comparison operators don't chain: `a < b > c` is a syntax error, and the suggested fix is `a < b && b < c`. So `json.decode<Order>(body)` has only one reading.
-- r[lex.no-shift-token] The lexer never makes `>>` one token, so `List<List<Int>>` closes without a space.
-- r[type.type-arg.optional] Type arguments are optional wherever inference finds them ([Inference rules](#inference-rules)).
-- r[type.type-arg.construct] A `PascalCase` name followed by `(` builds a value: a struct (`User(id:, name: "Ada")`), a newtype (`UserId(1)`) or, through its enum's name, a variant (`Shape.Rect(width: 2.0, height: 3.0)`). Functions are `snake_case`, so this is never a function call.
-- r[type.type-arg.no-brace-construct] Braces never build a value of a user type: `{` starts a block or a map literal. So a struct value can appear in an `if`, `while`, `for`, `match` or `with` head without parentheses: `if p == Point(x: 0, y: 0) { ... }`.
 
 ### Operators and precedence
 
@@ -145,7 +61,7 @@ a || b && c              // error: write a || (b && c)
 
 r[expr.op.keyword-forms] `return`, `break`, `continue` and `spawn` are keyword forms, not operators; `return expr` and `spawn expr` take everything to their right.
 
-Operand types. r[expr.op.no-conversion] No operator converts its operands, so `Int + Float` and `Int32 + Int64` are errors whose fix names the conversion method ([Types](#built-in-types)). User types take part only through the interfaces in [Operators on user types](#operators-on-user-types).
+Operand types. r[expr.op.no-conversion] No operator converts its operands, so `Int + Float` and `Int32 + Int64` are errors whose fix names the conversion method ([Types](reference/types.md)). User types take part only through the interfaces in [Operators on user types](#operators-on-user-types).
 
 | Operators | Built-in operands | Failure |
 | --- | --- | --- |
@@ -156,7 +72,7 @@ Operand types. r[expr.op.no-conversion] No operator converts its operands, so `I
 | `&  \|  ^  ~` | r[expr.op.bits.operands] Values of the same integer type | Never fails |
 | `<<  >>` | r[expr.op.shift.operands] An integer, shifted by a count of any integer type | r[expr.op.shift.panic] Panics when the count is negative or not below the bit width. r[expr.op.shift.semantics] Bits shifted out are dropped, and >> keeps the sign of a signed value |
 
-r[expr.op.plus-numeric] `+` is numeric only. r[expr.op.plus-suggest] Strings join with interpolation (`"{first}{last}"`) and lists with `.concat()`, and the compiler suggests both. r[expr.op.float-total-order] Because comparisons use `Eq` and `Ord`, floats compare in their total order ([Types](#built-in-types)): `NaN == NaN` is true and `-0.0 == 0.0` is false. r[expr.op.float-eq-warn] `quince` `check` warns when a float is compared with `==` against a literal.
+r[expr.op.plus-numeric] `+` is numeric only. r[expr.op.plus-suggest] Strings join with interpolation (`"{first}{last}"`) and lists with `.concat()`, and the compiler suggests both. r[expr.op.float-total-order] Because comparisons use `Eq` and `Ord`, floats compare in their total order ([Types](reference/types.md)): `NaN == NaN` is true and `-0.0 == 0.0` is false. r[expr.op.float-eq-warn] `quince` `check` warns when a float is compared with `==` against a literal.
 
 r[expr.op.excluded] Not in Quince: the ternary `c ? a : b` (use `if`), `++` and `--` (`+= 1`), `**` (`x.pow(n)`), `??` and `?.` (`unwrap_or`, `?`, `map`), a pipe operator, and casts with `as`.
 
@@ -175,13 +91,13 @@ r[expr.range.semantics] `a..b` runs from `a` up to but not including `b`, and `a
 
 r[expr.block.expr-stmt] `if`, `match`, closures and the keyword forms (`concurrent`, `background`, `select`, `with`) are expressions. Declarations, loops and assignments are statements.
 
-- r[expr.block.value] A block's value is its last line when that line is an expression, and `()` otherwise. r[expr.block.last-newline] The last statement needs no newline before `}`, so a one-line block may hold a single statement: `Some(m) => { total = total + m },`. r[expr.block.fn-value] A function returns its body's value, as `word_counts` does in [Mutation](#mutation).
+- r[expr.block.value] A block's value is its last line when that line is an expression, and `()` otherwise. r[expr.block.last-newline] The last statement needs no newline before `}`, so a one-line block may hold a single statement: `Some(m) => { total = total + m },`. r[expr.block.fn-value] A function returns its body's value, as `word_counts` does in [Mutation](reference/types.md#mutation).
 - r[expr.if.type] `if` with an `else` has its branches' common type. r[expr.if.no-else] Without an `else`, its type is `Unit` and its branch must be `Unit`: `let sign = if n < 0 { -1 } else { 1 }`. r[expr.block.unit-context] Where the expected type is `Unit` (an `if` without `else`, a loop body, the body of a function that returns `Unit`, or an `if` or `match` used as a statement), a last expression is a statement: its value is discarded under the unused-value rules ([Errors and failure](#expected-failures-result-and-option)). So `if ok { seen.insert(x) }` compiles, an unused `Result` is still an error, and the arms of a `match` used as a statement need not share a type.
 - r[expr.match.arm-syntax] A `match` arm is `pattern => expr,` or `pattern => { block },`. r[expr.match.arm-block] In an arm, `{` starts a block. r[expr.match.arm-comma] Every arm ends with a comma, a block arm included.
 - r[expr.block.no-bare] There are no bare blocks. r[expr.block.brace-map] Anywhere else, `{` where an expression is expected starts a map literal. r[expr.block.positions] Blocks appear only as the bodies of functions, closures, `if`, `else`, match arms, `for`, `while`, `test` and the keyword forms. r[expr.block.keyword-bodies] The bodies of `with` and `background`, like `select` arms, are ordinary blocks of the enclosing function: `return`, `?`, `break` and `continue` leave them, and a `background` block first cancels its tasks and waits for them. r[expr.block.concurrent-tasks] A `concurrent` block's spawned expressions are tasks, not blocks of the function.
 
 * r[stmt.loop.stmt] `for` and `while` are statements, and `break` takes no value. r[stmt.loop.for-sources] `for` iterates any `Iterator`, and a `List`, `Set` or `Map` directly (a map's entries as `(key, value)` pairs). r[stmt.loop.for-string] A `String` or `Bytes` value needs `.chars()`, `.bytes()` or `.iter()`, so the unit is always written. r[stmt.loop.fanout-sources] `concurrent(limit:) for` takes the same things.
-* r[expr.jump.expr] `return`, `break` and `continue` are expressions, so they can stand in a match arm (`None => return,`). r[type.never.block] A block whose last statement or expression can't complete normally can't complete normally itself, and neither can a `while true` with no `break` aimed at it. Such a block has type `Never`, so a function returning `Summary` may end in a `while true` loop that it leaves only through `return`.
+* r[expr.jump.expr] `return`, `break` and `continue` are expressions, so they can stand in a match arm (`None => return,`).
 * r[stmt.assign.stmt] Assignment is a statement: `place = expr`, or `place op= expr` with `+=` `-=` `*=` `/=` `%=`, meaning `place = place op expr`. r[stmt.assign.place] A place is a `var` binding, a field path from one, or an index into one (`xs[i] = v`). r[stmt.assign.no-chain] There is no `x = y = z`, no assignment inside a condition, and no `++` or `--`.
 * r[expr.closure.syntax] A closure is `fn(params) -> T uses E { body }`. r[expr.closure.infer] Parameter types, the return type and `uses` can be left out when the expected type gives them: `fn(n) { n + 1 }`. r[expr.closure.no-expected] With no expected type, the parameter types are written, and the return type and the effects are inferred from the body: `Callback.local(fn(sent: CInt, total: CInt) { done.set(sent.to_int64()) })` needs no `uses`. r[expr.closure.underscore] An unused parameter of a closure or function may be named `_`.
 * r[expr.fn-value.named] A named function, or an associated function such as `Url.parse`, can be passed where a function type is expected: `lines.map(parse_user)`. Its type carries its effects. r[expr.fn-value.no-method] A method is passed through a closure, `fn(u) { u.display() }`, so a function value never hides which receiver it holds. r[expr.fn-value.variant] An enum variant with a payload is a function from its fields, in declaration order, so `map_err(AppError.Serve)` passes the variant as a function.
@@ -194,184 +110,19 @@ r[expr.block.expr-stmt] `if`, `match`, closures and the keyword forms (`concurre
 - r[tool.fmt.imports] Imports sorted and grouped (standard library, then packages, then local).
 - r[tool.fmt.check] Unformatted code compiles but fails `quince` `check`, which CI runs by default.
 
-### Comments
-
-- r[lex.comment.line] `//` line comments only. No block comments, which break easily under partial edits.
-- r[lex.comment.doc] `///` doc comments attach to the next declaration and may contain executable examples (see [Testing](#executable-examples-in-doc-comments)).
-
-### Attributes
-
-r[item.attr.fixed] Attributes are a fixed set defined by the language. Packages cannot define their own, so attributes can never become a form of metaprogramming. r[item.attr.unknown] An unknown attribute is a compile error, and new attributes arrive only through editions ([Packages and modules](#editions)).
-
-| Attribute | Applies to | Meaning |
-| --- | --- | --- |
-| r[item.attr.unchecked] `@unchecked` | Functions | Skip contract checks in release builds ([Contracts](#requires-and-ensures)) |
-| r[item.attr.verify] `@verify` | Functions | Attempt static proof of contracts with `quince` `verify` ([Contracts](#static-verification-optional)) |
-| r[item.attr.extensible] `@extensible` | Enums | Variants may be added without a major version; callers must include a wildcard arm ([Dependencies and publishing](#enforced-semantic-versioning)) |
-| r[item.attr.pinned] `@pinned` | Foreign libraries | Always call from the same OS thread ([Interop with C](#calling-c)) |
-| r[item.attr.shareable] `@shareable` | Foreign resource types | The C handle is safe to use from several threads, so its Resource may cross task boundaries. Unverifiable, so it is listed with the package's native dependencies ([Interop with C](#trust)) |
-| r[item.attr.cleanup] `@cleanup(fn, limit: dur)` | Foreign types | The C function that releases the type, and the cleanup time limit (10 seconds when left out), so it can be held in a Resource ([Interop with C](#memory-across-the-boundary)) |
-| r[item.attr.ownership] `@borrowed`, `@owned(fn)` | Foreign functions that return a CString or a Ptr\<T> whose T has no @cleanup | Who owns the returned memory: C, or Quince, which frees it with fn when it is dropped. One of the two is required ([Interop with C](#memory-across-the-boundary)) |
-| r[item.attr.deprecated] `@deprecated("why", use: path)` | Any public declaration | Warn on use and name the replacement; `quince` `fix` rewrites calls automatically when the replacement takes the same arguments |
-| r[item.attr.opaque] `@opaque` | Structs and enums | No automatic Eq, Hash, debug form, test generator, Encode or Decode, for handle-like types ([Prelude and special interfaces](#serialization)) |
-| r[item.attr.test] `@test` | Top-level declarations | Compiled only by `quince` `test`; naming it from code that isn't a test is a compile error. Impls of a `@test` type are test-only too, without their own `@test` ([Testing](#unit-tests)) |
-| r[item.attr.wire] `@wire("name")`, `@wire(case: camel)`, `@wire(tag: "kind")` | Fields and variants (name); structs and enums (case, tag) | Set the wire name, the naming case, or the enum tag field used by Encode and Decode ([Serialization](#serialization)) |
-| r[item.attr.test-default] `@test_default(f)` | Package effects | The handler a test gets when it reaches this effect with no `with` around it; `f` takes no arguments and returns a handler ([Effects](#handlers-in-tests-and-production)) |
-
-r[item.attr.placement] An attribute goes on its own line directly above the declaration it applies to.
-
 ## 3. Type system
-
-r[type.nominal] Quince's type system is static, sound, and nominal, with full type annotations required at every declaration boundary and inference allowed only inside function bodies. r[type.no-any] There is no `any` type and no unchecked cast.
-
-### Built-in types
-
-| Type | Description |
-| --- | --- |
-| `Int`, `Int8`...`Int64`, `UInt8`...`UInt64` | r[type.int] Integers; overflow is a panic (see [Errors and failure](#panics-bugs)), and checked\_add etc. return Option. r[type.int-alias] Int is another name for Int64, not a separate type. r[type.no-uint] There is no plain UInt; use UInt64 |
-| `Float`, `Float32` | r[type.float] IEEE 754 floats; Float is another name for Float64. r[type.float.total-order] Arithmetic follows IEEE, but Eq, Ord and Hash use a total order (NaN equals NaN, and -0.0 sorts before 0.0), so floats can be map keys and always sort the same way |
-| `Bool` | r[type.bool] `true` / `false` |
-| `String` | r[type.string] Immutable UTF-8 text. r[type.string.no-index] There is no s\[i\]; .bytes() and .chars() say which unit you mean |
-| `Bytes` | r[type.bytes] Immutable byte sequence |
-| `List<T>`, `Map<K, V>`, `Set<T>` | r[type.collections] Values: passing or assigning never shares a mutable alias (see [Mutation](#mutation)) |
-| `Option<T>` | r[type.option] `Some(value)` or `None` |
-| `Result<T, E>` | r[type.result] `Ok(value)` or `Err(error)` |
-| `Unit` | r[type.unit] The empty value, written `()` |
-| `Never` | r[type.never] The type of an expression that never produces a value: return, break, continue, unreachable, todo and Process.exit. It has no values and fits wherever any type is expected (see [Inference rules](#inference-rules)) |
-| Char | r[type.char] One Unicode scalar value; .chars() yields them |
-| Tuples | r[type.tuple] Fixed-size groups such as (Int, String), written (1, "a") and taken apart with let (n, s) = t or match, or read by position with t.0 and t.1 |
-| Function types | r[type.fn] fn(A) -> B, with uses E for effects ([Effects](#effect-variables)) |
-| Duration, Timestamp, Url, Regex | r[type.tagged] The values of the tagged literals dur, ts, url and re ([Lexical structure](#literals)) |
-| Range\<T> | r[type.range] The value of a..b or a..=b, over one integer type ([Ranges](#ranges)) |
-
-r[type.num.div-round] Integer division `/` and remainder `%` round toward zero, so `-7 / 2` is `-3` and `-7 % 2` is `-1`. r[type.num.conversions] Conversions between numeric types are explicit methods: widening ones (`n.to_int64()`) always succeed, narrowing ones (`n.to_int32()`) return `Option`, and `f.to_int()` returns `None` for NaN, infinities and out-of-range values.
-
-### Structs
-
-```
-pub struct User {
-  id: UserId,
-  email: Email,
-  name: String,
-  created_at: Timestamp,
-}
-```
-
-- r[item.struct.init-all] All fields must be initialized at construction. No default constructors, no partially built values. r[item.struct.unit] A struct with no fields is declared without braces, as in `pub struct ChannelClosed`, and its one value is written as its name, `ChannelClosed`.
-- r[item.struct.literal] A struct is built with its name and every field named, in declaration order: `User(id: UserId(1), email:, name: "Ada", created_at: now)`. r[item.struct.shorthand] A field name with nothing after the colon takes the binding of the same name, as in patterns, and `quince` `fmt` rewrites `email: email` to that form. r[item.struct.update] `..base`, written first, copies every field not written after it: `User(..user, name: "New")`. r[item.enum.construct] A variant with a payload is built the same way, shorthand included: `SqliteError.Open(code:)`.
-- r[item.struct.value] Structs are values, like collections: passing or assigning one copies it (see [Mutation](#mutation)). r[item.struct.let-immutable] On a `let` binding a struct never changes, and updates build a new value with `User(..user, name: "New")`. r[item.struct.field-assign] On a `var` binding, `user.name = "New"` assigns one field, which is shorthand for `user = User(..user, name: "New")`.
-- r[item.struct.field-private] Each field is private unless marked `pub`, as in `pub struct Account { pub id: AccountId, balance: Money }`. r[item.struct.literal-visibility] A struct literal or a `Type(..x)` update can be written only where every field is visible, so a type with private fields can only be built through its own functions. Invariants are stated once, with `requires` on the struct ([Contracts](#requires-and-ensures)).
-
-### Enums (algebraic data types)
-
-```
-pub enum Shape {
-  Circle(radius: Float),
-  Rect(width: Float, height: Float),
-  Point,
-}
-```
-
-r[item.enum.named-fields] Variant payloads use named fields so call sites read unambiguously: `Shape.Rect(width: 2.0, height: 3.0)`. r[item.enum.field-visibility] A variant's fields always have its enum's visibility, so other packages can build and match a `pub` enum's variants, and a variant field is never marked `pub`: writing it is a compile error.
-
-r[item.enum.recursive] An enum may contain itself, directly or inside a collection: `enum Tree { Leaf, Node(left: Tree, value: Int, right: Tree) }`. Enums are values, so no box or pointer is written.
-
-### Newtypes
-
-r[item.newtype.distinct] `struct UserId(Int)` creates a distinct type that does not unify with `Int`. r[item.alias.lint] Plain aliases (`type Name = String`) are allowed but flagged by the linter in public APIs, since they hide meaning without adding safety.
-
-r[item.newtype.access] `UserId(1)` builds a newtype and `id.0` reads its inner value. r[item.newtype.visibility] The inner value follows `pub` like a field: `pub struct UserId(pub Int)` lets other packages build and read it, while `pub struct Email(String)` leaves both to the package's own functions, which is how a newtype guards an invariant.
 
 ### Mutation
 
-r[type.mut.value-semantics] All built-in collections and structs have value semantics. r[type.mut.shared-in-ref] Mutable state shared between functions lives only in a reference type (listed under [Reference types](#mutation)), and reading or writing one requires the `State` effect ([Effects](#5-effects-and-capabilities)), except where its row in the Reference types table below says otherwise. A signature therefore shows which state a function can reach, through its parameter types, and whether it touches that state, through `uses State`. A constant can't hold a reference type ([Items](#constants)), so there is no global mutable state to reach any other way.
-
-**Local mutation.** r[type.mut.local] On a `var` binding, collections and struct fields can be changed in place:
-
-```
-fn word_counts(text: String) -> Map<String, Int> {
-  var counts: Map<String, Int> = {:}
-  for word in text.split_whitespace() {
-    counts.update(word, default: 0, fn(n) { n + 1 })
-  }
-  counts
-}
-```
-
-- r[type.mut.no-alias] Passing or assigning a value never creates a shared alias. Changing `counts` can't affect any other variable, so a function that mutates locally is still pure from the outside.
-- r[type.mut.rc-cow] Every heap value carries a reference count. A mutating method updates in place when the count is one, and copies first otherwise; the copy is unique, so later changes to it are in place again. r[type.mut.move-last-use] The compiler moves a value at its last use, so building a collection in a loop never copies. r[type.mut.c-memory-scope] Values that own C memory are the one exception: they are released at the end of their scope, never at last use ([Interop with C](#memory-across-the-boundary)). r[type.mut.copy-report] `quince` `check` reports every update that may copy, and names the alias that causes it ([Memory](#memory-management)).
-- r[type.mut.var-self] A method that changes its receiver declares `var self`, as in `fn push(var self, item: T)`. r[type.mut.var-self.call] It can be called only on a `var` binding or on a field path that starts at one (`state.items.push(x)`). On a `let` binding the call is a compile error, and the suggested fix makes the binding `var`. r[type.mut.var-self.rebind] A call computes the updated value and rebinds it, the same shorthand as `user.name = ...`, so it updates in place when the value is unique. The built-in `push`, `insert` and `update` are declared this way, and the query API prints `var self` in every signature, so whether a method mutates is always visible.
 - r[expr.closure.capture-value] Closures capture values, never `var` bindings by reference. So a closure can't call a `var self` method on a value it captured; it copies the value into a local `var` first. r[expr.closure.no-assign-capture] Assigning to a captured binding is a compile error too, and the suggested fix uses `fold` or a `for` loop.
-
-**Shared state.** State that must outlive a call or be seen by several functions lives in a `Ref<T>`:
-
-```
-fn record_hit(stats: Ref<Stats>, path: String) -> Stats uses State {
-  stats.modify(fn(s) { Stats(..s, hits: s.hits + 1) })
-}
-```
-
-- **Reference types.** r[type.ref.identity] A reference type has identity: copying one shares the same underlying state. These are the only types with reference semantics:
-
-  | Type | Holds | Needs `uses State` | Crosses a task boundary |
-  | --- | --- | --- | --- |
-  | r[type.ref.ref] `Ref<T>` | One mutable value, within a single task | `get`, `set`, `modify` | No |
-  | r[type.ref.atomic] `Atomic<T>` | One value updated atomically | Every read and write | Yes |
-  | r[type.ref.concurrent-map] `ConcurrentMap<K, V>` | A map that tasks can update concurrently | Every read and write | Yes |
-  | r[type.ref.channel] `Channel<T>` | A queue between tasks | Every operation | Yes |
-  | r[type.ref.task-scope] `TaskScope` | A scope that owns long-lived tasks ([Concurrency](#long-lived-work-fire-and-forget)) | No: `spawn` is not an effect | Yes |
-  | r[type.ref.resource] `Resource<T>` | C-owned memory with guaranteed cleanup ([Interop with C](#memory-across-the-boundary)) | No: close() carries its foreign block's effects, and ptr, keep and is\_closed need none | Only if its foreign type is `@shareable` |
-  | r[type.ref.pool] `Pool<T, Err, uses E>` | A bounded set of values, such as connections, that tasks check out one at a time ([Interop with C](#memory-across-the-boundary)) | Yes: checking out carries the open function's effects plus State, and waiting is a cancellation point | Yes, even when T can't |
-  | r[type.ref.callback] Callback\<F> | A Quince closure that C code may call later ([Interop with C](#callbacks)) | No: its calls carry its foreign block's effects | No |
-  | r[type.ref.cbuf] `CBuf<T>` | C-allocated memory that C writes through and Quince reads ([Interop with C](#generated-bindings)) | No: creating, reading and writing it are pure | No |
-  | r[type.ref.net] `Outbound`, `Inbound`, `Listener` | A network connection or listening socket ([Types the built-in effects use](../std/API.md#types-the-built-in-effects-use)) | No: their operations are `Net` and `Listen` operations | Yes |
-
-  r[type.ref.pure-pass] Passing, storing or capturing a reference is pure. r[type.ref.pure-create] So is creating one, as in `Ref.new(0)`, since a fresh reference can't be observed without `uses State`. r[type.ref.state-access] Only reading or writing through it requires `uses State`, so a function with no `uses` clause always returns the same result for the same arguments. r[type.ref.no-merge] Same means equal under `Eq`: two calls that each create a `Ref` return different references, so the compiler never merges such calls. r[type.ref.release-pure] Releasing memory or a `Resource` is not an effect either, wherever the last reference drops: a resource's C cleanup runs without its foreign block's effects being required there ([Interop with C](#memory-across-the-boundary)).
-
-  r[type.ref.in-fields] Reference types may appear in struct fields, enum payloads and closure captures. r[type.ref.crossing] Whether a type can cross a task boundary is a property the compiler derives: a type can cross unless it contains a `Ref<T>`, `Resource<T>`, `Callback<F>` or `CBuf<T>` (other than a `@shareable` one, or one held inside a `Pool`) anywhere inside it. r[type.ref.crossing.report] The query API reports this property for every type, and a rejected `spawn` names the field path that holds the reference.
-- r[type.ref.no-cross] A `Ref<T>`, or any value that contains one, cannot cross a task boundary ([Concurrency](#shared-state)). State shared between tasks uses `Atomic<T>`, `ConcurrentMap<K, V>` or `Channel<T>`.
 
 ### Generics
 
-- r[item.generic.bounds] Type parameters with interface bounds: `fn max<T: Ord>(a: T, b: T) -> T`.
-- r[item.generic.multi-bounds] Several bounds are joined with `+`: `fn show_sorted<T: Ord + Display>(xs: List<T>) -> String`. r[item.generic.assoc-binding] A bound can fix an interface's associated type, as in Rust: `fn sum<I: Iterator<Item = Int>>(var it: I) -> Int` or `fn total<T: Add<T, Output = T>>(xs: List<T>) -> T`.
-- r[item.iface.type-params] Interfaces may take type parameters: `interface From<T> { fn from(value: T) -> Self }`, and effect parameters ([Effects](#effect-variables)): `interface Iterator<uses E>`.
-- r[item.iface.assoc-types] Interfaces may declare associated types, which each implementation fixes:
-
-```
-pub interface Iterator<uses E> {
-  type Item
-  fn next(var self) -> Option<Self.Item> uses E
-}
-```
-
-- r[prelude.iter.next-var-self] `next` takes `var self`, so it advances the iterator it is called on (see [Mutation](#mutation)). r[prelude.iter.for-copy] `for x in it` iterates over a copy of `it`, so `it` doesn't need to be `var` and is unchanged after the loop. That holds when the iterator's source is a value, such as a list or a range. r[prelude.iter.shared-source] An iterator over an effect or a reference type, such as `Fs.read_lines` or `Channel.iter()`, shares its source, so every copy pulls from the same stream.
-- r[type.tuple.derived] The compiler provides Eq, Ord, Hash, Encode, Decode and test generators for tuples of any size, so the standard library needs no per-size implementations.
-- r[item.generic.excluded] Deliberately excluded: higher-kinded types (keeps type errors readable), variadic generics (`concurrent` and tuples are handled by the compiler instead), and specialization (which implementation runs must never depend on code elsewhere).
-- Type arguments can be written at a call site, as in `json.decode<Order>(body)` or `Channel<Job>.``new(16)`, and are optional wherever inference finds them ([Type arguments and construction](#type-arguments-and-construction)).
+- r[prelude.iter.next-var-self] `next` takes `var self`, so it advances the iterator it is called on (see [Mutation](reference/types.md#mutation)). r[prelude.iter.for-copy] `for x in it` iterates over a copy of `it`, so `it` doesn't need to be `var` and is unchanged after the loop. That holds when the iterator's source is a value, such as a list or a range. r[prelude.iter.shared-source] An iterator over an effect or a reference type, such as `Fs.read_lines` or `Channel.iter()`, shares its source, so every copy pulls from the same stream.
 
 ### Interfaces
 
-```
-pub interface Display {
-  fn display(self) -> String
-}
-
-impl Display for Email {
-  fn display(self) -> String { self.0 }
-}
-
-impl Display for User {
-  fn display(self) -> String { "{self.name} <{self.email}>" }
-}
-```
-
-- r[item.iface.explicit] Implementation is always explicit with `impl`. A type never satisfies an interface by accident.
-- r[item.iface.receiver] An impl's method takes the same receiver as the interface declares, `self` or `var self`. r[effect.handler.receiver] The one exception is a handler, which implements each operation of an `effect` as a method with a `self` receiver. r[effect.handler.uses] That method's `uses` may name the effects the effect is built on ([Effects](#declaring-and-inferring)), `State`, and the effect it handles. r[effect.handler.outer-call] A call to that effect from inside the handler goes to the handler that was in effect where the `with` installed it, never back to the handler itself. So a narrowing handler such as `net.only` passes allowed calls through, and a fake such as `fixed_clock` keeps its time in a reference type. r[effect.handler.uses-subset] It may name fewer of them, down to none.
-- r[item.iface.in-scope] A method that comes from an interface can be called only when the interface is in scope, either defined in the same package or imported. r[item.iface.ambiguous] If two interfaces in scope define the same method name for a type, the call is a compile error, and the suggested fix names the interface: `Display.display(u)`. r[item.iface.ambiguous-inherent] The same holds when a type's own method and an interface method in scope share a name: the call is an error until it is written `User.display(u)` or `Display.display(u)`, so a new method in a dependency can never silently change which body runs. Picking an `impl` by argument type, as `Money.from(x)` does across several `From<T>` impls, is ordinary generic dispatch, not overloading.
-- r[item.iface.orphan] An `impl` must live in the package that defines the type or the package that defines the interface (the orphan rule), so every implementation can be found in one of two places.
-- r[item.iface.no-default] Interface methods have no bodies, default or otherwise. Shared behavior goes in a regular generic function.
-- r[item.iface.no-dyn] There are no interface-typed values (no `dyn Interface`). Interfaces are used only as generic bounds, so the implementation that runs is always known from the types at the call site. To hold handlers of different types in one list, use a struct of closures or an enum.
+- r[effect.handler.receiver] The one exception is a handler, which implements each operation of an `effect` as a method with a `self` receiver. r[effect.handler.uses] That method's `uses` may name the effects the effect is built on ([Effects](#declaring-and-inferring)), `State`, and the effect it handles. r[effect.handler.outer-call] A call to that effect from inside the handler goes to the handler that was in effect where the `with` installed it, never back to the handler itself. So a narrowing handler such as `net.only` passes allowed calls through, and a fake such as `fixed_clock` keeps its time in a reference type. r[effect.handler.uses-subset] It may name fewer of them, down to none.
 
 ### Operators on user types
 
@@ -446,16 +197,8 @@ let text = json.encode(order)           // String
 
 ### Methods
 
-- r[item.method.impl] Methods and associated functions are declared in an `impl` block for the type, in the type's own package: ` impl User {  ``fn create(email: Email) -> Result<User, UserError>` `{ ... } }`. r[item.method.call] A function with a `self` or `var self` receiver is called as a method (`u.display_name()`); one without is called on the type (`User.create(email)`, `Config.parse(text)`). r[item.method.visibility] An inherent method or associated function is visible outside the package only when marked `pub`. r[item.method.impl-no-pub] Methods in an interface impl or a handler take no `pub`: they are visible wherever both the type and the interface or effect are.
 - r[effect.op-call] Effect operations are called through the effect's name: `Log.info("started")`, `Db.query(sql)`. The handler that runs is the one `with` installed ([Effects](#handlers-in-tests-and-production)).
 - A struct literal may write a field whose value is a binding of the same name once: `Dashboard(profile:, orders:)`. r[tool.fmt.field-shorthand] `quince` `fmt` rewrites `profile: profile` to that form, so each literal has one canonical layout.
-
-### Inference rules
-
-- r[type.infer.required] Required annotations: function parameters, return types (leaving one out means Unit, and quince fmt removes a written -> Unit, so there is one form; the same holds in a function type such as `fn(Int) uses Log`), struct fields, constants.
-- r[type.infer.inferred] Inferred: local `let`/`var` bindings, closure parameters when passed directly to a typed parameter, generic arguments at call sites.
-- r[type.infer.locality] If inference would need information from more than one statement away, the compiler asks for an annotation instead of guessing.
-- **Never.** r[type.never.type] `return`, `break`, `continue`, `unreachable(...)`, `todo(...)` and `Process.exit(...)` have type `Never`, so each fits in any branch or match arm: `None => return Err(e)` sits beside an arm that yields a value. r[type.never.fn] A function can declare `-> Never`, as in `fn fatal(msg: String) -> Never uses Console, Process`, and the compiler rejects it if the end of its body is reachable. r[type.never.while-true] A `while true` with no `break` aimed at it can't complete ([Statements](#keywords)), so a server loop can be typed `-> Never`.
 
 ## 4. Errors and failure
 
@@ -516,9 +259,8 @@ A panic means the program has a bug, not that something in the world went wrong.
 
 - r[err.panic.arith] Integer overflow, division by zero, and a shift count outside the bit width
 - r[err.panic.index] Out-of-bounds indexing with `xs[i]` (use `xs.get(i)` for an `Option`)
-- r[type.map.no-index] Maps have no `m[k]` at all, because a missing key is an expected case, not a bug. `m.get(k)` returns an `Option`.
 - r[err.panic.contract] A failed `requires` or `ensures` contract ([Contracts](#requires-and-ensures))
-- r[err.panic.explicit] An explicit `unreachable("reason")` or `todo("reason")`. Both have type Never ([Types](#built-in-types)), so either can stand in for any value while code is still being written
+- r[err.panic.explicit] An explicit `unreachable("reason")` or `todo("reason")`. Both have type Never ([Types](reference/types.md)), so either can stand in for any value while code is still being written
 
 r[err.panic.message] Every panic message includes the source location and, for contracts, the values that violated the condition. r[err.panic.task] A panic stops the current task; the scope that owns the task may log the panic or restart it, as its FailurePolicy says ([Concurrency](#long-lived-work-fire-and-forget)), but cannot inspect or resume it. That scope boundary is the only place a panic is handled.
 
@@ -538,11 +280,11 @@ r[effect.pure-default] Functions are pure by default: a function with no `uses` 
 | r[effect.env] `Env` | Environment variables and command-line arguments |
 | r[effect.process] `Process` | Spawning subprocesses and ending the program early |
 | r[effect.console] `Console` | Reading standard input; writing standard output and standard error |
-| r[effect.state] `State` | Reading or writing a reference type whose row in the [Reference types](#mutation) table needs it |
+| r[effect.state] `State` | Reading or writing a reference type whose row in the [Reference types](reference/types.md) table needs it |
 
 Each built-in effect's operations, such as Clock.now() and Fs.read\_text(path), are listed in [Built-in effect operations](#built-in-effect-operations). r[effect.log-not-builtin] Logging is not built in. The standard library declares it as a package effect, `pub effect Log uses Console, Clock { ... }`, so a function that logs says `uses Log`, and a test can capture its logs with `with Log = ...` without touching standard output.
 
-r[effect.decl] Packages declare their own effects with `effect`, naming the built-in effects each one is built on and listing its operations. r[effect.handler.def] A handler is any value whose type implements the operations with `impl Db for T`, and only those bodies may perform the underlying effects. r[effect.handler.crossing] A handler's type must be able to cross task boundaries ([Types](#mutation)), since tasks inherit handlers ([Concurrency](#9-concurrency)); that's why `PgDb` holds a `Pool` rather than a single connection:
+r[effect.decl] Packages declare their own effects with `effect`, naming the built-in effects each one is built on and listing its operations. r[effect.handler.def] A handler is any value whose type implements the operations with `impl Db for T`, and only those bodies may perform the underlying effects. r[effect.handler.crossing] A handler's type must be able to cross task boundaries ([Types](reference/types.md)), since tasks inherit handlers ([Concurrency](#9-concurrency)); that's why `PgDb` holds a `Pool` rather than a single connection:
 
 `pg`, `PgConn` and `PgError`, here and in [Interop with C](#11-interop), stand for a hypothetical third-party Postgres package. They are not part of std.
 
@@ -643,7 +385,7 @@ fn main() -> Result<Unit, AppError> uses * {
 }
 ```
 
-- r[effect.with.package-main-only] Outside test code, a `with` for a package effect may appear only in `main`. A package that builds several programs, such as a server and a worker, gives each its own small package with one main ([Packages](#packages)), so a program's production wiring always sits in one function an agent can read, and "which `Db` is this?" is always answered there.
+- r[effect.with.package-main-only] Outside test code, a `with` for a package effect may appear only in `main`. A package that builds several programs, such as a server and a worker, gives each its own small package with one main ([Packages](reference/packages.md#packages)), so a program's production wiring always sits in one function an agent can read, and "which `Db` is this?" is always answered there.
 - r[exec.main.no-package-effects] `main` gets no package effects from `uses *`. r[exec.main.handler-proof] The compiler proves that every package effect reachable from `main` is covered by a `with`; a missing one is a compile error that names the call path.
 - r[exec.main.uses-star] `uses *` is allowed only on `main`. Anywhere else it is a compile error, and `quince` `fix` writes the real `uses` clause. Tests opt into real effects with `test "name" uses Net`.
 - r[test.package-effect-proof] A test that reaches a package effect with no `with` around it is a compile error that names the call path, the same proof as for `main`. The suggested fix wraps the call in `with Db = ...`. Built-in effects keep their default fakes ([Testing](#unit-tests)); package effects have none, because no fake database can be guessed. r[test.default-handler] An effect's own package may name one with `@test_default(f)` on the effect declaration, where `f` takes no arguments and returns a handler. std.log names `capture_log`, so a test of code that logs needs no `with Log`.
@@ -702,7 +444,7 @@ r[diag.query.without-tests] Unit tests make files longer, so `quince` `query sou
 
 Integration tests check how a package behaves from the outside, through its public API only. They live in a top-level `tests/` directory instead of beside the code they test.
 
-- r[test.itest.packages] Each file directly in `tests/`, and each folder tests/\<name>/, is compiled as a separate test package that depends on the library ([Packages](#packages)), so it can use only `pub` names, exactly as an outside user would.
+- r[test.itest.packages] Each file directly in `tests/`, and each folder tests/\<name>/, is compiled as a separate test package that depends on the library ([Packages](reference/packages.md#packages)), so it can use only `pub` names, exactly as an outside user would.
 - They don't break when internals are rewritten, which makes them the main safety net for refactoring.
 - r[test.itest.same-syntax] Same `test` block syntax, effect fakes, and property tests as unit tests. r[test.itest.flags] `quince` `test` runs both; `quince` `test --unit` or `--integration` runs one kind.
 
@@ -725,43 +467,14 @@ r[contract.verify.opt-in] `quince` `verify` attempts to prove contracts with an 
 
 ## 7. Modules, packages, and versioning
 
-r[mod.namespace] A package is one namespace, and a project holds one library package plus its programs and tests ([Packages](#packages)): files organize code but never change what a name is called or how it is imported. r[mod.name-sources] Every name used in a file is either defined in the package, listed in an import, or in the prelude ([Prelude and special interfaces](#modules-and-imports)). r[mod.pkg.one-version] Each dependency, meaning one repository folder at one major version, resolves to one exact version, pinned in the lockfile by content hash, so nothing a dependent relies on changes without a change to its lockfile.
-
 ### Modules and imports
 
-```
-import std.http.{Response}
-import std.json
-import acme_billing.{Invoice, InvoiceError}
-```
-
-- r[mod.import.explicit] Imports list names explicitly; `import std.json` brings in the package name only, used as `json.decode(...)`. r[mod.import.fn-qualified] A function is always called through its package, as `json.decode(body)` or `http.get(url)`, so every call says where it comes from. r[mod.import.by-name-kinds] Only types, interfaces, effects and constants are imported by name; importing a function by name is a compile error whose fix imports its package instead. r[mod.import.prelude-fns] The prelude's free functions (`assert`, `todo`, `unreachable` and `dbg`) are called bare. r[mod.import.self] To use both the package name and some of its names, write one line, `import std.log.{self, Log}`. r[mod.import.one-line] A package appears in at most one import line, and `quince` `fmt` merges two lines into that form. r[mod.import.as] When two packages in one file end in the same name, one is renamed for the file with `as`, which only a package import takes: `import json as acme_json` beside `import std.json`. r[mod.import.major] A second major version is imported by its manifest key, as `import http_v2` ([The manifest](#the-manifest)); no import or type name contains `@`. r[mod.import.test-only] An import used only by `test` blocks is allowed at the top of the file and raises no unused-import warning.
-- r[prelude.only] The prelude is the only set of names a file can use without importing them, and the [table of prelude names](#prelude-names) lists every one. r[prelude.contents] It holds `Option`, `Result` and their variants, the number, text, time and collection types, the core and operator interfaces, the built-in effects, `TaskScope`, `FailurePolicy`, `ScopeFailed`, `assert`, `todo`, `unreachable` and `dbg`. r[prelude.not-ref-types] The other reference types of [Types](#mutation) are not in it: `Ref`, `Atomic`, `ConcurrentMap`, `Channel` and `Pool` are imported from std.sync, and `Resource`, `Callback` and the C types from std.ffi. r[prelude.fixed] The language fixes the prelude, and it changes only in an edition. r[prelude.criterion] A name is in the prelude only if the language's syntax or the compiler needs it, so any name that isn't imported is a language name. Everything else, including test helpers such as `fixed_clock` from std.testing, is imported.
-- r[mod.extension] Source files use the `.qnc` extension.
-- r[mod.unique-names] Every top-level name is unique within its package, and its import path is the package, never the file. r[mod.no-reexport] There are no re-exports, so a name has exactly one import path, and moving a definition to another file never changes it.
-- r[mod.pkg.program] A program is a package of its own in `cmd/<name>/`, holding the one `main` for that binary and depending on the library package beside it, as in Go. r[mod.pkg.main-location] `main` may appear only in such a package, and `quince` `build` builds every program in the project.
-- r[mod.pkg.program-path] A package is a program exactly when its folder is `cmd/<name>/`. The path decides; no manifest field makes or unmakes a program. This holds for a project with only one program too, so adding a second program never moves code.
-- r[mod.pkg.main-outside] A `main` outside `cmd/<name>/` is a compile error with its own error code. r[mod.pkg.main-fix] `quince` `fix` moves it to `cmd/<package>/`, using the package name from `quince``.toml`.
-- r[mod.pkg.binary-name] A program's binary is named `<name>`, after its folder. Build flags may choose where the binary is written, never what it is called, so every build of a commit produces the same names.
-- r[mod.intra-package] Files in the same package may refer to each other freely. r[mod.no-cycles] Circular dependencies between packages are a compile error.
-- r[mod.private-default] Everything is private unless marked `pub`.
+- r[prelude.only] The prelude is the only set of names a file can use without importing them, and the [table of prelude names](#prelude-names) lists every one. r[prelude.contents] It holds `Option`, `Result` and their variants, the number, text, time and collection types, the core and operator interfaces, the built-in effects, `TaskScope`, `FailurePolicy`, `ScopeFailed`, `assert`, `todo`, `unreachable` and `dbg`. r[prelude.not-ref-types] The other reference types of [Types](reference/types.md) are not in it: `Ref`, `Atomic`, `ConcurrentMap`, `Channel` and `Pool` are imported from std.sync, and `Resource`, `Callback` and the C types from std.ffi. r[prelude.fixed] The language fixes the prelude, and it changes only in an edition. r[prelude.criterion] A name is in the prelude only if the language's syntax or the compiler needs it, so any name that isn't imported is a language name. Everything else, including test helpers such as `fixed_clock` from std.testing, is imported.
 - r[diag.query.signature-location] Since an import doesn't name a file, `quince` `query signature <name>` and the language server return the file and line where any name is defined.
 
 ### Packages
 
-r[mod.pkg.project] A project is a folder with a `quince``.toml` manifest at its root, naming the project, its edition, its dependencies, the capability limits of its programs ([Program execution](#capabilities-at-runtime)), and the native libraries it links ([Interop with C](#linking)). Its format is under [The manifest](#the-manifest). r[mod.pkg.one-manifest] One manifest and one lockfile cover every package in the project, so all of them build with the same edition and the same dependency versions. r[dep.lock.contents] The lockfile records the exact version and content hash of every dependency, direct or indirect.
-
-- **Library.** r[mod.pkg.library-files] Every source file in the project except those under `cmd/`, `tests/` and folders whose names start with a dot, and except any `testdata/` folder, whose files are never compiled, so a tool can keep `.qnc` fixtures there. r[mod.pkg.library-name] Its import name is the `name` in `quince``.toml`. r[mod.pkg.program-import] A program imports it by that name, `import <name>.{...}`, and a program folder may share the library's name, since folders are not namespaces. r[mod.pkg.one-library] A project has at most one library, and it has none when every file is in a program.
-
-* **Programs.** Each `cmd/<name>/` ([Modules and imports](#modules-and-imports)). r[mod.pkg.program-visibility] A program sees only the library's `pub` names, exactly as a dependent does. r[mod.pkg.program-no-import] Nothing imports a program, and programs never import each other, so code that two programs share goes in the library.
-
-- **Test packages.** r[mod.pkg.test-packages] Each file directly in `tests/`, and each folder `tests/<name>/`, is one test package ([Testing](#integration-tests)). A folder lets several test files share helpers. r[mod.pkg.test-visibility] A test package sees only the library's `pub` names.
-
-* r[mod.pkg.dependents] **Dependents** import only the library. Programs and test packages are never part of a project's public API, and `quince` `publish` compares only the library's.
-
-- r[mod.pkg.test-deps] Dependencies used only by tests (test packages, `test` blocks and `@test` declarations) are listed in their own section of the manifest. They never become dependencies of anyone who depends on the project.
-
-* r[mod.pkg.nested-manifest] A `quince``.toml` anywhere below the project root is a compile error. r[mod.pkg.multi-project] A repository with several libraries holds several projects, each in its own folder with its own tags, and a dependent names one with `dir` ([The manifest](#the-manifest)). r[mod.pkg.workspace-room] The manifest format must leave room for a later workspace that groups them.
+r[dep.lock.contents] The lockfile records the exact version and content hash of every dependency, direct or indirect.
 
 ### The manifest
 
@@ -822,13 +535,7 @@ r[dep.mvs.min] Quince uses minimal version selection, as Go does, so the same ma
 - r[dep.semver.receiver] Changing a public method's receiver between `self` and `var self` is breaking in either direction.
 - r[dep.semver.variant] Adding an enum variant is breaking unless the enum is marked `@extensible`, which in turn forces callers to include a wildcard arm.
 - r[dep.semver.contract] Any change to a contract's normalized syntax tree counts as breaking (reformatting doesn't), because whether a new `requires` is stronger than the old one can't be decided in general. r[dep.semver.iface-method] Adding a method to a public interface is breaking too. `quince` `publish` can't see a behavior change behind an unchanged signature; doc examples and integration tests are the guard there.
-- r[dep.semver.derived] `quince` `publish` also compares the properties the compiler derives for each public type: automatic `Eq`, `Hash`, `Encode` and `Decode`, whether it can cross a task boundary, and whether it can be held in a `const`. Losing any of them is breaking, for example by adding a field whose type has no `Hash`. r[dep.semver.pub-field] Adding a field to a struct whose fields are all `pub` is breaking, because it breaks struct literals outside the package. r[dep.semver.impl-review] Adding an impl to a public type is reported as needs-review, because it can create a method-name clash ([Items](#interfaces)) in a dependent. So is adding a `pub` method, for the same reason.
-
-### Editions
-
-- r[mod.edition.per-package] Language changes ship in editions (e.g., `edition = "2027"`), chosen per package.
-- r[mod.edition.interop] Packages on different editions link together freely.
-- r[mod.edition.migrate] `quince` `migrate` rewrites code to a new edition mechanically; any change it can't make automatically is a compile error with a suggested fix.
+- r[dep.semver.derived] `quince` `publish` also compares the properties the compiler derives for each public type: automatic `Eq`, `Hash`, `Encode` and `Decode`, whether it can cross a task boundary, and whether it can be held in a `const`. Losing any of them is breaking, for example by adding a field whose type has no `Hash`. r[dep.semver.pub-field] Adding a field to a struct whose fields are all `pub` is breaking, because it breaks struct literals outside the package. r[dep.semver.impl-review] Adding an impl to a public type is reported as needs-review, because it can create a method-name clash ([Items](reference/items.md)) in a dependent. So is adding a `pub` method, for the same reason.
 
 ## 8. Toolchain
 
@@ -989,7 +696,7 @@ fn handle(req: Request, bg: TaskScope) -> Response uses Net {
 ### Shared state
 
 - r[conc.share.values] Values are immutable by default and can be shared freely between tasks.
-- A `Ref<T>` cannot cross a task boundary, and neither can any value that contains one ([Reference types](#mutation)). r[conc.share.spawn-reject] The compiler rejects capturing such a value in a `spawn`, and the error names the field that holds the reference.
+- A `Ref<T>` cannot cross a task boundary, and neither can any value that contains one ([Reference types](reference/types.md)). r[conc.share.spawn-reject] The compiler rejects capturing such a value in a `spawn`, and the error names the field that holds the reference.
 - r[conc.share.channels] Tasks communicate through `Channel<T>` or explicitly concurrent types such as `Atomic<T>` and `ConcurrentMap<K, V>`. r[conc.share.state] Every operation on them requires `uses State`. r[conc.share.no-races] Data races are impossible in safe code.
 - r[conc.chan.capacity] A `Channel<T>` has a fixed capacity, set when it is created. r[conc.chan.send] `ch.send(v)` waits while the channel is full and returns `Err(ChannelClosed)` once it has been closed. r[conc.chan.receive] `ch.receive()` waits for a value and returns `Option<T>`, which is `None` once the channel is closed and empty. r[conc.chan.close] `ch.close()` closes it, and values already sent can still be received.
 - r[conc.share.modify-pure] The closures passed to `Ref.modify`, `Atomic.modify` and `ConcurrentMap.update` must be pure. r[conc.share.modify-atomic] The update is applied only after the closure returns, so a cancellation inside the closure leaves the reference unchanged, and an update is never applied halfway.
@@ -1134,7 +841,7 @@ impl Db {
 - r[ffi.not-pub] Raw declarations use C types (`CInt`, `CString`, `Ptr<T>`) and cannot be `pub`. The package that declares them must wrap them in a safe API using `Result` and ordinary Quince types. r[ffi.resource-not-pub] A Resource\<T> whose T is a foreign type can't appear in a pub signature either; hold it in a field of a struct, as Db does.
 - r[ffi.type] `type name` inside a `foreign` block declares an opaque C type. r[ffi.cleanup] `@cleanup(fn, limit: dur)` above it names the C function that releases it and the cleanup time limit, 10 seconds when left out. r[ffi.cleanup-signature] The cleanup function must be declared in a foreign block of the same package and take exactly one parameter, Ptr\<T>. r[ffi.cleanup-return] It may return any C type, and res.close() returns that value; a wrong signature is a compile error on the @cleanup line.
 - r[ffi.cresource.adopt] `Resource.adopt(p)` turns a `Ptr<T>` into a `Resource<T>`, and works only for a type with `@cleanup`. r[ffi.cresource.ptr] `res.ptr()` lends the raw pointer for one call. r[ffi.cresource.ptr-arg-only] Like buf.ptr() and bytes.lend(), it may only be written as an argument of a foreign call; binding it to a name is a compile error. r[ffi.cresource.close] res.close() runs the cleanup now and returns the cleanup function's result, res.is\_closed() tells whether cleanup has run, and res.keep(x) moves a Callback, CBuf or CString into the resource, which releases it right after the C cleanup runs, so the end of the local scope no longer releases it.
-- r[ffi.cbuf.def] `CBuf<T>` is C-allocated memory with identity (a reference type, [Types](#mutation)), and is the only way to pass an out-parameter, so Quince memory never escapes to C. r[ffi.cbuf.api] CBuf.new\<T>() holds one value and CBuf.alloc\<T>(n) an array; buf.get(), buf.set(v) and buf.ptr() reach it, and CBuf.from\_bytes(b) and buf.to\_bytes(n) copy UInt8 buffers. r[ffi.cstring.convert] `CString.try_from(s)` converts text for C (`None` when it holds a NUL byte), and `cstr.to_string()` converts it back as a `Result`, since C strings may not be UTF-8.
+- r[ffi.cbuf.def] `CBuf<T>` is C-allocated memory with identity (a reference type, [Types](reference/types.md)), and is the only way to pass an out-parameter, so Quince memory never escapes to C. r[ffi.cbuf.api] CBuf.new\<T>() holds one value and CBuf.alloc\<T>(n) an array; buf.get(), buf.set(v) and buf.ptr() reach it, and CBuf.from\_bytes(b) and buf.to\_bytes(n) copy UInt8 buffers. r[ffi.cstring.convert] `CString.try_from(s)` converts text for C (`None` when it holds a NUL byte), and `cstr.to_string()` converts it back as a `Result`, since C strings may not be UTF-8.
 - r[ffi.lend] `bytes.lend()` lends a `Bytes` value in place for one call, as a `ConstPtr<UInt8>`. r[ffi.lend-const] `quince` `bind` emits `ConstPtr<T>` for a `const T*` parameter, and only such a parameter accepts a lent pointer, so C can't write into Quince memory. r[ffi.no-string-lend] A `String` is never lent, since C strings need a trailing NUL byte; `CString.try_from` copies it.
 - r[ffi.ownership] A foreign function that returns a `CString` must say who owns it. r[ffi.borrowed] `@borrowed` means C keeps it: Quince never frees it, and it must be converted with `to_string()` before the next call into that library. r[ffi.owned] `@owned(free_fn)` means Quince frees it with `free_fn` when it is dropped. r[ffi.ownership-required] Leaving both out is a compile error, and `quince` `bind` leaves them out because a header can't say. r[ffi.ownership-ptr] The same rule covers a returned `Ptr<T>` whose `T` has no `@cleanup`. r[ffi.cstring.owned] A `CString` made by `CString.try_from` is always owned by Quince.
 - r[ffi.ptr-ops] The pointer operations are `Ptr.null()`, `p.is_null()`, and `p.read()` and `p.write(v)` for C types declared in the block.
@@ -1260,8 +967,6 @@ Only the name remains open. Every design question raised in the v0.1 and v0.2 re
 
 ## Appendix: Expression grammar
 
-`{ x }` means zero or more, `[ x ]` optional. r[lex.grammar-rules] Three lexer rules apply: `>>` is never one token (the parser joins two adjacent `>` for a shift), `..=` is one token, and `|` inside a pattern is alternation, so `x is A | B` tests for either variant.
-
 ```ebnf
 expr        = jump | logic | range | bits
 jump        = "return" [ expr ] | "break" | "continue"
@@ -1292,8 +997,6 @@ tuple       = "(" ")" | "(" expr "," expr { "," expr } [ "," ] ")"
 list_lit    = "[" [ expr { "," expr } [ "," ] ] "]"
 map_lit     = "{" ":" "}" | "{" entry { "," entry } [ "," ] "}"
 entry       = expr ":" expr
-struct_lit  = type_path [ type_args ] "(" [ ".." expr "," ] field_init { "," field_init } [ "," ] ")"
-field_init  = name ":" [ expr ]
 closure     = "fn" "(" [ cparam { "," cparam } [ "," ] ] ")" [ "->" type ] [ "uses" effects ] block
 cparam      = ( name | "_" ) [ ":" type ]
 if_expr     = "if" expr block [ "else" ( if_expr | block ) ]
@@ -1313,52 +1016,14 @@ assign_op   = "=" | "+=" | "-=" | "*=" | "/=" | "%="
 
 ### Declarations, types and patterns
 
-r[lex.ident-classes] `name` is a `snake_case` identifier, `Name` a `PascalCase` one and `NAME` a `SCREAMING_SNAKE_CASE` one. r[lex.ident-not-keyword] None of them can be a keyword. r[lex.c-name] `c_name` is any C identifier, kept in its C spelling, and appears only for what a `foreign` block declares. `path` is `name { "." name }`, a package path such as `std.http`. `literal`, `string`, `int` and `doc_comment` are the tokens of [Lexical structure](#2-lexical-structure-and-syntax).
-
 ```ebnf
-file         = { import NEWLINE } { decl NEWLINE }
-import       = "import" path ( "." names | [ "as" name ] )   // as: packages only
-names        = "{" name_ref { "," name_ref } [ "," ] "}"
-name_ref     = "self" | name | Name | NAME
-decl         = { doc_comment } { attribute NEWLINE } [ "pub" ] item
-attribute    = "@" name [ "(" arg { "," arg } ")" ]
-item         = fn_decl | struct_decl | newtype_decl | enum_decl | alias_decl | interface_decl
-             | impl_decl | effect_decl | const_decl | foreign_decl | test_decl
-
-fn_decl      = fn_sig { contract } block
-fn_sig       = "fn" name [ generics ] "(" [ params ] ")" [ "->" type ] [ "uses" effects ]
-generics     = "<" generic { "," generic } ">"
-generic      = Name [ ":" bounds ] | "uses" Name
-bounds       = bound { "+" bound }
-bound        = type_path [ "<" bound_arg { "," bound_arg } ">" ]
-bound_arg    = type_arg | Name "=" type   // Item = Int, Output = T
-params       = param { "," param } [ "," ]
-param        = [ "var" ] "self" | [ "var" ] ( name | "_" ) ":" type [ "=" expr ]   // closures: "_" too
 contract     = "requires" expr | "ensures" [ "(" name ")" ] expr
-struct_decl  = "struct" Name [ generics ] [ "{" [ field { "," field } [ "," ] ] "}" [ "requires" expr ] ]   // no braces: no fields
-field        = { doc_comment } { attribute NEWLINE } [ "pub" ] name ":" type
-newtype_decl = "struct" Name [ generics ] "(" [ "pub" ] type ")"
-enum_decl    = "enum" Name [ generics ] "{" [ evariant { "," evariant } [ "," ] ] "}"
-evariant     = { doc_comment } { attribute NEWLINE } variant
-variant      = Name [ "(" vfield { "," vfield } [ "," ] ")" ]
-vfield       = { doc_comment } { attribute NEWLINE } name ":" type   // no pub: the enum's visibility
-alias_decl   = "type" Name [ generics ] "=" type
-interface_decl = "interface" Name [ generics ] "{" { ( "type" Name | fn_sig { contract } ) NEWLINE } "}"
-impl_decl    = "impl" [ generics ] [ type_path [ type_args ] "for" ] type "{" { impl_item NEWLINE } "}"
-impl_item    = [ "pub" ] fn_decl | "type" Name "=" type | [ "pub" ] const_decl
 effect_decl  = "effect" Name ( [ "uses" effects ] "{" { fn_sig NEWLINE } "}" | "=" type_path )
-const_decl   = "const" NAME ":" type "=" expr
 foreign_decl = "foreign" string [ "uses" effects ] "{" { ( { attribute NEWLINE } ( c_fn | "type" c_name ) ) NEWLINE } "}"
 c_fn         = "fn" c_name "(" [ c_name ":" type { "," c_name ":" type } [ "," ] ] ")" [ "->" type ]
 test_decl    = "test" string [ "forall" "(" params ")" ] [ "uses" effects ] block
 effects      = "*" | effect_ref { "," effect_ref }      // "*" only on main
 effect_ref   = type_path | Name                          // an effect or an effect variable
-
-type         = type_path [ type_args ] | "(" ")" | "(" type "," type { "," type } [ "," ] ")"
-             | "fn" "(" [ type { "," type } ] ")" [ "->" type ] [ "uses" effects ]
-type_args    = "<" type_arg { "," type_arg } ">"
-type_arg     = type | "uses" effects   // uses comes last and takes the rest of the list
-type_path    = [ name "." ] Name { "." Name } | "Self" { "." Name } | c_name   // a type declared in a foreign block
 
 pattern      = alt { "|" alt }
 alt          = "_" | [ "-" ] literal [ ( ".." | "..=" ) [ "-" ] literal ] | name | NAME | type_path "." NAME | tuple_pat | variant_pat
@@ -1427,7 +1092,7 @@ pub struct DecodeError { pub path: String, pub expected: String, pub found: Stri
 - `Eq`, `Hash`, `Encode` and `Decode` are usually automatic ([Automatic equality and hashing](#automatic-equality-and-hashing)). `Ord` and `Display` are always written by hand.
 - r[prelude.encode-data] `Encode` and `Decode` write to encoding.Data, the format-neutral data model in std.encoding. Code calls a format (`json.encode(x)`) rather than these methods, and implements them only for a custom wire form.
 - r[prelude.display-impls] `String`, every number type, `Bool`, `Char`, `Duration`, `Timestamp` and `Url` implement `Display`, which string interpolation calls.
-- r[prelude.eq-ord-impls] Every number type, `Bool`, `Char`, `String`, `Bytes`, `Duration` and `Timestamp` implement `Eq`, `Ord` and `Hash`; floats use their total order ([Types](#built-in-types)). r[prelude.unit-url-eq] `Unit` and `Url` implement `Eq` and `Hash`. r[prelude.collection-eq] `List`, `Map`, `Set`, `Option`, `Result` and tuples implement `Eq` and `Hash` when their element types do, and `List` and tuples implement `Ord` too, comparing element by element. r[prelude.no-other-ord] No other built-in type implements `Ord`.
+- r[prelude.eq-ord-impls] Every number type, `Bool`, `Char`, `String`, `Bytes`, `Duration` and `Timestamp` implement `Eq`, `Ord` and `Hash`; floats use their total order ([Types](reference/types.md)). r[prelude.unit-url-eq] `Unit` and `Url` implement `Eq` and `Hash`. r[prelude.collection-eq] `List`, `Map`, `Set`, `Option`, `Result` and tuples implement `Eq` and `Hash` when their element types do, and `List` and tuples implement `Ord` too, comparing element by element. r[prelude.no-other-ord] No other built-in type implements `Ord`.
 
 ### Functions
 
@@ -1443,10 +1108,6 @@ pub fn dbg<T>(value: T) -> T
 ### List
 
 - r[expr.index.list] `xs[i]` is `xs.get(i)` that panics when `i` is out of range ([Errors and failure](#panics-bugs)).
-
-### Map and Set
-
-r[type.map.order] `Map` and `Set` iterate in insertion order, so a program's output never depends on hash values.
 
 ### Duration, Timestamp, Url and Regex
 

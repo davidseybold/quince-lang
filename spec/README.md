@@ -6,6 +6,16 @@ The spec says what Quince programs mean, and what the tools guarantee about them
 
 ## Chapters
 
+Part I, the language:
+
+- [Introduction](reference/introduction.md): what Quince is for, the grammar notation, and the features it leaves out.
+- [Lexical structure](reference/lexical.md): line breaks, keywords, literals, naming, comments and tokens.
+- [Packages and modules](reference/packages.md): imports, the layout of a project's library, programs and tests, and editions.
+- [Items](reference/items.md): constants, structs, enums, newtypes, methods, interfaces, generics, arguments and attributes.
+- [Types](reference/types.md): the built-in types, type arguments, mutation and reference types, and inference.
+
+Still being split:
+
 - [Quince Language Spec (being split)](quince-spec.md): every rule not yet moved to a chapter.
 
 Read the chapters in the order listed. [`chapters.txt`](chapters.txt) lists them with their rule-ID prefixes.

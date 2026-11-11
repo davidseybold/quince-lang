@@ -6,6 +6,53 @@
 // spec's prose, not as productions. `path` is `name { "." name }`, a package path.
 // terminals: name Name NAME c_name path literal string int doc_comment NEWLINE
 
+file         = { import NEWLINE } { decl NEWLINE }
+import       = "import" path ( "." names | [ "as" name ] )   // as: packages only
+names        = "{" name_ref { "," name_ref } [ "," ] "}"
+name_ref     = "self" | name | Name | NAME
+
+decl         = { doc_comment } { attribute NEWLINE } [ "pub" ] item
+item         = fn_decl | struct_decl | newtype_decl | enum_decl | alias_decl | interface_decl
+             | impl_decl | effect_decl | const_decl | foreign_decl | test_decl
+fn_decl      = fn_sig { contract } block
+fn_sig       = "fn" name [ generics ] "(" [ params ] ")" [ "->" type ] [ "uses" effects ]
+params       = param { "," param } [ "," ]
+param        = [ "var" ] "self" | [ "var" ] ( name | "_" ) ":" type [ "=" expr ]   // closures: "_" too
+
+const_decl   = "const" NAME ":" type "=" expr
+
+struct_decl  = "struct" Name [ generics ] [ "{" [ field { "," field } [ "," ] ] "}" [ "requires" expr ] ]   // no braces: no fields
+field        = { doc_comment } { attribute NEWLINE } [ "pub" ] name ":" type
+struct_lit  = type_path [ type_args ] "(" [ ".." expr "," ] field_init { "," field_init } [ "," ] ")"
+field_init  = name ":" [ expr ]
+
+enum_decl    = "enum" Name [ generics ] "{" [ evariant { "," evariant } [ "," ] ] "}"
+evariant     = { doc_comment } { attribute NEWLINE } variant
+variant      = Name [ "(" vfield { "," vfield } [ "," ] ")" ]
+vfield       = { doc_comment } { attribute NEWLINE } name ":" type   // no pub: the enum's visibility
+
+newtype_decl = "struct" Name [ generics ] "(" [ "pub" ] type ")"
+alias_decl   = "type" Name [ generics ] "=" type
+
+impl_decl    = "impl" [ generics ] [ type_path [ type_args ] "for" ] type "{" { impl_item NEWLINE } "}"
+impl_item    = [ "pub" ] fn_decl | "type" Name "=" type | [ "pub" ] const_decl
+
+interface_decl = "interface" Name [ generics ] "{" { ( "type" Name | fn_sig { contract } ) NEWLINE } "}"
+
+generics     = "<" generic { "," generic } ">"
+generic      = Name [ ":" bounds ] | "uses" Name
+bounds       = bound { "+" bound }
+bound        = type_path [ "<" bound_arg { "," bound_arg } ">" ]
+bound_arg    = type_arg | Name "=" type   // Item = Int, Output = T
+
+attribute    = "@" name [ "(" arg { "," arg } ")" ]
+
+type         = type_path [ type_args ] | "(" ")" | "(" type "," type { "," type } [ "," ] ")"
+             | "fn" "(" [ type { "," type } ] ")" [ "->" type ] [ "uses" effects ]
+type_args    = "<" type_arg { "," type_arg } ">"
+type_arg     = type | "uses" effects   // uses comes last and takes the rest of the list
+type_path    = [ name "." ] Name { "." Name } | "Self" { "." Name } | c_name   // a type declared in a foreign block
+
 expr        = jump | logic | range | bits
 jump        = "return" [ expr ] | "break" | "continue"
             | "spawn" [ "in" postfix ] expr   // a TaskScope value: bg, self.bg
@@ -35,8 +82,6 @@ tuple       = "(" ")" | "(" expr "," expr { "," expr } [ "," ] ")"
 list_lit    = "[" [ expr { "," expr } [ "," ] ] "]"
 map_lit     = "{" ":" "}" | "{" entry { "," entry } [ "," ] "}"
 entry       = expr ":" expr
-struct_lit  = type_path [ type_args ] "(" [ ".." expr "," ] field_init { "," field_init } [ "," ] ")"
-field_init  = name ":" [ expr ]
 closure     = "fn" "(" [ cparam { "," cparam } [ "," ] ] ")" [ "->" type ] [ "uses" effects ] block
 cparam      = ( name | "_" ) [ ":" type ]
 if_expr     = "if" expr block [ "else" ( if_expr | block ) ]
@@ -53,49 +98,13 @@ stmt        = "let" pattern [ ":" type ] "=" expr
 place       = ( name | "self" ) { "." name | "[" expr "]" }   // self only under var self
 assign_op   = "=" | "+=" | "-=" | "*=" | "/=" | "%="
 
-file         = { import NEWLINE } { decl NEWLINE }
-import       = "import" path ( "." names | [ "as" name ] )   // as: packages only
-names        = "{" name_ref { "," name_ref } [ "," ] "}"
-name_ref     = "self" | name | Name | NAME
-decl         = { doc_comment } { attribute NEWLINE } [ "pub" ] item
-attribute    = "@" name [ "(" arg { "," arg } ")" ]
-item         = fn_decl | struct_decl | newtype_decl | enum_decl | alias_decl | interface_decl
-             | impl_decl | effect_decl | const_decl | foreign_decl | test_decl
-
-fn_decl      = fn_sig { contract } block
-fn_sig       = "fn" name [ generics ] "(" [ params ] ")" [ "->" type ] [ "uses" effects ]
-generics     = "<" generic { "," generic } ">"
-generic      = Name [ ":" bounds ] | "uses" Name
-bounds       = bound { "+" bound }
-bound        = type_path [ "<" bound_arg { "," bound_arg } ">" ]
-bound_arg    = type_arg | Name "=" type   // Item = Int, Output = T
-params       = param { "," param } [ "," ]
-param        = [ "var" ] "self" | [ "var" ] ( name | "_" ) ":" type [ "=" expr ]   // closures: "_" too
 contract     = "requires" expr | "ensures" [ "(" name ")" ] expr
-struct_decl  = "struct" Name [ generics ] [ "{" [ field { "," field } [ "," ] ] "}" [ "requires" expr ] ]   // no braces: no fields
-field        = { doc_comment } { attribute NEWLINE } [ "pub" ] name ":" type
-newtype_decl = "struct" Name [ generics ] "(" [ "pub" ] type ")"
-enum_decl    = "enum" Name [ generics ] "{" [ evariant { "," evariant } [ "," ] ] "}"
-evariant     = { doc_comment } { attribute NEWLINE } variant
-variant      = Name [ "(" vfield { "," vfield } [ "," ] ")" ]
-vfield       = { doc_comment } { attribute NEWLINE } name ":" type   // no pub: the enum's visibility
-alias_decl   = "type" Name [ generics ] "=" type
-interface_decl = "interface" Name [ generics ] "{" { ( "type" Name | fn_sig { contract } ) NEWLINE } "}"
-impl_decl    = "impl" [ generics ] [ type_path [ type_args ] "for" ] type "{" { impl_item NEWLINE } "}"
-impl_item    = [ "pub" ] fn_decl | "type" Name "=" type | [ "pub" ] const_decl
 effect_decl  = "effect" Name ( [ "uses" effects ] "{" { fn_sig NEWLINE } "}" | "=" type_path )
-const_decl   = "const" NAME ":" type "=" expr
 foreign_decl = "foreign" string [ "uses" effects ] "{" { ( { attribute NEWLINE } ( c_fn | "type" c_name ) ) NEWLINE } "}"
 c_fn         = "fn" c_name "(" [ c_name ":" type { "," c_name ":" type } [ "," ] ] ")" [ "->" type ]
 test_decl    = "test" string [ "forall" "(" params ")" ] [ "uses" effects ] block
 effects      = "*" | effect_ref { "," effect_ref }      // "*" only on main
 effect_ref   = type_path | Name                          // an effect or an effect variable
-
-type         = type_path [ type_args ] | "(" ")" | "(" type "," type { "," type } [ "," ] ")"
-             | "fn" "(" [ type { "," type } ] ")" [ "->" type ] [ "uses" effects ]
-type_args    = "<" type_arg { "," type_arg } ">"
-type_arg     = type | "uses" effects   // uses comes last and takes the rest of the list
-type_path    = [ name "." ] Name { "." Name } | "Self" { "." Name } | c_name   // a type declared in a foreign block
 
 pattern      = alt { "|" alt }
 alt          = "_" | [ "-" ] literal [ ( ".." | "..=" ) [ "-" ] literal ] | name | NAME | type_path "." NAME | tuple_pat | variant_pat
