@@ -104,12 +104,27 @@ fn suffixes() {
     let error = &lex_str("1.5f32").errors[0];
     assert_eq!(error.fixes[0].applicability, Applicability::NeedsReview);
     assert!(error.message.starts_with("`f32` can't follow a number"));
-    assert!(error.message.contains("`let x: Float32 = 1.5`"));
-    assert!(
-        lex_str("1u8").errors[0]
-            .message
-            .contains("`let b: UInt8 = 1`")
-    );
+}
+
+/// A Rust-style suffix gets an example with the Quince type it names, and the number itself.
+#[test]
+fn suffix_messages_name_the_type() {
+    let example = |text| {
+        let message = lex_str(text).errors[0].message.clone();
+        message[message.find(", as in ").unwrap() + 8..].to_string()
+    };
+    assert_eq!(example("200u8"), "`let x: UInt8 = 200`");
+    assert_eq!(example("1_000i32"), "`let x: Int32 = 1_000`");
+    assert_eq!(example("7i64"), "`let x: Int = 7`");
+    assert_eq!(example("0xFFu16"), "`let x: UInt16 = 0xFF`");
+    assert_eq!(example("1.5f32"), "`let x: Float32 = 1.5`");
+    assert_eq!(example("2.5f64"), "`let x: Float = 2.5`");
+    assert_eq!(example("1f32"), "`let x: Float32 = 1.0`");
+    // No Quince type for these, or the wrong kind of number for it.
+    assert_eq!(example("10px"), "`let b: UInt8 = 1`");
+    assert_eq!(example("1usize"), "`let b: UInt8 = 1`");
+    assert_eq!(example("1.5u8"), "`let x: Float32 = 1.5`");
+    assert_eq!(example("1.5em"), "`let x: Float32 = 1.5`");
 }
 
 #[test]
@@ -118,6 +133,9 @@ fn prefixes_and_digits() {
     assert_eq!(errors("0B1"), [r#"E0008 1..2 => "0b1""#]);
     assert_eq!(errors("0O7"), [r#"E0008 1..2 => "0o7""#]);
     assert_eq!(errors("0x"), ["E0008 0..2"]);
+    // An uppercase prefix with no digits is one error, whose message gives both.
+    assert_eq!(errors("0X"), ["E0008 0..2"]);
+    assert_eq!(errors("0B_"), ["E0008 0..3"]);
     assert_eq!(errors("0b_"), ["E0008 0..3"]);
     assert_eq!(errors("0b102"), ["E0008 4..5"]);
     assert_eq!(errors("0o78"), ["E0008 3..4"]);
@@ -126,6 +144,10 @@ fn prefixes_and_digits() {
     assert_eq!(
         message("0b_"),
         "`0b` needs at least one binary digit after it"
+    );
+    assert_eq!(
+        message("0X"),
+        "`0x` needs at least one hex digit after it, and a base prefix is written lowercase"
     );
     assert!(message("0b102").starts_with("`2` isn't a binary digit"));
     assert!(message("0o78").starts_with("`8` isn't an octal digit"));
@@ -163,10 +185,17 @@ fn leading_zeros_and_exponents() {
     assert_eq!(errors("1.5E-3"), [r#"E0008 3..4 => "1.5e-3""#]);
     assert_eq!(errors("1e"), ["E0008 1..2"]);
     assert_eq!(errors("1e+x"), ["E0008 1..2"]);
-    assert_eq!(errors("1E"), [r#"E0008 1..2 => "1e""#, "E0008 1..2"]);
+    // An uppercase `E` with no digits is one error, whose message gives both.
+    assert_eq!(errors("1E"), ["E0008 1..2"]);
+    assert_eq!(errors("1E+x"), ["E0008 1..2"]);
+    assert_eq!(errors("1E_"), ["E0008 1..3"]);
     assert_eq!(
         lex_str("1e").errors[0].message,
         "an exponent needs digits after its `e`"
+    );
+    assert_eq!(
+        lex_str("1E").errors[0].message,
+        "an exponent is a lowercase `e` followed by digits"
     );
     assert_eq!(errors("1e5x"), [r#"E0008 3..4 => "1e5""#]);
 }

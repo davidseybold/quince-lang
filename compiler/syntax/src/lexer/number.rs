@@ -57,10 +57,12 @@ fn scan(text: &str, tuple_position: bool) -> Scan {
     };
     let mut end;
     if base != 10 {
-        if b[1].is_ascii_uppercase() {
+        end = digits_end(b, 2, base);
+        // With no digits, the missing digits are the one problem, and its message gives the
+        // lowercase prefix, so two errors don't share one span.
+        if b[1].is_ascii_uppercase() && has_digit(&b[2..end]) {
             problems.push((1..2, Problem::UppercasePrefix));
         }
-        end = digits_end(b, 2, base);
         group(b, 0..2, 2..end, base, &mut problems);
     } else {
         end = digits_end(b, 0, 10);
@@ -80,10 +82,10 @@ fn scan(text: &str, tuple_position: bool) -> Scan {
             }
             if let Some(exponent_end) = exponent(b, end) {
                 kind = SyntaxKind::Float;
-                if b[end] == b'E' {
+                let digits = digits_end(b, exponent_end, 10);
+                if b[end] == b'E' && has_digit(&b[exponent_end..digits]) {
                     problems.push((end..end + 1, Problem::UppercaseExponent));
                 }
-                let digits = digits_end(b, exponent_end, 10);
                 group(
                     b,
                     end..exponent_end,
@@ -148,7 +150,7 @@ fn group(
     problems: &mut Vec<(Range<usize>, Problem)>,
 ) {
     let text = &b[digits.clone()];
-    if !text.iter().any(|c| c.is_ascii_hexdigit()) {
+    if !has_digit(text) {
         return problems.push((lead.start..digits.end, Problem::NoDigits));
     }
     if let Some(i) = text
@@ -166,6 +168,11 @@ fn group(
         let at = digits.start + i;
         problems.push((at..at + run, Problem::Underscore));
     }
+}
+
+/// True when `group` holds a digit, not only underscores.
+fn has_digit(group: &[u8]) -> bool {
+    group.iter().any(u8::is_ascii_hexdigit)
 }
 
 /// A letter, digit or underscore: what glues to a number as a suffix.
@@ -194,9 +201,17 @@ fn problem_error(
     };
     match problem {
         Problem::Suffix => {
-            let example = match kind {
-                SyntaxKind::Float => "`let x: Float32 = 1.5`",
-                _ => "`let b: UInt8 = 1`",
+            let number = &text[..range.start];
+            let example = match (suffix_type(part), kind) {
+                (Some(ty), SyntaxKind::Int) if ty.starts_with("Float") => {
+                    format!("`let x: {ty} = {number}.0`")
+                }
+                (Some(ty), SyntaxKind::Float) if !ty.starts_with("Float") => {
+                    "`let x: Float32 = 1.5`".to_string()
+                }
+                (Some(ty), _) => format!("`let x: {ty} = {number}`"),
+                (None, SyntaxKind::Float) => "`let x: Float32 = 1.5`".to_string(),
+                (None, _) => "`let b: UInt8 = 1`".to_string(),
             };
             error(format!(
                 "`{part}` can't follow a number: a numeric literal has no type suffix, and takes \
@@ -211,10 +226,17 @@ fn problem_error(
         Problem::UppercasePrefix => lowercase("a base prefix (`0x`, `0b` or `0o`)"),
         Problem::UppercaseExponent => lowercase("an exponent's `e`"),
         Problem::NoDigits if part.starts_with('0') => error(format!(
-            "`{}` needs at least one {} digit after it",
-            &part[..2],
-            base_name(part)
+            "`{}` needs at least one {} digit after it{}",
+            part[..2].to_ascii_lowercase(),
+            base_name(part),
+            match part.as_bytes()[1].is_ascii_uppercase() {
+                true => ", and a base prefix is written lowercase",
+                false => "",
+            }
         )),
+        Problem::NoDigits if part.starts_with('E') => {
+            error("an exponent is a lowercase `e` followed by digits".to_string())
+        }
         Problem::NoDigits => error("an exponent needs digits after its `e`".to_string()),
         Problem::BadDigit(base) => error(format!(
             "`{part}` isn't {}",
@@ -232,6 +254,23 @@ fn problem_error(
                 .to_string(),
         ),
     }
+}
+
+/// The Quince type that a Rust-style suffix such as `u8` or `f32` names, if it names one.
+fn suffix_type(suffix: &str) -> Option<&'static str> {
+    Some(match suffix {
+        "i8" => "Int8",
+        "i16" => "Int16",
+        "i32" => "Int32",
+        "i64" => "Int",
+        "u8" => "UInt8",
+        "u16" => "UInt16",
+        "u32" => "UInt32",
+        "u64" => "UInt64",
+        "f32" => "Float32",
+        "f64" => "Float",
+        _ => return None,
+    })
 }
 
 /// `hex`, `binary` or `octal`, for a text that starts with a base prefix.
