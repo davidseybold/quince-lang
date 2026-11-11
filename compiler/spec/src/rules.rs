@@ -219,10 +219,7 @@ pub fn strip(spec: &str) -> String {
             continue;
         }
         let mut copied_to = 0;
-        for tag in find_tags(chunk, true) {
-            if tag.glued || !tag.terminated || !is_valid_id(&tag.id) {
-                continue;
-            }
+        for tag in tag_spans(chunk) {
             out.push_str(&chunk[copied_to..tag.start]);
             copied_to = if chunk[tag.end..].starts_with(' ') {
                 tag.end + 1
@@ -233,6 +230,29 @@ pub fn strip(spec: &str) -> String {
         out.push_str(&chunk[copied_to..]);
     }
     out
+}
+
+/// A well-formed tag on a prose line: `r[<id>]` from byte `start` up to `end`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TagSpan {
+    pub id: String,
+    pub start: usize,
+    /// Just past the `]`.
+    pub end: usize,
+}
+
+/// The well-formed tags on one prose line, outside inline code spans, in order. Misplaced or
+/// malformed tag-shaped text is skipped; `parse` reports it.
+pub fn tag_spans(line: &str) -> Vec<TagSpan> {
+    find_tags(line, true)
+        .into_iter()
+        .filter(|tag| !tag.glued && tag.terminated && is_valid_id(&tag.id))
+        .map(|tag| TagSpan {
+            id: tag.id,
+            start: tag.start,
+            end: tag.end,
+        })
+        .collect()
 }
 
 /// Finds every tag in one file and reports misplaced or malformed ones, without the uniqueness
