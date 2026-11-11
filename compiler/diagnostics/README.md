@@ -39,7 +39,7 @@ The error-code registry, the JSON diagnostic types and their schema, and fix che
 - A diagnostic carries exactly the fields `r[diag.json]` lists, and any other field is rejected. The field set stays closed until a spec change adds a field.
 - `severity` is `"error"` or `"warning"`. `fixes` is always present, as `[]` when empty.
 - Every `file`, in a span or an edit, is relative to the project root and uses `/` separators.
-- Output validates against `schema/diagnostic.schema.json` (JSON Schema 2020-12, written by hand). A test checks that the spec's example diagnostic validates.
+- Output validates against `schema/diagnostic.schema.json` (JSON Schema 2020-12, written by hand). A test checks that the example diagnostic in `testdata/example.json` validates.
 - The test-only schema checker fails on any schema keyword it doesn't implement, so the schema can't hold a constraint that nothing enforces.
 
 ## Every code is documented and tested

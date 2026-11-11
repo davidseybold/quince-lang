@@ -925,26 +925,4 @@ let x = 1 //~ E0100
                 .is_empty()
         );
     }
-
-    #[test]
-    fn loads_the_real_spec() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let rules = load_rules(&root).unwrap();
-        assert_eq!(
-            rules.ids.get("grammar.fn_decl").map(String::as_str),
-            Some(GRAMMAR_SECTION)
-        );
-        assert_eq!(
-            rules
-                .ids
-                .get("stmt.bind.shadow.same-scope")
-                .map(String::as_str),
-            Some("Statements")
-        );
-        assert_eq!(
-            rules.sections.last().map(String::as_str),
-            Some(GRAMMAR_SECTION)
-        );
-        assert_eq!(rules.spec_version, "0.11");
-    }
 }

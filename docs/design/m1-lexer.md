@@ -214,7 +214,7 @@ The runner changes:
 ### 11. Testing
 
 - **Unit tests** in `quince_syntax` compare token dumps (`kind "text"` per line) with hand-written expected text, and check decoded values through `literal`. No snapshot crate.
-- **No `quince_syntax` test reads the spec** (decided by David, 2026-11-11). No lexer or parser test lexes or parses the spec's code blocks, or reads the spec's keyword list or grammar. Tests use the `testdata` fixtures and their own inputs, such as hand-written copies of the keyword list and of decision 4's line-continuing tokens. Layer 7 removed the spec sync tests that earlier layers added, and with them `quince_syntax`'s dev-dependency on `quince_spec`.
+- **No test reads the spec** (decided by David, 2026-11-11). No test lexes or parses the spec's code blocks, reads a list or an example out of it, or loads it. The xtask spec checks and the conformance step still read the spec in CI, because checking the spec and its rule IDs is their job. Tests use the `testdata` fixtures and their own inputs, such as hand-written copies of the keyword list and of decision 4's line-continuing tokens. Layer 7 removed the spec sync tests that earlier layers added, and with them `quince_syntax`'s dev-dependency on `quince_spec`. Layer 8 removed the last tests elsewhere that read the spec.
 - **Invariants on every input:** no panic; the token texts concatenate to the input; no token is empty; every error range lies inside the input on character boundaries. These run over seeded mutations (inserted, deleted and swapped bytes, from a small dependency-free PRNG) of the `lex/` fixtures, as bytes so they reach invalid UTF-8 and `decode_source`. The mutants together must report every code, which the fixtures guarantee, since every code has one. Each fixture's mutants come from a stream seeded by its own bytes, so editing another fixture doesn't change them. The unit-test inputs aren't collected (layer 7): the fixtures cover every code and literal form, and the `every_short_*` tests already try every short literal text. The mutations take about 0.25 s in debug. The crate's run takes about 2 s in debug, set by `every_short_multiline_string`, so they add no time to it; the first goal of under a second was already missed before layer 7. A `cargo-fuzz` target needs nightly and a dependency, so it waits for the parser doc, which owns the fuzzing exit criterion.
 - **Conformance fixtures:** one per diagnostic code, as `cargo xtask diagnostics` requires, and one per rule in Tasks.
 
@@ -240,6 +240,7 @@ Each layer builds and passes `cargo xtask ci` on its own:
 6c1. `m1/lexer-lossy-fixes`: no fixes in a lossy text (decision 9).
 6c2. `m1/lexer-control`: spec question 8, and a bump; control and bidirectional characters; E0015.
 7. `m1/lexer-corpus`: the mutation tests over the fixtures; the spec sync tests removed. Spec question 5 is withdrawn.
+8. `m1/no-spec-tests`: the last tests that read the spec, in `quince_diagnostics`, `quince_spec`, conformance and xtask, are removed or moved to fixtures; M3's and M12's exit criteria no longer use the spec's code (decided by David, 2026-11-11).
 
 Each layer should come in at around 500 to 900 changed lines. Layer 2 was first planned to hold layers 2 to 4, but it would have run to about 1,600 lines, so it is split into the token stream, its errors, and numbers. Layer 6 was planned as one layer with six codes, but layer 5 alone, with three, came to about 1,200 lines, so it is split into 6a to 6c (decided by David, 2026-11-11). Layer 6b, with three codes and four forms, was estimated at about 1,150 lines, so char literals moved to 6b2 (decided by David, 2026-11-11). The codes keep the numbers the table gives, so E0008 is registered after E0013 and E0014.
 
@@ -330,7 +331,7 @@ Found while writing this. None of them block the lexer.
 - **Coverage ratchet.** M0 left this for M1. Decide it once the parser adds real coverage.
 - **Adjacent literals** (layer 6b). A quote in a string that isn't escaped can leave two literals side by side with no lexical error: `"press "b" now"` is a string and then a bytes literal, and `"the "r" key"` a string and then a raw string. With an unknown tag, as in `"say "hi" now"`, the lexer reports E0010. The parser reports two adjacent literals as it reports any two expressions with nothing between them, with no hint for this shape (decision 9). Likewise `r"a\"b"` is a raw string, `r"a\"`, then an unclosed bytes literal.
 
-- **No spec corpus** (decided by David, 2026-11-11). M1's exit criterion no longer asks for the spec's code blocks to parse, and no lexer or parser test reads the spec (decision 11). The parser is tested with `parse` fixtures in `testdata`, and `fmt` with `fmt` fixtures, a mode the formatter doc adds to the fixture format.
+- **No spec corpus** (decided by David, 2026-11-11). M1's exit criterion no longer asks for the spec's code blocks to parse, and no test reads the spec (decision 11). The parser is tested with `parse` fixtures in `testdata`, and `fmt` with `fmt` fixtures, a mode the formatter doc adds to the fixture format.
 
 ## For later milestones
 
@@ -403,3 +404,7 @@ Rule IDs in brackets are what each task's fixtures cite. Rules added by spec que
 - [x] Mutation tests of the invariants, over the `lex/` fixtures.
 - [x] Remove the spec sync tests and the dev-dependency on `quince_spec` (decision 11).
 - Withdrawn: the code block labels (question 5) and the corpus test over the spec (David, 2026-11-11).
+
+**Layer 8: `m1/no-spec-tests`**
+- [x] Move the example diagnostic to `compiler/diagnostics/testdata/example.json`, and remove the tests that load the real spec from `quince_spec`, conformance and xtask (decision 11).
+- [x] Reword M3's and M12's exit criteria to use fixtures, not the spec's code.

@@ -1,0 +1,14 @@
+{
+  "code": "E0412",
+  "severity": "error",
+  "message": "match on `FetchError` is missing variant `Timeout`",
+  "span": { "file": "src/fetch.qnc", "start": [42, 3], "end": [47, 4] },
+  "fixes": [
+    {
+      "description": "add an arm for `Timeout`",
+      "applicability": "needs-review",
+      "edits": [{ "start": [46, 5], "end": [46, 5], "text": "FetchError.Timeout(after:) => todo(\"handle timeout\"),\n" }]
+    }
+  ],
+  "docs": "quince explain E0412"
+}

@@ -271,10 +271,4 @@ mod tests {
         let err = check(&root).unwrap_err();
         assert_eq!(err, "2 broken link(s) and 1 positional reference(s)");
     }
-
-    #[test]
-    fn real_spec_links_resolve() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
-        assert_eq!(check(&root), Ok(()));
-    }
 }
