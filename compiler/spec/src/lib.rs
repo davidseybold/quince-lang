@@ -73,7 +73,7 @@ impl std::fmt::Display for FileError {
 /// One chapter file, read from disk.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChapterFile {
-    /// The chapter's ID prefix, or [`manifest::LEGACY_PREFIX`].
+    /// The chapter's ID prefix.
     pub prefix: String,
     /// The chapter's title from the manifest.
     pub title: String,
@@ -95,9 +95,9 @@ pub struct Spec {
 }
 
 impl Spec {
-    /// Reads the manifest, the README and every chapter file. A listed file may be missing only
-    /// while the `legacy` chapter's file exists. Every Markdown file under the
-    /// [`CHAPTER_DIRS`] must be listed. Returns every problem found.
+    /// Reads the manifest, the README and every chapter file. Every listed file must exist, and
+    /// every Markdown file under the [`CHAPTER_DIRS`] must be listed. Returns every problem
+    /// found.
     pub fn load(root: &Path) -> Result<Spec, Vec<FileError>> {
         let mut errors = Vec::new();
         let read = |path: &str| std::fs::read_to_string(root.join(path));
@@ -116,10 +116,6 @@ impl Spec {
             }
         };
 
-        let legacy_exists = chapters.iter().any(|chapter| {
-            chapter.prefix == manifest::LEGACY_PREFIX
-                && root.join(spec_path(&chapter.file)).is_file()
-        });
         let mut files = Vec::new();
         for chapter in &chapters {
             let path = spec_path(&chapter.file);
@@ -131,7 +127,6 @@ impl Spec {
                     file: chapter.file.clone(),
                     text,
                 }),
-                Err(e) if e.kind() == ErrorKind::NotFound && legacy_exists => {}
                 Err(e) if e.kind() == ErrorKind::NotFound => errors.push(FileError {
                     path: CHAPTERS_PATH.to_string(),
                     line: chapter.line,
@@ -280,42 +275,24 @@ mod tests {
     }
 
     #[test]
-    fn missing_files_are_errors_without_the_legacy_file() {
+    fn missing_files_are_errors() {
         let root = tree(
             "missing",
             &[
                 (
                     CHAPTERS_PATH,
-                    "legacy  quince-spec.md  Being split\nlex  reference/lexical.md  Lexical structure\n",
+                    "intro  reference/introduction.md  Introduction\nlex  reference/lexical.md  Lexical structure\n",
                 ),
                 (README_PATH, "# Spec\n"),
+                ("spec/reference/introduction.md", "# Introduction\n"),
             ],
         );
         assert_eq!(
             messages(Spec::load(&root).unwrap_err()),
             [
-                "spec/chapters.txt:1: chapter `legacy` lists spec/quince-spec.md, which doesn't exist; create it or fix the path",
                 "spec/chapters.txt:2: chapter `lex` lists spec/reference/lexical.md, which doesn't exist; create it or fix the path",
             ]
         );
-    }
-
-    #[test]
-    fn missing_files_are_allowed_while_the_legacy_file_exists() {
-        let root = tree(
-            "transition",
-            &[
-                (
-                    CHAPTERS_PATH,
-                    "legacy  quince-spec.md  Being split\nlex  reference/lexical.md  Lexical structure\n",
-                ),
-                (README_PATH, "# Spec\n"),
-                ("spec/quince-spec.md", "# Spec\n"),
-            ],
-        );
-        let spec = Spec::load(&root).unwrap();
-        assert_eq!(spec.files.len(), 1);
-        assert_eq!(spec.chapters.len(), 2);
     }
 
     #[test]

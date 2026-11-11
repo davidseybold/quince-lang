@@ -1,6 +1,6 @@
 # Spec restructure
 
-Status: approved by David (PR #11, merged 2026-11-10), being built as a stack. The Tasks list tracks progress.
+Status: done. Approved by David (PR #11, merged 2026-11-10) and built as a stack; the Tasks list records each layer.
 
 ## Why
 
@@ -611,6 +611,6 @@ One `gh stack`, a PR per layer (decision 11). Tick each box as it lands on its b
   - [x] inline parser moved into `spec_compare`; `spec-compare` reads the own-line form; labels split on both sides; `tables.tsv` with exact row rebuilds; final targets through converted tables; planted-failure tests
   - [x] every chapter in the own-line form; tables converted; text pointing into tables reworded; `rewordings.tsv` and `tables.tsv` rows (`rewordings.tsv` also takes `L<line>` units, for the one untagged cell that pointed into a table)
   - [x] the tag rule in `compiler/spec/README.md` and `AGENTS.md`
-- [ ] 13. `cleanup`, as two PRs: `cleanup` and `cleanup-legacy`
+- [x] 13. `cleanup`, as two PRs: `cleanup` and `cleanup-legacy`
   - [x] `spec-compare`, its inline tag parser, its `ci` step and the baseline deleted (`cleanup`)
-  - [ ] the `legacy` chapter support in `quince_spec` and its README deleted; status "done" (`cleanup-legacy`)
+  - [x] the `legacy` chapter support in `quince_spec` and its README deleted; status "done" (`cleanup-legacy`)

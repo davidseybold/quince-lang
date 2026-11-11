@@ -7,10 +7,6 @@
 use crate::{ChapterFile, SpecError};
 use std::collections::HashMap;
 
-/// The prefix of the transitional chapter: the one-file spec while it is being split. It is
-/// never a rule ID's first segment.
-pub const LEGACY_PREFIX: &str = "legacy";
-
 /// One chapter line and the construct lines under it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Chapter {
@@ -53,11 +49,7 @@ pub fn parse(text: &str) -> (Vec<Chapter>, Vec<SpecError>) {
                 ));
                 continue;
             };
-            if chapter.prefix == LEGACY_PREFIX {
-                error(format!(
-                    "the `{LEGACY_PREFIX}` chapter can't list constructs; list `{first}` under the chapter it belongs to"
-                ));
-            } else if !crate::rules::is_valid_segment(first) {
+            if !crate::rules::is_valid_segment(first) {
                 error(format!(
                     "`{first}` is not a valid construct: use lowercase letters and digits joined by single hyphens"
                 ));
@@ -96,7 +88,7 @@ pub fn parse(text: &str) -> (Vec<Chapter>, Vec<SpecError>) {
                 "chapter `{first}` needs a file and a title after it, such as `lex  reference/lexical.md  Lexical structure`"
             ))
         } else {
-            file_problem(first, file).or_else(|| {
+            file_problem(file).or_else(|| {
                 files.get(file).map(|first_line| {
                     format!("{file} is listed twice; it is first listed on line {first_line}")
                 })
@@ -193,9 +185,9 @@ fn split_word(text: &str) -> (&str, &str) {
         .map_or((text, ""), |(word, rest)| (word, rest.trim()))
 }
 
-/// Why `file` can't be the file of the chapter `prefix`, if it can't. A chapter file is a
-/// Markdown file under one of the chapter folders. The legacy file is directly in `spec/`.
-fn file_problem(prefix: &str, file: &str) -> Option<String> {
+/// Why `file` can't be a chapter's file, if it can't. A chapter file is a Markdown file
+/// directly in one of the chapter folders.
+fn file_problem(file: &str) -> Option<String> {
     let simple = |name: &str| {
         name.ends_with(".md")
             && name.len() > 3
@@ -203,23 +195,15 @@ fn file_problem(prefix: &str, file: &str) -> Option<String> {
             && !name.contains('\\')
             && !name.starts_with('.')
     };
-    let ok = if prefix == LEGACY_PREFIX {
-        simple(file)
-    } else {
-        crate::CHAPTER_DIRS.iter().any(|dir| {
-            file.strip_prefix(dir)
-                .and_then(|rest| rest.strip_prefix('/'))
-                .is_some_and(simple)
-        })
-    };
+    let ok = crate::CHAPTER_DIRS.iter().any(|dir| {
+        file.strip_prefix(dir)
+            .and_then(|rest| rest.strip_prefix('/'))
+            .is_some_and(simple)
+    });
     (!ok).then(|| {
-        if prefix == LEGACY_PREFIX {
-            format!("`{file}` must be a Markdown file directly in spec/, such as `quince-spec.md`")
-        } else {
-            format!(
-                "`{file}` must be a Markdown file directly in spec/reference/ or spec/tooling/, such as `reference/lexical.md`"
-            )
-        }
+        format!(
+            "`{file}` must be a Markdown file directly in spec/reference/ or spec/tooling/, such as `reference/lexical.md`"
+        )
     })
 }
 
@@ -235,7 +219,7 @@ mod tests {
     fn parses_chapters_and_constructs() {
         let (chapters, errors) = parse(
             "# chapter  file  title\n\
-             legacy  quince-spec.md  Quince Language Spec (being split)\n\
+             intro  reference/introduction.md  Introduction\n\
              \n\
              lex  reference/lexical.md  Lexical structure\n\
              \x20 continue   Line continuation\n\
@@ -250,12 +234,7 @@ mod tests {
         assert_eq!(
             found,
             [
-                (
-                    "legacy",
-                    "quince-spec.md",
-                    "Quince Language Spec (being split)",
-                    2
-                ),
+                ("intro", "reference/introduction.md", "Introduction", 2),
                 ("lex", "reference/lexical.md", "Lexical structure", 4),
                 (
                     "dep",
@@ -294,7 +273,7 @@ mod tests {
              expr  expressions.md  Expressions\n\
              stmt  reference/nested/statements.md  Statements\n\
              pat  reference/patterns.txt  Patterns\n\
-             legacy  reference/quince-spec.md  Old\n",
+             legacy  quince-spec.md  Old\n",
         );
         assert_eq!(chapters.len(), 1);
         assert_eq!(lines(&errors), [2, 3, 4, 5, 6, 7, 8, 9, 10], "{errors:?}");
@@ -312,15 +291,15 @@ mod tests {
                 .contains("reference/lexical.md is listed twice")
         );
         assert!(errors[5].message.contains("directly in spec/reference/"));
-        assert!(errors[8].message.contains("directly in spec/, such as"));
+        assert!(errors[8].message.contains("directly in spec/reference/"));
     }
 
     #[test]
     fn bad_construct_lines() {
         let (chapters, errors) = parse(
             "  stray  Before any chapter\n\
-             legacy  quince-spec.md  Being split\n\
-             \x20 if  If expressions\n\
+             intro  reference/introduction.md  Introduction\n\
+             \x20 excl  Features deliberately excluded\n\
              expr  reference/expressions.md  Expressions\n\
              \x20 If  If expressions\n\
              \x20 if\n\
@@ -328,13 +307,12 @@ mod tests {
              \x20 if  Again\n",
         );
         assert_eq!(chapters[1].constructs.len(), 1);
-        assert_eq!(lines(&errors), [1, 3, 5, 6, 8], "{errors:?}");
+        assert_eq!(lines(&errors), [1, 5, 6, 8], "{errors:?}");
         assert!(errors[0].message.contains("before any chapter line"));
-        assert!(errors[1].message.contains("can't list constructs"));
-        assert!(errors[2].message.contains("not a valid construct"));
-        assert!(errors[3].message.contains("needs the subject"));
+        assert!(errors[1].message.contains("not a valid construct"));
+        assert!(errors[2].message.contains("needs the subject"));
         assert!(
-            errors[4]
+            errors[3]
                 .message
                 .contains("listed twice under chapter `expr`; it is first listed on line 7")
         );
