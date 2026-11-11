@@ -431,7 +431,7 @@ pkg.dependents	mod.pkg.dependents	mechanical
 pkg.test-deps	mod.pkg.test-deps	mechanical
 pkg.nested-manifest	mod.pkg.nested-manifest	mechanical
 pkg.multi-project	mod.pkg.multi-project	mechanical
-manifest.workspace-room	dep.manifest.workspace-room	mechanical
+manifest.workspace-room	mod.pkg.workspace-room	hand
 manifest.strict	dep.manifest.strict	mechanical
 manifest.unknown	dep.manifest.unknown	mechanical
 manifest.fmt	dep.manifest.fmt	mechanical

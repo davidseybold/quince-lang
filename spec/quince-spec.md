@@ -761,7 +761,7 @@ r[mod.pkg.project] A project is a folder with a `quince``.toml` manifest at its 
 
 - r[mod.pkg.test-deps] Dependencies used only by tests (test packages, `test` blocks and `@test` declarations) are listed in their own section of the manifest. They never become dependencies of anyone who depends on the project.
 
-* r[mod.pkg.nested-manifest] A `quince``.toml` anywhere below the project root is a compile error. r[mod.pkg.multi-project] A repository with several libraries holds several projects, each in its own folder with its own tags, and a dependent names one with `dir` (The manifest, below). r[dep.manifest.workspace-room] The manifest format must leave room for a later workspace that groups them.
+* r[mod.pkg.nested-manifest] A `quince``.toml` anywhere below the project root is a compile error. r[mod.pkg.multi-project] A repository with several libraries holds several projects, each in its own folder with its own tags, and a dependent names one with `dir` (The manifest, below). r[mod.pkg.workspace-room] The manifest format must leave room for a later workspace that groups them.
 
 ### The manifest
 

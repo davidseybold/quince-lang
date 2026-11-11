@@ -514,7 +514,7 @@ One `gh stack`, a PR per layer (decision 11). Tick each box as it lands on its b
   - [x] `id-map.tsv` with 34 `removed` rows; `removed.tsv` `to-std` rows; `std` out of `rule-topics.txt`
   - [x] `std/README.md`, `CLAUDE.md`, `AGENTS.md`, `docs/milestones.md`, `docs/repo-plan.md` paths
 - [ ] 6. `rename-ids`, as two PRs to stay under the size limit: `rename-ids`, then `moved-rules`
-  - [x] `id-map.tsv` renames, with `hand` rows (40 or fewer): 644 renamed, 7 of them `hand`
+  - [x] `id-map.tsv` renames, with `hand` rows (40 or fewer): 644 renamed, 8 of them `hand`
   - [x] `chapters.txt` constructs; `rule-topics.txt` deleted; chapter checks on
   - [ ] `moved-rules.txt` and the runner's moved-ID error (second PR, `moved-rules`)
   - [x] `compiler/spec/README.md`, `tests/conformance/testdata/README.md`, `AGENTS.md`
