@@ -1,6 +1,6 @@
 # M1: Parser
 
-Status: passed design review (four passes). On 2026-11-11 David decided the three dependency questions, approved spec questions 2 to 12 as proposed, chose parentheses for question 14, and allowed tuple positions as places for question 13. Question 1 waits on him. This is the second design doc of M1 (Syntax), after [the lexer](m1-lexer.md). The formatter doc (`quince fmt`) follows it.
+Status: passed design review (four passes). On 2026-11-11 David decided the three dependency questions, approved spec questions 2 to 12 as proposed, chose parentheses for question 14, allowed tuple positions as places for question 13, and approved question 1 as proposed. Every question is decided. This is the second design doc of M1 (Syntax), after [the lexer](m1-lexer.md). The formatter doc (`quince fmt`) follows it.
 
 ## Why
 
@@ -15,7 +15,7 @@ The tree matters more than the parser code. The formatter, `fix`, `query`, name 
   - **A. The CST:** the `rowan` crate (decision 2). Layer 0 pins its version, after checking its dependencies and minimum Rust version against `rust-toolchain.toml`.
   - **B. Snapshots:** none. Unit tests compare hand-written tree dumps (decision 11). Layer 0 corrects the repo plan's step 3, which asks for snapshot tests.
   - **C. The fuzzer:** a `cargo-fuzz` target, outside the workspace and outside CI (decision 11). It adds `libfuzzer-sys` to the fuzz crate only, and needs nightly Rust wherever it runs.
-- **Spec, waiting on David:** Spec questions, below, has fourteen questions with proposed wording. Each rule lands in the layer whose code enforces it, and each such layer bumps the spec's minor version. A code whose rule waits on a question is registered only after approval.
+- **Spec (decided by David, 2026-11-11):** Spec questions, below, has fourteen questions, each with its approved wording. Each rule lands in the layer whose code enforces it, and each such layer bumps the spec's minor version.
 - **Diagnostic codes:** eleven, E0016 to E0026, numbered provisionally (decision 10).
 - **Delivery:** a stack of ten PRs (decision 13).
 
@@ -348,7 +348,7 @@ Each spec question lands in the layer that enforces it, with a minor version bum
 
 ## Spec questions
 
-**Decided by David, 2026-11-11:** questions 2 to 12 are approved as proposed, question 13 allows tuple positions as places, and question 14 uses parentheses for function types, as written below. Question 1 is open.
+**Decided by David, 2026-11-11:** questions 1 to 12 are approved as proposed, question 13 allows tuple positions as places, and question 14 uses parentheses for function types, as written below.
 
 Questions 1 to 5 come from the lexer doc's handover. The rest came up while reading the grammar. Each gives proposed wording and the tag it would have. Every ID uses a construct already listed in `spec/chapters.txt`, and a question that changes a rule's meaning retires its ID and adds a new one (`AGENTS.md`, "Rule IDs").
 
@@ -468,9 +468,8 @@ Rule IDs in brackets are what each task's fixtures cite. Grammar productions are
 
 **Before building**
 - [x] David decides questions A, B and C (2026-11-11).
-- [ ] Design review passes.
-- [x] David decides spec questions 2 to 14 (2026-11-11).
-- [ ] David decides spec question 1.
+- [x] Design review passes (four passes, and a check of the decisions recorded after it).
+- [x] David decides spec questions 1 to 14 (2026-11-11).
 
 **Layer 0: `m1/parser-cst`**
 - [ ] Add `rowan`, pinned after checking its dependencies and minimum Rust version.
