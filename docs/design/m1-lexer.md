@@ -406,5 +406,5 @@ Rule IDs in brackets are what each task's fixtures cite. Rules added by spec que
 - Withdrawn: the code block labels (question 5) and the corpus test over the spec (David, 2026-11-11).
 
 **Layer 8: `m1/no-spec-tests`**
-- [x] Move the example diagnostic to `compiler/diagnostics/testdata/example.json`, and remove the tests that load the real spec from `quince_spec`, conformance and xtask (decision 11).
+- [x] Move the example diagnostic to `compiler/diagnostics/testdata/example.json`, and remove the tests that load the real spec from `quince_spec`, conformance and xtask (decision 11). Conformance's `load_rules` gets a test over a small spec the test writes.
 - [x] Reword M3's and M12's exit criteria to use fixtures, not the spec's code.

@@ -177,7 +177,7 @@ The grammar keeps the spec's own notation and gets no conversion to ISO EBNF, so
   - The runner writes `target/conformance/coverage.json`, whose shape is fixed in the delta spec and includes the spec's draft version, and prints the total and covered counts per spec section. Grammar IDs are grouped last under `Grammar productions`.
   - Listing roughly 970 uncovered IDs in the terminal would bury the summary, so the JSON report is where agents find them.
   - A fixture that cites an unknown ID is an error, and so is one that cites a retired ID, with a message saying it's retired.
-- **Self-tests:** the runner's unit tests use a fake `Backend`. A small fixture tree under `tests/conformance/src/selftest/` (a nested fixture, a `.stdout` pair, an orphan `.stdout`) tests discovery. A test ran the rule loader on the real spec until M1 removed it, since no test reads the spec (M1 lexer doc, decision 11); the `conformance` CI step still runs the loader on it. So the matching logic is tested before any real compiler exists.
+- **Self-tests:** the runner's unit tests use a fake `Backend`. A small fixture tree under `tests/conformance/src/selftest/` (a nested fixture, a `.stdout` pair, an orphan `.stdout`) tests discovery. A test ran the rule loader on the real spec until M1 replaced it with one over a small spec the test writes, since no test reads the spec (M1 lexer doc, decision 11). So the matching logic is tested before any real compiler exists.
 
 ### 7. Delivery as a stack
 
