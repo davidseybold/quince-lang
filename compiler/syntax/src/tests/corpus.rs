@@ -68,7 +68,7 @@ fn corpus() -> Vec<(String, String)> {
 #[test]
 fn every_quince_block_lexes() {
     let corpus = corpus();
-    // Only proves the test found the corpus: the spec holds 60 `quince` blocks.
+    // Only proves the test found the corpus, which holds about 60 blocks.
     assert!(
         corpus.len() >= 40,
         "found only {} `quince` code blocks in the spec and the std API doc; did their labels change?",
