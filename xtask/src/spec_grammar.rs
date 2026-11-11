@@ -2,10 +2,13 @@
 //! appendices, that the grammar is closed, and that no production reuses a retired name.
 //! `--write` regenerates the file.
 
-use crate::spec_rules::read;
-use quince_spec::{GRAMMAR_PATH, RETIRED_PATH, SPEC_PATH, grammar, rules};
+use crate::spec_rules::{load, read};
+use quince_spec::{GRAMMAR_PATH, RETIRED_PATH, grammar, rules};
 use std::io::ErrorKind;
 use std::path::Path;
+
+/// The chapter file that holds the grammar appendices.
+const GRAMMAR_CHAPTER: &str = "spec/quince-spec.md";
 
 pub fn check(root: &Path) -> Result<(), String> {
     let extracted = extract(root)?;
@@ -13,7 +16,7 @@ pub fn check(root: &Path) -> Result<(), String> {
     let (header, actual) = grammar::split_header(&file);
     if actual != extracted.text {
         eprintln!(
-            "{GRAMMAR_PATH} differs from the grammar appendices in {SPEC_PATH} (- file, + spec):"
+            "{GRAMMAR_PATH} differs from the grammar appendices in {GRAMMAR_CHAPTER} (- file, + spec):"
         );
         eprint!("{}", grammar::diff(actual, &extracted.text));
         return Err(format!(
@@ -25,11 +28,11 @@ pub fn check(root: &Path) -> Result<(), String> {
     let mut errors = grammar::check_closure(actual, &grammar::terminals(header), &spec_line);
     errors.extend(grammar::check_retired(actual, &retired, &spec_line));
     for error in &errors {
-        eprintln!("{SPEC_PATH}:{}: {}", error.line, error.message);
+        eprintln!("{GRAMMAR_CHAPTER}:{}: {}", error.line, error.message);
     }
     if !errors.is_empty() {
         eprintln!(
-            "Fix the grammar in {SPEC_PATH} (or a terminal in the header of {GRAMMAR_PATH}), \
+            "Fix the grammar in {GRAMMAR_CHAPTER} (or a terminal in the header of {GRAMMAR_PATH}), \
              then run `cargo xtask spec-grammar --write`."
         );
         return Err(format!("{} problem(s) in the grammar", errors.len()));
@@ -58,9 +61,13 @@ pub fn write(root: &Path) -> Result<(), String> {
 }
 
 fn extract(root: &Path) -> Result<grammar::Extracted, String> {
-    grammar::extract(&read(root, SPEC_PATH)?).map_err(|e| match e.line {
+    let spec = load(root)?;
+    let chapter = spec
+        .file(GRAMMAR_CHAPTER)
+        .ok_or_else(|| format!("{GRAMMAR_CHAPTER} is not listed in spec/chapters.txt"))?;
+    grammar::extract(&chapter.text).map_err(|e| match e.line {
         // Line 0 means the problem has no line, such as a missing heading.
-        0 => format!("{SPEC_PATH}: {}", e.message),
-        line => format!("{SPEC_PATH}:{line}: {}", e.message),
+        0 => format!("{GRAMMAR_CHAPTER}: {}", e.message),
+        line => format!("{GRAMMAR_CHAPTER}:{line}: {}", e.message),
     })
 }

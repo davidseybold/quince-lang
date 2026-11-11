@@ -1,6 +1,6 @@
 # Spec restructure
 
-Status: design, in review. Nothing in `spec/` changes until David approves this doc.
+Status: approved by David (PR #11, merged 2026-11-10), being built as a stack. The Tasks list tracks progress.
 
 ## Why
 
@@ -494,15 +494,16 @@ None. David settled the chapter list, the tooling chapters, the ID scheme, moved
 
 One `gh stack`, a PR per layer (decision 11). Tick each box as it lands on its branch. Run the pr-reviewer loop on the whole stack before handing it to David.
 
-- [ ] 1. `design`: this doc reviewed and approved
-- [ ] 2. `manifest`
-  - [ ] `chapters.txt` with `legacy`; manifest parsing in `quince_spec`
-  - [ ] `spec/README.md` with the header (test: within 10 lines); `ebnf` info strings; manual diff in the PR
-  - [ ] grammar assembled from `ebnf` blocks; errors with file and line
-  - [ ] rule parsing across files; `--strip` across files
-  - [ ] coverage by chapter; `spec_version` from the README
-  - [ ] pointers to `spec/quince-spec.md` moved to `spec/README.md`; `compiler/spec/README.md` and the testdata README updated
-  - [ ] `AGENTS.md`: Conventional Commits section
+- [x] 1. `design`: this doc reviewed and approved
+- [ ] 2. `manifest`, as two PRs to stay under the size limit: `manifest`, then `grammar-blocks`
+  - [x] `chapters.txt` with `legacy`; manifest parsing in `quince_spec`
+  - [x] `spec/README.md` with the header (test: within 10 lines); manual diff in the PR
+  - [ ] `ebnf` info strings (with `grammar-blocks`)
+  - [ ] grammar assembled from `ebnf` blocks; errors with file and line (second PR, `grammar-blocks`)
+  - [x] rule parsing across files; `--strip` across files
+  - [x] coverage by chapter; `spec_version` from the README
+  - [x] pointers to `spec/quince-spec.md` moved to `spec/README.md`; `compiler/spec/README.md` and the testdata README updated
+  - [x] `AGENTS.md`: Conventional Commits section
 - [ ] 3. `links`: `spec-links` with github-slugger anchors, its subcommand and `ci` step, tests on awkward headings
 - [ ] 4. `compare`: baseline committed; segmenter with planted-failure tests; production and declaration units; placement and count checks; `ci` step
 - [ ] 5. `move-library`

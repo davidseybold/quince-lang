@@ -9,7 +9,7 @@ pub mod fixture;
 
 use fixture::{Fixture, Mode};
 use quince_diagnostics::{Diagnostic, Severity};
-use quince_spec::{GRAMMAR_PATH, RETIRED_PATH, SPEC_PATH, TOPICS_PATH};
+use quince_spec::{GRAMMAR_PATH, README_PATH, RETIRED_PATH, Spec, TOPICS_PATH};
 use std::collections::{BTreeMap, HashSet};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -53,21 +53,22 @@ impl Backend for NoBackend {
     }
 }
 
-/// Every rule ID, with the spec section it belongs to.
+/// Every rule ID, with the coverage section it belongs to: its chapter's title, or
+/// [`GRAMMAR_SECTION`].
 pub type RuleSet = BTreeMap<String, String>;
 
 /// What fixtures are checked against: every live rule ID, the section order, and the retired
 /// IDs, so citing one gets its own message.
 pub struct Rules {
     pub ids: RuleSet,
-    /// Section names in spec order, ending with [`GRAMMAR_SECTION`].
+    /// Chapter titles in manifest order, ending with [`GRAMMAR_SECTION`].
     pub sections: Vec<String>,
     pub retired: HashSet<String>,
-    /// The draft version in the spec's header, such as `0.5`.
+    /// The draft version in the header of `spec/README.md`, such as `0.5`.
     pub spec_version: String,
 }
 
-/// The version in the spec's `Draft vX.Y` header line.
+/// The version in the `Draft vX.Y` header line, which must be within the first 10 lines.
 pub fn spec_version(spec: &str) -> Option<&str> {
     spec.lines()
         .take(10)
@@ -76,7 +77,8 @@ pub fn spec_version(spec: &str) -> Option<&str> {
         .filter(|version| !version.is_empty())
 }
 
-/// Loads every rule ID: the spec's tags plus `grammar.<production>` for each production.
+/// Loads every rule ID: the tags in every chapter file plus `grammar.<production>` for each
+/// production.
 pub fn load_rules(root: &Path) -> Result<Rules, Vec<String>> {
     let read = |path: &str| {
         std::fs::read_to_string(root.join(path))
@@ -85,38 +87,29 @@ pub fn load_rules(root: &Path) -> Result<Rules, Vec<String>> {
     let located = |path: &str, errors: Vec<quince_spec::SpecError>| {
         errors
             .into_iter()
-            .map(|e| format!("{path}:{}: {}", e.line, e.message))
+            .map(|e| quince_spec::FileError::new(path, e).to_string())
             .collect::<Vec<_>>()
     };
+    let spec = Spec::load(root)
+        .map_err(|errors| errors.iter().map(ToString::to_string).collect::<Vec<_>>())?;
     let (retired, retired_errors) = quince_spec::rules::parse_retired(&read(RETIRED_PATH)?);
     let (topics, topic_errors) = quince_spec::rules::parse_topics(&read(TOPICS_PATH)?);
     let mut errors = located(RETIRED_PATH, retired_errors);
     errors.extend(located(TOPICS_PATH, topic_errors));
-    let spec = read(SPEC_PATH)?;
-    let version = spec_version(&spec).map(str::to_string);
+    let version = spec_version(&spec.readme).map(str::to_string);
     if version.is_none() {
         errors.push(format!(
-            "{SPEC_PATH}: the header has no `Draft vX.Y` version line"
+            "{README_PATH}: the header has no `Draft vX.Y` version line in its first 10 lines"
         ));
     }
-    let rules = match quince_spec::rules::check(&spec, &retired, &topics) {
-        Ok(rules) => rules,
-        Err(spec_errors) => {
-            errors.extend(located(SPEC_PATH, spec_errors));
-            Vec::new()
-        }
-    };
+    let (rules, spec_errors) = quince_spec::rules::check(&spec.files, &retired, &topics);
+    errors.extend(spec_errors.iter().map(ToString::to_string));
     if !errors.is_empty() {
         return Err(errors);
     }
-    let mut sections: Vec<String> = Vec::new();
-    for rule in &rules {
-        if !sections.contains(&rule.section) {
-            sections.push(rule.section.clone());
-        }
-    }
+    let mut sections: Vec<String> = spec.files.iter().map(|f| f.title.clone()).collect();
     sections.push(GRAMMAR_SECTION.to_string());
-    let mut ids: RuleSet = rules.into_iter().map(|r| (r.id, r.section)).collect();
+    let mut ids: RuleSet = rules.into_iter().map(|r| (r.id, r.chapter)).collect();
     let grammar_file = read(GRAMMAR_PATH)?;
     let (_, grammar) = quince_spec::grammar::split_header(&grammar_file);
     for production in quince_spec::grammar::productions(grammar) {
@@ -682,6 +675,8 @@ let x = 1 //~ E0100
     fn reads_the_spec_version() {
         assert_eq!(spec_version("# Spec\n\nNov 10 · Draft v0.5\n"), Some("0.5"));
         assert_eq!(spec_version("# Spec\n"), None);
+        let late = format!("# Spec\n{}Draft v0.5\n", "\n".repeat(9));
+        assert_eq!(spec_version(&late), None);
     }
 
     #[test]
@@ -744,7 +739,7 @@ let x = 1 //~ E0100
         );
         assert_eq!(
             rules.ids.get("bind.shadow.same-scope").map(String::as_str),
-            Some("2. Lexical structure and syntax")
+            Some("Quince Language Spec (being split)")
         );
         assert_eq!(
             rules.sections.last().map(String::as_str),

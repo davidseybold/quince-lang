@@ -1,40 +1,64 @@
-//! `cargo xtask spec-rules`: checks the rule tags in the spec. `--strip` prints the spec
-//! with every tag removed.
+//! `cargo xtask spec-rules`: checks the chapter manifest and the rule tags in every chapter
+//! file. `--strip` prints the spec with every tag removed.
 
-use quince_spec::rules;
-use quince_spec::{RETIRED_PATH, SPEC_PATH, SpecError, TOPICS_PATH};
+use quince_spec::{FileError, README_PATH, RETIRED_PATH, Spec, SpecError, TOPICS_PATH};
+use quince_spec::{manifest, rules};
 use std::path::Path;
 
-/// The CI step: format, placement, topics, uniqueness and retired IDs. Problems in all three
-/// files are reported together.
+/// The CI step: the manifest, the README's chapter list, and every tag's format, placement,
+/// topic and uniqueness. Problems in every file are reported together.
 pub fn check(root: &Path) -> Result<(), String> {
-    let spec = read(root, SPEC_PATH)?;
+    let spec = load(root)?;
     let (retired, retired_errors) = rules::parse_retired(&read(root, RETIRED_PATH)?);
     let (topics, topic_errors) = rules::parse_topics(&read(root, TOPICS_PATH)?);
     let mut problems = report(RETIRED_PATH, &retired_errors) + report(TOPICS_PATH, &topic_errors);
-    let count = match rules::check(&spec, &retired, &topics) {
-        Ok(found) => found.len(),
-        Err(errors) => {
-            problems += report(SPEC_PATH, &errors);
-            0
-        }
-    };
-    let (parsed, _) = rules::parse(&spec);
-    problems += report(TOPICS_PATH, &rules::unused_topics(&parsed, &topics));
+    problems += report(
+        README_PATH,
+        &manifest::check_readme(&spec.readme, &spec.files),
+    );
+    let (found, errors) = rules::check(&spec.files, &retired, &topics);
+    problems += report_located(&errors);
+    problems += report(TOPICS_PATH, &rules::unused_topics(&found, &topics));
     if problems > 0 {
         return Err(format!("{problems} problem(s) in the spec's rule IDs"));
     }
     eprintln!(
-        "{SPEC_PATH}: {count} rule IDs under {} topics, all valid",
-        topics.len()
+        "spec: {} rule IDs under {} topics in {} chapter file(s), all valid",
+        found.len(),
+        topics.len(),
+        spec.files.len()
     );
     Ok(())
 }
 
-/// Prints the spec with every tag removed, for checking that tagging changed no wording.
-pub fn strip(root: &Path) -> Result<(), String> {
-    print!("{}", rules::strip(&read(root, SPEC_PATH)?));
+/// Prints one chapter file with every tag removed, or with no file, every chapter file in
+/// manifest order, each after a `<!-- spec/<path> -->` line. For checking that a change to tags
+/// changed no wording.
+pub fn strip(root: &Path, file: Option<&str>) -> Result<(), String> {
+    let spec = load(root)?;
+    match file {
+        Some(path) => {
+            let chapter = spec.file(path).ok_or_else(|| {
+                format!("{path} is not a chapter file listed in spec/chapters.txt")
+            })?;
+            print!("{}", rules::strip(&chapter.text));
+        }
+        None => {
+            for chapter in &spec.files {
+                println!("<!-- {} -->", chapter.path);
+                print!("{}", rules::strip(&chapter.text));
+            }
+        }
+    }
     Ok(())
+}
+
+/// Loads the spec, printing every problem with the manifest or its files.
+pub fn load(root: &Path) -> Result<Spec, String> {
+    Spec::load(root).map_err(|errors| {
+        report_located(&errors);
+        format!("{} problem(s) loading the spec", errors.len())
+    })
 }
 
 pub fn read(root: &Path, relative: &str) -> Result<String, String> {
@@ -43,8 +67,17 @@ pub fn read(root: &Path, relative: &str) -> Result<String, String> {
 
 /// Prints every error as `path:line: message` and returns how many there were.
 fn report(path: &str, errors: &[SpecError]) -> usize {
+    let located: Vec<_> = errors
+        .iter()
+        .map(|e| FileError::new(path, e.clone()))
+        .collect();
+    report_located(&located)
+}
+
+/// Prints every error and returns how many there were.
+pub fn report_located(errors: &[FileError]) -> usize {
     for error in errors {
-        eprintln!("{path}:{}: {}", error.line, error.message);
+        eprintln!("{error}");
     }
     errors.len()
 }

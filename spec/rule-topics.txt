@@ -1,4 +1,4 @@
-# Rule-ID topics: the first segment of every r[...] tag in spec/quince-spec.md.
+# Rule-ID topics: the first segment of every r[...] tag in the spec's chapters.
 #
 # One topic per line, followed by the subject it covers. Reuse a topic before adding one, so
 # the same subject never gets two names. `cargo xtask spec-rules` fails on a tag whose topic
