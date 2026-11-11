@@ -45,7 +45,7 @@ The lexer reports each lexical problem once, and the parser must not report it a
 | E0001 | A run of characters that start no token, outside literals and comments | For a run of whitespace other than spaces and tabs, replace each with a space (`safe`) |
 | E0002 | A `;` | At a line end, delete it: `safe`, or `needs-review` when the next line starts with `.`, which the deletion joins to the statement |
 | E0003 | A block comment | When it covers whole lines, rewrite it as `//` lines (`safe`) |
-| E0008 | A malformed number: a misplaced underscore, an uppercase prefix or `E`, a prefix or exponent with no digits, a digit outside its base, a leading zero, or a suffix. Each problem is its own E0008, at most one of each kind per digit group | Lowercase a prefix or `E` (`safe`); remove a suffix (`needs-review`) |
+| E0008 | A malformed number: a misplaced underscore, an uppercase prefix or `E`, a prefix or exponent with no digits, a digit outside its base, a leading zero, or a suffix. Each problem is its own E0008, at most one of each kind per digit group | Lowercase a prefix or `E` (`safe`); remove a suffix (`needs-review`), unless a `.` and a digit follow it, as in `1x.5`, which would become a float |
 | E0013 | A CR not followed by LF, also inside a block comment | Replace it with LF (`safe`), unless it ends an unclosed literal |
 | E0014 | A line with invalid UTF-8, from `decode_source` | None |
 

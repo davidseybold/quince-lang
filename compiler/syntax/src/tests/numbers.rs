@@ -135,8 +135,8 @@ fn suffix_messages_name_the_type() {
     assert_eq!(example("007u8"), "`let x: UInt8 = 1`");
     assert_eq!(example("0b1u8"), "`let x: UInt8 = 0b1`");
     // No Quince type for these, or the wrong kind of number for it.
-    assert_eq!(example("10px"), "`let b: UInt8 = 1`");
-    assert_eq!(example("1usize"), "`let b: UInt8 = 1`");
+    assert_eq!(example("10px"), "`let x: UInt8 = 1`");
+    assert_eq!(example("1usize"), "`let x: UInt8 = 1`");
     assert_eq!(example("1.5u8"), "`let x: Float32 = 1.5`");
     assert_eq!(example("1.5em"), "`let x: Float32 = 1.5`");
 }

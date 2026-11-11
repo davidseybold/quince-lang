@@ -226,7 +226,7 @@ fn problem_error(
                 (Some(ty), SyntaxKind::Int) if well_formed => format!("`let x: {ty} = {number}`"),
                 (Some(ty), SyntaxKind::Int) => format!("`let x: {ty} = 1`"),
                 (_, SyntaxKind::Float) => "`let x: Float32 = 1.5`".to_string(),
-                _ => "`let b: UInt8 = 1`".to_string(),
+                _ => "`let x: UInt8 = 1`".to_string(),
             };
             error(format!(
                 "`{part}` can't follow a number: a numeric literal has no type suffix, and takes \
