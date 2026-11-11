@@ -7,7 +7,7 @@
 //! an error, so a misplaced tag can't silently drop out of coverage. A backtick run with no
 //! closing run on the same line is literal text, as in CommonMark.
 
-use crate::manifest::{Chapter, LEGACY_PREFIX};
+use crate::manifest::Chapter;
 use crate::{CHAPTERS_PATH, ChapterFile, FileError, MOVED_PATH, SpecError};
 use std::collections::{HashMap, HashSet};
 
@@ -120,8 +120,8 @@ pub fn check(
 }
 
 /// Why `id`, tagged in a file of the chapter `file_prefix`, doesn't fit the manifest, if it
-/// doesn't. Its first segment must be that chapter's prefix (in the legacy file, any chapter's),
-/// and in an ID of 3 or 4 segments the second must be a construct listed under that chapter.
+/// doesn't. Its first segment must be that chapter's prefix, and in an ID of 3 or 4 segments
+/// the second must be a construct listed under that chapter.
 fn chapter_problem(id: &str, file_prefix: &str, chapters: &[Chapter]) -> Option<String> {
     let first = prefix(id);
     if first == GRAMMAR_PREFIX {
@@ -130,21 +130,14 @@ fn chapter_problem(id: &str, file_prefix: &str, chapters: &[Chapter]) -> Option<
              grammar productions; start it with its chapter's prefix"
         ));
     }
-    if file_prefix != LEGACY_PREFIX && first != file_prefix {
+    if first != file_prefix {
         return Some(format!(
             "rule ID `{id}` starts with `{first}`, but this file holds chapter `{file_prefix}` \
              ({CHAPTERS_PATH}); start the ID with `{file_prefix}.`"
         ));
     }
-    let Some(chapter) = chapters
-        .iter()
-        .find(|chapter| chapter.prefix == first && chapter.prefix != LEGACY_PREFIX)
-    else {
-        return Some(format!(
-            "rule ID `{id}` starts with `{first}`, which isn't a chapter prefix in \
-             {CHAPTERS_PATH}; start it with the prefix of the chapter the rule belongs to"
-        ));
-    };
+    // Every file is a chapter's, so its chapter is listed.
+    let chapter = chapters.iter().find(|chapter| chapter.prefix == first)?;
     let segments: Vec<&str> = id.split('.').collect();
     let construct = segments[1];
     (segments.len() >= 3 && !chapter.constructs.iter().any(|c| c.name == construct)).then(|| {
@@ -624,15 +617,14 @@ fn inline_code_mask(line: &str) -> Vec<bool> {
 mod tests {
     use super::*;
 
-    /// A manifest for the tests. The legacy file may hold any chapter's tags.
+    /// A manifest for the tests.
     fn chapters() -> Vec<Chapter> {
         let (chapters, errors) = crate::manifest::parse(
             "bind  reference/bindings.md  Bindings\n\
              lit  reference/literals.md  Literals\n\
              \x20 int  Integer literals\n\
              \x20 float  Float literals\n\
-             type  reference/types.md  Types\n\
-             legacy  quince-spec.md  Being split\n",
+             type  reference/types.md  Types\n",
         );
         assert_eq!(errors, Vec::new());
         chapters
@@ -648,9 +640,21 @@ mod tests {
         }
     }
 
+    /// Checks `spec` as the file of the chapter its first tag names, or of `bind` when its
+    /// first tag names no chapter.
     fn check_one(spec: &str, retired: &HashSet<String>) -> (Vec<SpecRule>, Vec<FileError>) {
+        let named = spec
+            .split("r[")
+            .nth(1)
+            .and_then(|rest| rest.split(['.', ']']).next())
+            .unwrap_or_default();
+        let prefix = if chapters().iter().any(|c| c.prefix == named) {
+            named
+        } else {
+            "bind"
+        };
         check(
-            &[file(LEGACY_PREFIX, "spec.md", "Spec", spec)],
+            &[file(prefix, "spec.md", "Spec", spec)],
             retired,
             &chapters(),
         )
@@ -735,9 +739,9 @@ mod tests {
     #[test]
     fn errors_name_their_file() {
         let files = [
-            file(LEGACY_PREFIX, "spec/a.md", "A", "r[bind.let]\na\n"),
+            file("bind", "spec/a.md", "A", "r[bind.let]\na\n"),
             file(
-                LEGACY_PREFIX,
+                "bind",
                 "spec/b.md",
                 "B",
                 "\nr[bind.let]\nb\n\nr[nope.x]\nc\n",
@@ -756,13 +760,13 @@ mod tests {
 
     #[test]
     fn covers_paragraphs_and_top_level_items() {
-        let spec = "r[bind.let]\nA paragraph\nwith a lazy line.\n\nr[bind.var]\n- An item\nlazily continued\n  and indented.\n- An untagged sibling.\n\n  Its nested paragraph.\n\nr[lit.int.hex]\n* A star item.\n\n- Loose sibling.\n\nr[lit.int.oct]\n- A dash item\n- - -\n";
+        let spec = "r[lit.a]\nA paragraph\nwith a lazy line.\n\nr[lit.b]\n- An item\nlazily continued\n  and indented.\n- An untagged sibling.\n\n  Its nested paragraph.\n\nr[lit.int.hex]\n* A star item.\n\n- Loose sibling.\n\nr[lit.int.oct]\n- A dash item\n- - -\n";
         let ids: Vec<_> = rules(spec).into_iter().map(|r| (r.id, r.line)).collect();
         assert_eq!(
             ids,
             [
-                ("bind.let".to_string(), 1),
-                ("bind.var".to_string(), 5),
+                ("lit.a".to_string(), 1),
+                ("lit.b".to_string(), 5),
                 ("lit.int.hex".to_string(), 13),
                 ("lit.int.oct".to_string(), 18),
             ]
@@ -1001,7 +1005,17 @@ mod tests {
              bind.var  type.var\n",
         );
         assert_eq!(errors, Vec::new());
-        let found = rules("r[type.let]\na\n\nr[bind.var]\nb\n\nr[type.var]\nc\n");
+        let files = [
+            file(
+                "type",
+                "spec/types.md",
+                "Types",
+                "r[type.let]\na\n\nr[type.var]\nc\n",
+            ),
+            file("bind", "spec/bindings.md", "Bindings", "\nr[bind.var]\nb\n"),
+        ];
+        let (found, errors) = check(&files, &HashSet::new(), &chapters());
+        assert_eq!(errors, Vec::new());
         let retired = HashSet::from(["type.old".to_string()]);
         let errors: Vec<_> = check_moved(&moved, &found, &retired)
             .into_iter()
@@ -1012,7 +1026,7 @@ mod tests {
             [
                 "spec/moved-rules.txt:3: `bind.gone` moved to `type.gone`, which is neither a rule tag nor retired; give the rule's current ID",
                 "spec/moved-rules.txt:4: `bind.twice` moved to `bind.let`, which moved again to `type.let`; point `bind.twice` at the final ID",
-                "spec.md:4: rule ID `bind.var` moved to `type.var` (spec/moved-rules.txt) and can't be a tag again; pick a new ID",
+                "spec/bindings.md:2: rule ID `bind.var` moved to `type.var` (spec/moved-rules.txt) and can't be a tag again; pick a new ID",
             ]
         );
     }
@@ -1026,32 +1040,12 @@ mod tests {
     }
 
     #[test]
-    fn legacy_tags_need_a_chapter_prefix() {
-        assert_eq!(
-            messages(&tagged(&[
-                "types.nominal",
-                "grammar.block",
-                "legacy.x",
-                "type.int"
-            ])),
-            [
-                "line 1: rule ID `types.nominal` starts with `types`, which isn't a chapter prefix \
-                 in spec/chapters.txt; start it with the prefix of the chapter the rule belongs to",
-                "line 4: rule ID `grammar.block` uses the reserved prefix `grammar`, which belongs \
-                 to IDs derived from grammar productions; start it with its chapter's prefix",
-                "line 7: rule ID `legacy.x` starts with `legacy`, which isn't a chapter prefix in \
-                 spec/chapters.txt; start it with the prefix of the chapter the rule belongs to",
-            ]
-        );
-    }
-
-    #[test]
     fn chapter_tags_need_their_chapters_prefix() {
         let files = [file(
             "type",
             "spec/reference/types.md",
             "Types",
-            &tagged(&["type.int", "bind.let", "nope.x"]),
+            &tagged(&["type.int", "bind.let", "nope.x", "grammar.block"]),
         )];
         let (_, errors) = check(&files, &HashSet::new(), &chapters());
         let errors: Vec<_> = errors.into_iter().map(|e| e.to_string()).collect();
@@ -1066,6 +1060,10 @@ mod tests {
             [
                 format!("spec/reference/types.md:4: {}", wrong("bind.let", "bind")),
                 format!("spec/reference/types.md:7: {}", wrong("nope.x", "nope")),
+                "spec/reference/types.md:10: rule ID `grammar.block` uses the reserved prefix \
+                 `grammar`, which belongs to IDs derived from grammar productions; start it with \
+                 its chapter's prefix"
+                    .to_string(),
             ]
         );
     }

@@ -16,7 +16,6 @@ The spec is a folder of Markdown chapters. `spec/README.md` is its index, and `s
 **Files.**
 - A chapter file is a Markdown file directly in `spec/reference/` (the language) or `spec/tooling/` (the tools the language guarantees).
 - Every `.md` file under those folders must be listed in the manifest, and every listed file must exist.
-- **The transitional file.** While the spec is split into chapters, the one-file spec is listed as the chapter `legacy  quince-spec.md`, directly in `spec/`, with no constructs. While that file exists, a listed chapter file may be missing. `legacy` is reserved and never appears in a rule ID.
 
 **The index.** `spec/README.md` holds the spec's version header, a line of the form `<date> · <author> · Draft vX.Y`, within its first 10 lines; the coverage report reads the version from it. It links every chapter file that exists, in manifest order.
 
@@ -45,7 +44,7 @@ r[effect.net]
 
 **Format.**
 - An ID is `chapter.construct.rule`, with an optional fourth segment for detail, such as `stmt.bind.shadow.same-scope`. It has 2 to 4 dot-separated segments, each matching `[a-z0-9]+(-[a-z0-9]+)*`.
-- The first segment is the prefix of a chapter in `spec/chapters.txt`, so an ID says which chapter holds its rule. In a chapter file it must be that file's chapter. In the `legacy` file it may be any chapter's prefix.
+- The first segment is the prefix of a chapter in `spec/chapters.txt`, so an ID says which chapter holds its rule. It must be the chapter of the file the tag is in.
 - In an ID of 3 or 4 segments, the second segment is a construct listed under that chapter. Every listed construct must be named by at least one ID. Reuse a listed construct before adding one.
 - An ID of 2 segments is about the chapter's own subject or the chapter as a whole, such as `lex.braces` or `type.float`.
 - The prefix `grammar` is reserved for derived production IDs and can't appear in a written tag.
