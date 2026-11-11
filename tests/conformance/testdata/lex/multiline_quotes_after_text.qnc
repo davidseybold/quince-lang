@@ -1,8 +1,7 @@
 // rule: lex.lit.multiline-quotes
 // mode: parse
 // Outside the closing line, """ in a multi-line string is an error, so quotes after text
-// never close it, as they do in Java and Kotlin, and never silently join the next string
-// into this one.
+// are never a valid close, and never silently join the next string into this one.
 const USAGE: String = """
   quince test"""
 //~^ E0012

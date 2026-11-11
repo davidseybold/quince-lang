@@ -217,11 +217,17 @@ fn text_on_the_opening_line() {
     assert_eq!(errors("\"\"\"\"\"\""), ["E0012 3..6"]);
     assert_eq!(errors("\"\"\"  \"\"\""), ["E0012 5..8"]);
     assert!(message("\"\"\"ab\n\"\"\"").ends_with("move this text to the next line"));
-    assert!(message("\"\"\"ab\"\"\"").ends_with("write a `\"` string"));
-    assert!(message("\"\"\"a\"b\"\"\"").ends_with("written `\\\"`"));
-    assert!(message("r\"\"\"ab\"\"\"").ends_with("write an `r\"` string"));
-    assert!(message("r\"\"\"a\"b\"\"\"").contains("can't hold a quote"));
-    assert!(message("\"\"\"\"\"\"").ends_with("an empty string is written `\"\"`"));
+    // The message is the same whatever the text, and whatever the prefix.
+    let closed = "a multi-line string's text starts on the line after its opening `\"\"\"`, and \
+                  it closes on a line of its own";
+    for text in [
+        "\"\"\"ab\"\"\"",
+        "\"\"\"a\"b\"\"\"",
+        "r\"\"\"ab\"\"\"",
+        "\"\"\"\"\"\"",
+    ] {
+        assert_eq!(message(text), closed, "{text:?}");
+    }
 }
 
 #[test]
@@ -259,7 +265,7 @@ fn indentation() {
 }
 
 /// Quotes after text are an E0012 (`r[lex.lit.multiline-quotes]`), and they end the string,
-/// as Java and Kotlin close one, so the rest of the file is still checked as code.
+/// so the rest of the file is still checked as code.
 #[test]
 fn closing_quotes_after_text() {
     let text = "f(\"\"\"\n    a\n      b\"\"\") \\";
@@ -281,11 +287,9 @@ fn closing_quotes_after_text() {
     assert_eq!(
         message(&text[..22]),
         "a multi-line string's text can't hold `\"\"\"`, and its closing `\"\"\"` goes on a line \
-         of its own: to end the string here, move it to the next line, indented with 4 spaces; \
-         for quotes in the text, write `\\\"\"\"`"
+         of its own: to end the string here, move it to the next line, indented with 4 spaces"
     );
-    assert!(message("\"\"\"\na\"\"\"").contains("move it to the next line; for quotes"));
-    assert!(message("r\"\"\"\na\"\"\"").ends_with("is a `\"\"\"` string that writes `\\\"\"\"`"));
+    assert!(message("r\"\"\"\na\"\"\"").ends_with("move it to the next line"));
     // The lines are checked once the string is closed, and the fix keeps CR LF.
     assert_eq!(
         errors("\"\"\"\r\n  \\q\"\"\""),

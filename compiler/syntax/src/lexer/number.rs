@@ -208,25 +208,9 @@ fn problem_error(
     };
     match problem {
         Problem::Suffix => {
-            // The example repeats the number only when nothing else is wrong with it.
-            let number = &text[..range.start];
-            let well_formed = scan(number, false).problems.is_empty();
-            let decimal = number.bytes().all(|c| c.is_ascii_digit() || c == b'_');
-            let example = match (suffix_type(part), kind) {
-                (Some(ty), SyntaxKind::Float) if ty.starts_with("Float") && well_formed => {
-                    format!("`let x: {ty} = {number}`")
-                }
-                // An integer literal doesn't take a float type, so the example adds `.0`.
-                (Some(ty), SyntaxKind::Int)
-                    if ty.starts_with("Float") && well_formed && decimal =>
-                {
-                    format!("`let x: {ty} = {number}.0`")
-                }
-                (Some(ty), _) if ty.starts_with("Float") => format!("`let x: {ty} = 1.5`"),
-                (Some(ty), SyntaxKind::Int) if well_formed => format!("`let x: {ty} = {number}`"),
-                (Some(ty), SyntaxKind::Int) => format!("`let x: {ty} = 1`"),
-                (_, SyntaxKind::Float) => "`let x: Float32 = 1.5`".to_string(),
-                _ => "`let x: UInt8 = 1`".to_string(),
+            let example = match kind {
+                SyntaxKind::Float => "`let x: Float32 = 1.5`",
+                _ => "`let x: UInt8 = 1`",
             };
             error(format!(
                 "`{part}` can't follow a number: a numeric literal has no type suffix, and takes \
@@ -263,29 +247,10 @@ fn problem_error(
         Problem::Underscore => {
             error("an underscore in a number must sit between two digits".to_string())
         }
-        Problem::LeadingZero => error(
-            "a number doesn't start with `0` unless its integer part is `0`: Quince has no \
-             C-style octal, so an octal number is written `0o17`"
-                .to_string(),
-        ),
+        Problem::LeadingZero => {
+            error("a number doesn't start with `0` unless its integer part is `0`".to_string())
+        }
     }
-}
-
-/// The Quince type that a Rust-style suffix such as `u8` or `f32` names, if it names one.
-fn suffix_type(suffix: &str) -> Option<&'static str> {
-    Some(match suffix {
-        "i8" => "Int8",
-        "i16" => "Int16",
-        "i32" => "Int32",
-        "i64" => "Int",
-        "u8" => "UInt8",
-        "u16" => "UInt16",
-        "u32" => "UInt32",
-        "u64" => "UInt64",
-        "f32" => "Float32",
-        "f64" => "Float",
-        _ => return None,
-    })
 }
 
 /// `hex`, `binary` or `octal`, for a text that starts with a base prefix.

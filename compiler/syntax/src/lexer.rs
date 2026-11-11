@@ -340,19 +340,10 @@ impl<'a> Lexer<'a> {
             len += c.len_utf8();
         }
         let run = &self.text[start..start + len];
-        // The `#`s of a Rust raw string, `r#"..."#`: before its opening quote, or after its end.
-        let previous = self.tokens.last().map(|t| t.kind);
-        let opens = previous == Some(SyntaxKind::Ident)
-            && self.text[..start].ends_with('r')
-            && self.tokens.last().is_some_and(|t| t.len == 1)
-            && self.text[start + len..].starts_with('"');
-        // A `#` glued to a closing quote, as in `"x"# note`, gets the hint too. A comment
-        // written from habit has a space before its `#`, so this is nearly always a raw string.
-        let raw_hashes = run.starts_with('#') && (opens || previous == Some(SyntaxKind::StringEnd));
         let mut error = LexError::new(
             start..start + len,
             codes::UNKNOWN_CHARACTER,
-            unknown_message(run, raw_hashes),
+            unknown_message(run),
         );
         if run.chars().all(is_other_space) {
             let spaces = " ".repeat(run.chars().count());
@@ -407,7 +398,7 @@ fn is_other_space(c: char) -> bool {
     c.is_whitespace() && !matches!(c, ' ' | '\t' | '\n' | '\r')
 }
 
-fn unknown_message(run: &str, raw_hashes: bool) -> String {
+fn unknown_message(run: &str) -> String {
     let first = run.chars().next().expect("a run isn't empty");
     let shown = match first {
         '`' => "a backtick".to_string(),
@@ -420,11 +411,6 @@ fn unknown_message(run: &str, raw_hashes: bool) -> String {
         n => format!(" and the {} characters after it", n - 1),
     };
     let why = match first {
-        '#' if raw_hashes => {
-            "Quince has no `r#\"` strings: raw text that holds quotes is written `r\"\"\"`"
-        }
-        '#' => "comments start with `//`",
-        '`' => "strings use `\"`, and interpolate with `{name}`",
         '\u{FEFF}' => "a byte order mark is allowed only at the start of a file",
         c if is_other_space(c) => "within a line, only spaces and tabs are whitespace",
         c if !c.is_ascii() => {

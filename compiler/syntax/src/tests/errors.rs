@@ -131,12 +131,11 @@ fn unknown_characters() {
         ]
     );
     let message = |text| lex_str(text).errors[0].message.clone();
-    assert!(message("# x").contains("comments start with `//`"));
-    assert!(message("r#\"x\"#").contains("`r\"\"\"`"));
-    assert!(lex_str("r#\"x\"#").errors[1].message.contains("`r\"\"\"`"));
-    assert!(message("r#x").contains("comments start with `//`"));
+    assert_eq!(
+        message("# x"),
+        "`#` can't appear here: it doesn't start any Quince token"
+    );
     assert!(message("`x`").starts_with("a backtick can't appear here"));
-    assert!(message("`x`").contains("interpolate with `{name}`"));
     assert!(message("$$").starts_with("`$` and the character after it can't"));
     assert!(message("$$$").starts_with("`$` and the 2 characters after it"));
     // Non-ASCII is fine in comments and literals.

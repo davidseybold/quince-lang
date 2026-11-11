@@ -109,36 +109,12 @@ fn suffixes() {
     assert!(error.message.starts_with("`f32` can't follow a number"));
 }
 
-/// A Rust-style suffix gets an example with the Quince type it names, and the number itself.
+/// A suffix's message shows a type from context, with an integer or a float to match.
 #[test]
-fn suffix_messages_name_the_type() {
-    let example = |text| {
-        let errors = lex_str(text).errors;
-        let suffix = errors
-            .iter()
-            .find(|e| e.message.contains(", as in "))
-            .unwrap();
-        let message = &suffix.message;
-        message[message.find(", as in ").unwrap() + 8..].to_string()
-    };
-    assert_eq!(example("200u8"), "`let x: UInt8 = 200`");
-    assert_eq!(example("1_000i32"), "`let x: Int32 = 1_000`");
-    assert_eq!(example("7i64"), "`let x: Int = 7`");
-    assert_eq!(example("0xFFu16"), "`let x: UInt16 = 0xFF`");
-    assert_eq!(example("1.5f32"), "`let x: Float32 = 1.5`");
-    assert_eq!(example("2.5f64"), "`let x: Float = 2.5`");
-    assert_eq!(example("1f32"), "`let x: Float32 = 1.0`");
-    // A number with other problems, or a float type on a non-decimal integer, gets a plain one.
-    assert_eq!(example("0b1f32"), "`let x: Float32 = 1.5`");
-    assert_eq!(example("007f32"), "`let x: Float32 = 1.5`");
-    assert_eq!(example("1_f32"), "`let x: Float32 = 1.5`");
-    assert_eq!(example("007u8"), "`let x: UInt8 = 1`");
-    assert_eq!(example("0b1u8"), "`let x: UInt8 = 0b1`");
-    // No Quince type for these, or the wrong kind of number for it.
-    assert_eq!(example("10px"), "`let x: UInt8 = 1`");
-    assert_eq!(example("1usize"), "`let x: UInt8 = 1`");
-    assert_eq!(example("1.5u8"), "`let x: Float32 = 1.5`");
-    assert_eq!(example("1.5em"), "`let x: Float32 = 1.5`");
+fn suffix_messages_show_a_type_from_context() {
+    let message = |text| lex_str(text).errors[0].message.clone();
+    assert!(message("200u8").ends_with("as in `let x: UInt8 = 1`"));
+    assert!(message("1.5f32").ends_with("as in `let x: Float32 = 1.5`"));
 }
 
 #[test]
@@ -194,7 +170,6 @@ fn leading_zeros_and_exponents() {
     assert_eq!(errors("00.5"), ["E0008 0..2"]);
     assert_eq!(errors("0_1"), ["E0008 0..3"]);
     assert_eq!(errors("0 0.5 0e3 0_"), ["E0008 11..12"]);
-    assert!(lex_str("007").errors[0].message.contains("`0o17`"));
     assert_eq!(errors("1E9"), [r#"E0008 1..2 => "1e9""#]);
     assert_eq!(errors("1.5E-3"), [r#"E0008 3..4 => "1.5e-3""#]);
     assert_eq!(errors("1e"), ["E0008 1..2"]);

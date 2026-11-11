@@ -27,10 +27,9 @@ impl<'a> Lexer<'a> {
         let open = self.pos;
         let prefix = &self.text[open..open + prefix_len];
         let quote = open + prefix_len;
-        let glued = self.glued_opener();
         if self.text[quote..].starts_with("\"\"\"") {
             if prefix != "r" {
-                (self.errors).push(unknown_tag_error(open..quote, prefix, glued, true));
+                (self.errors).push(unknown_tag_error(open..quote, prefix, true));
             }
             return self.multiline_string(prefix_len, true, false);
         }
@@ -78,27 +77,9 @@ impl<'a> Lexer<'a> {
             self.unclosed_string(open..quote + 1, first_error, dangling, message);
         }
         if form == Form::Unknown {
-            let error = unknown_tag_error(open..quote, prefix, glued, false);
+            let error = unknown_tag_error(open..quote, prefix, false);
             self.errors.insert(first_error, error);
         }
-    }
-
-    /// The `StringStart` of the literal whose `StringEnd` is the last token, if it is one: a
-    /// prefix glued to closing quotes, as in `"say "hi" now"`.
-    fn glued_opener(&self) -> Option<&'a str> {
-        let (last, before) = self.tokens.split_last()?;
-        if last.kind != SyntaxKind::StringEnd {
-            return None;
-        }
-        let mut end = self.pos - last.len as usize;
-        for token in before.iter().rev() {
-            let start = end - token.len as usize;
-            if token.kind == SyntaxKind::StringStart {
-                return Some(&self.text[start..end]);
-            }
-            end = start;
-        }
-        None
     }
 
     /// A bytes literal's text up to `end`, which is a line ending or the end of input, or up to
@@ -121,8 +102,7 @@ impl<'a> Lexer<'a> {
                 if let Err(problem) = escape.value {
                     dangling = problem == BadEscape::Dangling;
                     let text = &rest[len..len + escape.len];
-                    let after = &rest[len + escape.len..];
-                    let mut error = escape_error(text, after, start + len, problem, false, true);
+                    let mut error = escape_error(text, start + len, problem, false, true);
                     if open_unicode_end == Some(len) {
                         error.fixes.clear();
                     }
@@ -197,67 +177,18 @@ impl<'a> Lexer<'a> {
 }
 
 /// The E0010 for the identifier `prefix`, at `range`, before a `"`, or before `"""` when it is
-/// `multiline`. `glued` is the `StringStart` of a literal whose closing quotes come right
-/// before it, if any.
-fn unknown_tag_error(
-    range: Range<usize>,
-    prefix: &str,
-    glued: Option<&str>,
-    multiline: bool,
-) -> LexError {
-    let tags = "the tags are `url`, `re`, `dur` and `ts`";
-    let lower = prefix.to_ascii_lowercase();
-    let message = if let Some(opener) = glued {
-        // What to write instead, for the literal those quotes close.
-        let advice = match opener {
-            "\"" | "b\"" => "if that quote is part of the text, write `\\\"`",
-            "\"\"\"" => "if those quotes are part of the text, write `\\\"\"\"`",
-            "r\"" => {
-                "a raw string can't hold a `\"`, so text with quotes goes between `r\"\"\"` lines"
-            }
-            "r\"\"\"" => {
-                "an `r\"\"\"` string can't hold `\"\"\"`, so text with them is a `\"\"\"` string \
-                 that writes `\\\"\"\"`"
-            }
-            o if o.ends_with("\"\"\"") => "the quotes before it close the string they follow",
-            _ => "a tagged literal can't hold a `\"`",
-        };
-        format!(
-            "`{prefix}\"` reads as a literal tag, since it is glued to the closing quote before \
-             it: {advice}; {tags}"
-        )
-    } else if multiline && lower == "b" {
+/// `multiline`.
+fn unknown_tag_error(range: Range<usize>, prefix: &str, multiline: bool) -> LexError {
+    let message = if multiline && prefix == "b" {
         "bytes literals have no multi-line form: write a `b\"...\"` literal on one line, with \
          `\\n` for each line break"
             .to_string()
-    } else if multiline && TAGS.contains(&lower.as_str()) {
-        format!("tagged literals have no multi-line form: write `{lower}\"...\"` on one line")
-    } else if lower == "f" {
-        format!(
-            "Quince has no `{prefix}\"` strings: every `\"` string interpolates already, as in \
-             `\"total: {{total}}\"`, so delete the `{prefix}`"
-        )
-    } else if lower == "u" {
-        format!(
-            "Quince has no `{prefix}\"` strings: every `\"` string is Unicode already, so delete \
-             the `{prefix}`"
-        )
-    } else if lower == "rf" || lower == "fr" {
-        format!(
-            "Quince has no `{prefix}\"` strings: a `\"` string interpolates, and an `r\"` string \
-             is raw, with no interpolation; write one or the other"
-        )
-    } else if lower != prefix && (TAGS.contains(&lower.as_str()) || lower == "r" || lower == "b") {
-        let quotes = if multiline { "\"\"\"" } else { "\"" };
-        format!("literal prefixes are lowercase: write `{lower}{quotes}`")
-    } else if lower == "br" || lower == "rb" {
-        "Quince has no raw bytes literals: write a `b\"...\"` literal, with `\\\\` for each \
-         backslash"
-            .to_string()
+    } else if multiline && TAGS.contains(&prefix) {
+        "tagged literals have no multi-line form: a tagged literal stays on one line".to_string()
     } else {
         format!(
-            "`{prefix}\"` isn't a literal: {tags}, and `r\"` and `b\"` start raw strings and \
-             bytes literals"
+            "`{prefix}\"` isn't a literal: the tags are `url`, `re`, `dur` and `ts`, and `r\"` \
+             and `b\"` start raw strings and bytes literals"
         )
     };
     LexError::new(range, codes::UNKNOWN_TAG, message)
