@@ -1,6 +1,6 @@
 # M1: Lexer
 
-Status: draft, not yet approved. The first design doc of M1 (Syntax). A parser doc and a formatter doc follow it.
+Status: draft. Passed design review (three passes); waiting on David for the spec questions. The first design doc of M1 (Syntax). A parser doc and a formatter doc follow it.
 
 ## Why
 
@@ -53,7 +53,7 @@ The lexer is the `lexer` module of `quince_syntax`, with its literal handling in
 
 ### 2. Lossless tokens
 
-`lex(source: &str) -> Lexed`, where `Lexed` holds a `Vec<Token>` and a `Vec<LexError>`.
+`lex(&Decoded) -> Lexed`, or `lex_str(&str)` for text that never came from bytes (decision 9), where `Lexed` holds a `Vec<Token>` and a `Vec<LexError>`.
 - A `Token` is a `SyntaxKind` and a byte length (`u32`). Start offsets are the running sum, so a token is 8 bytes.
 - Every byte of the input belongs to exactly one token, so concatenating the token texts gives back the input. Comments, spaces and line breaks are tokens too (trivia). No token is empty.
 - The lexer never fails and never stops early. An error produces a diagnostic and a token, and lexing goes on.
@@ -147,6 +147,7 @@ StringStart  ( StringText | StringIndent | StringNewline | Interp... )*  [ Strin
 - A one-line string with no closing quote ends before its line ending (`r[lex.lit.string.one-line]`), with no `StringEnd`, so one missing quote can't swallow the file.
 - A broken interpolation (`{a + b}`, `{}`, `{ name }`, a `{` never closed) becomes an `Error` token up to and including the next `}`, or up to but excluding the next `"` or line ending, and the string goes on. So `"{"` reports one E0007, and its closing quote still ends the string.
 - A char literal with no closing `'` ends before its line ending.
+- A lone CR is a line ending here too (decision 3), so it ends a one-line string or char literal. Only E0013 is reported then, not E0004 or E0009, since the missing quote is the CR's fault.
 - A multi-line string with no closing `"""` line runs to the end of the file. That one does swallow the file, and Risks covers it.
 
 ### 9. Diagnostics
@@ -169,7 +170,7 @@ Codes are numbered in the order they are registered, from E0001, skipping the re
 | E0010 | An unknown literal tag | None. The message lists the tags | |
 | E0011 | A non-ASCII character in a bytes literal | Replace it with the `\x` escapes of its UTF-8 bytes (`safe`) | |
 | E0012 | A multi-line string layout error | None | Q3 |
-| E0013 | A carriage return not followed by a line feed | Outside a literal, replace it with a line feed (`safe`). None inside one, where a line feed would end the string | Q1 |
+| E0013 | A carriage return not followed by a line feed | Outside a literal, replace it with a line feed (`safe`). None inside a one-line literal, which the CR ends (decision 8) | Q1 |
 | E0014 | A file that isn't valid UTF-8 | None | Q1 |
 | E0015 | A control or bidirectional-format character in a literal or comment | In a `"` or `"""` string, replace it with its `\u{...}` escape (`safe`). None in raw and tagged bodies or comments | Q8 |
 
@@ -267,7 +268,8 @@ Each proposed rule would go in `spec/reference/lexical.md` with the tag shown. E
 
 **4. Number forms (layer 2).** The examples don't settle the edge cases. Proposed:
 - `r[lex.lit.underscore]` In any numeric literal, including a float's fraction and exponent, an underscore may appear only between two digits. So `1_000` and `1_000.5` are valid, and `_1`, `1_`, `1__0`, `0x_FF` and `1_.5` are not.
-- `r[lex.lit.int.prefix]` The base prefixes are lowercase (`0x`, `0b`, `0o`). Hex digits may be either case, and `quince` `fmt` writes them uppercase.
+- `r[lex.lit.int.prefix]` The base prefixes are lowercase (`0x`, `0b`, `0o`). Hex digits may be either case.
+- `r[tool.fmt.hex-digits]`, in the Toolchain chapter's formatting rules: "`quince` `fmt` writes hex digits uppercase." The formatter doc cites it.
 - `r[lex.lit.int.leading-zero]` A decimal literal, or a float's integer part, doesn't start with `0` unless it is `0`. So `007` and `00.5` are errors, rather than octal as in C, and `0.5` is fine.
 - `r[lex.lit.float.shape]` A float has digits on both sides of its point (`1.0`, not `1.` or `.5`), and its exponent is a lowercase `e`, an optional sign and digits. `1E9` is an error whose fix lowercases the `E`.
 - `r[lex.lit.no-suffix]` A numeric literal has no type suffix: its type comes from context.
@@ -314,8 +316,11 @@ Found while writing this. None of them block the lexer.
 - **C names that are keywords.** A C function whose name is a keyword (POSIX `select`) can't be declared: `r[ffi.cbind.keyword-param]` covers parameters only, and `r[lex.no-contextual]` rules out reading `select` as a name inside `foreign`.
 - **Negative literals.** `r[lex.lit.int.neg]` says the minus is "directly before" the literal. Whether `- 1` counts decides whether the parser checks adjacency.
 - **Rules this doc hands over** (decision 11): fixtures for `lex.keywords`, `lex.no-contextual`, `lex.no-shift-token`, `lex.grammar-rules`, `lex.ident-classes`, `lex.indentation`, `lex.comment.doc` and `lex.comment.doc-exact`. The formatter doc takes `lex.source.encoding-not-format`.
-- **Lockfile hashes (M11, not the parser).** If CR LF checkouts are allowed (spec question 1), content hashes must be computed over git's tree or over normalized bytes, or a Windows checkout hashes differently.
 - **Coverage ratchet.** M0 left this for M1. Decide it once the parser adds real coverage.
+
+## For later milestones
+
+- **Lockfile hashes (M11).** If CR LF checkouts are allowed (spec question 1), content hashes must be computed over git's tree or over normalized bytes, or a Windows checkout hashes differently. The M11 design doc should take this up.
 
 ## Tasks
 
