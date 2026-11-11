@@ -35,8 +35,6 @@ macro_rules! syntax_kinds {
             /// a `>` and the token after it, into one of these when the parser asks.
             pub const JOINED: &[(&str, SyntaxKind)] =
                 &[$(($joined_text, SyntaxKind::$joined)),*];
-            /// Every node kind.
-            pub const NODES: &[SyntaxKind] = &[$(SyntaxKind::$node),*];
             /// Every lexer token kind that is neither a keyword nor punctuation, for tests that
             /// walk them all.
             #[cfg(test)]

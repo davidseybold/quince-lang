@@ -1,10 +1,6 @@
 //! The lossless CST: a `rowan` tree whose text is the source. The parser emits [`Event`]s and
 //! [`build`] turns them and the lexer's tokens into the tree, placing trivia. The README's CST
 //! section has the contract.
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the parser, in the next layer, calls the builder")
-)]
 
 use crate::{SyntaxError, SyntaxKind, Token};
 use rowan::{GreenNode, GreenNodeBuilder, Language};
@@ -32,6 +28,10 @@ pub type SyntaxElement = rowan::SyntaxElement<QuinceLanguage>;
 /// One step of the parser's output. The parser sees only significant tokens, so these never
 /// mention trivia: the builder places it.
 #[derive(Debug)]
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "the parser, in the next layer, emits these")
+)]
 pub(crate) enum Event {
     /// Opens a node of this kind inside the innermost open one.
     Start(SyntaxKind),
@@ -51,6 +51,10 @@ pub(crate) enum Event {
 ///
 /// The first event starts the root and the last finishes it. Every significant token is taken,
 /// and every node but the root holds a token. Fuzz and debug builds check both.
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "the parser, in the next layer, calls the builder")
+)]
 pub(crate) fn build(
     text: &str,
     tokens: &[Token],
@@ -98,10 +102,12 @@ struct Builder<'a> {
 
 impl Builder<'_> {
     fn start(&mut self, kind: SyntaxKind) {
-        // The trivia before a node goes outside it, apart from the comments it takes. The root
-        // has no outside, so its leading trivia waits for the root's first child.
+        // The trivia before a node goes outside it, apart from the comments it takes, which go
+        // in at once. So a node that starts at the same token inside this one finds no trivia
+        // left, and the outermost node takes the comments. The root has no outside, so its
+        // leading trivia waits for the root's first child.
+        let first = self.next_significant();
         if !self.open.is_empty() {
-            let first = self.next_significant();
             let inside = if kind.attaches_comments() {
                 self.attached_comments(first)
             } else {
@@ -111,6 +117,9 @@ impl Builder<'_> {
         }
         self.green.start_node(QuinceLanguage::kind_to_raw(kind));
         self.open.push(false);
+        if self.open.len() > 1 {
+            self.write_to(first);
+        }
     }
 
     fn finish(&mut self) {
@@ -129,6 +138,9 @@ impl Builder<'_> {
             holds_token || self.open.is_empty(),
             "only the root may be empty"
         );
+        if holds_token {
+            self.mark_holds_token();
+        }
         self.green.finish_node();
     }
 
@@ -150,11 +162,13 @@ impl Builder<'_> {
         for token in &self.tokens[first..=last] {
             self.offset += token.len as usize;
         }
-        let kind = joined.unwrap_or(self.tokens[first].kind);
-        self.green.token(
-            QuinceLanguage::kind_to_raw(kind),
-            &self.text[start..self.offset],
+        let text = &self.text[start..self.offset];
+        debug_assert!(
+            joined.is_none_or(|kind| SyntaxKind::JOINED.contains(&(text, kind))),
+            "a join whose tokens don't spell its kind"
         );
+        let kind = joined.unwrap_or(self.tokens[first].kind);
+        self.green.token(QuinceLanguage::kind_to_raw(kind), text);
         self.cursor = last + 1;
         self.next += count;
         self.mark_holds_token();

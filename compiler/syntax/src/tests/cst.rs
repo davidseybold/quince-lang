@@ -12,7 +12,8 @@ pub(crate) fn dump_tree(node: &SyntaxNode) -> String {
     dump(node, true)
 }
 
-/// [`dump_tree`] without trivia tokens.
+/// [`dump_tree`] without the tokens whose kind is trivia. A doc comment the parser left as
+/// trivia still shows, since only the tree's position says it is one.
 pub(crate) fn dump_tree_without_trivia(node: &SyntaxNode) -> String {
     dump(node, false)
 }
@@ -39,8 +40,9 @@ fn dump(node: &SyntaxNode, trivia: bool) -> String {
     out
 }
 
-/// The tree's text is `text`, and its tokens are the lexer's, in order, apart from the joins.
-/// No token is empty, and no node but the root.
+/// The tree's text is `text`, and its tokens are the lexer's, in order, apart from the joins,
+/// each of which spells its kind with two lexer tokens. No token is empty, and no node but
+/// the root.
 pub(crate) fn check_lossless(text: &str, lexed: &Lexed, root: &SyntaxNode) {
     assert_eq!(root.text().to_string(), text);
     let mut lexer_tokens = lexed.ranges();
@@ -57,12 +59,13 @@ pub(crate) fn check_lossless(text: &str, lexed: &Lexed, root: &SyntaxNode) {
             NodeOrToken::Token(token) => token,
         };
         let (kind, range) = lexer_tokens.next().expect("the tree has extra tokens");
-        if SyntaxKind::JOINED.iter().any(|&(_, k)| k == token.kind()) {
-            let (_, second) = lexer_tokens.next().expect("a join of the last token");
-            assert_eq!(kind, Gt, "a join that doesn't start with `>`");
-            assert_eq!(token.text(), &text[range.start..second.end]);
-        } else {
-            assert_eq!((token.kind(), token.text()), (kind, &text[range]));
+        match SyntaxKind::JOINED.iter().find(|&&(_, k)| k == token.kind()) {
+            Some(&(joined_text, _)) => {
+                let (_, second) = lexer_tokens.next().expect("a join of the last token");
+                assert_eq!(token.text(), joined_text);
+                assert_eq!(&text[range.start..second.end], joined_text);
+            }
+            None => assert_eq!((token.kind(), token.text()), (kind, &text[range])),
         }
     }
     assert_eq!(lexer_tokens.next(), None, "the tree lost a token");
@@ -93,16 +96,12 @@ fn s(kind: SyntaxKind) -> Event {
 const T: Event = Event::Token;
 const F: Event = Event::Finish;
 
-/// The events for `fn f() {}`, ending with the `FnDecl`'s finish.
-fn empty_fn() -> Vec<Event> {
-    vec![s(FnDecl), T, s(Name), T, F, T, T, s(Block), T, T, F, F]
-}
-
-/// The events for a file of `fn f() {}` declarations, one per element of `fns`.
-fn file_of(fns: usize) -> Vec<Event> {
+/// The events for a file of `decls` declarations, each the single token `fn`. The builder
+/// doesn't check grammar, so a one-token declaration keeps the trivia tests' dumps short.
+fn file_of(decls: usize) -> Vec<Event> {
     let mut events = vec![s(File)];
-    for _ in 0..fns {
-        events.extend(empty_fn());
+    for _ in 0..decls {
+        events.extend([s(FnDecl), T, F]);
     }
     events.push(F);
     events
@@ -208,11 +207,29 @@ fn trivia_goes_outside_nodes() {
     );
 }
 
+/// Trivia between two nodes goes in the innermost node that holds both, not in the node of
+/// the token after it.
+#[test]
+fn trivia_between_nodes_goes_in_the_node_around_both() {
+    let root = tree("fn\n\nfn", file_of(2));
+    assert_eq!(
+        dump_tree(&root),
+        r#"File
+  FnDecl
+    FnKw "fn"
+  Newline "\n"
+  Newline "\n"
+  FnDecl
+    FnKw "fn"
+"#
+    );
+}
+
 /// Comment lines directly above a declaration go inside it, with their line endings. A blank
 /// line ends them, and the comment before it stays outside.
 #[test]
 fn comments_above_a_declaration_go_inside_it() {
-    let root = tree("// header\n\n// one\n// two\nfn f() {}\n", file_of(1));
+    let root = tree("// header\n\n// one\n// two\nfn\n", file_of(1));
     assert_eq!(
         dump_tree(&root),
         r#"File
@@ -225,43 +242,65 @@ fn comments_above_a_declaration_go_inside_it() {
     Comment "// two"
     Newline "\n"
     FnKw "fn"
-    Whitespace " "
-    Name
-      Ident "f"
-    LParen "("
-    RParen ")"
-    Whitespace " "
-    Block
-      LBrace "{"
-      RBrace "}"
   Newline "\n"
 "#
     );
 }
 
-/// A comment at the end of a line belongs to that line, not to the declaration below it, and
-/// a line with a `;` on it isn't a comment line.
+/// A comment on the file's first line starts a line, as one after a line ending does.
+#[test]
+fn a_comment_on_the_first_line_goes_inside() {
+    let root = tree("// a\nfn", file_of(1));
+    assert_eq!(
+        dump_tree(&root),
+        r#"File
+  FnDecl
+    Comment "// a"
+    Newline "\n"
+    FnKw "fn"
+"#
+    );
+}
+
+/// Every comment on a comment line goes inside, the first one included.
+#[test]
+fn a_line_of_several_comments_goes_inside_whole() {
+    let root = tree("/* a */ // b\nfn", file_of(1));
+    assert_eq!(
+        dump_tree(&root),
+        r#"File
+  FnDecl
+    BlockComment "/* a */"
+    Whitespace " "
+    Comment "// b"
+    Newline "\n"
+    FnKw "fn"
+"#
+    );
+}
+
+/// A comment at the end of a line of code belongs to that line, not to the declaration below
+/// it, and a line with a `;` on it isn't a comment line.
 #[test]
 fn a_comment_after_code_stays_outside() {
-    let text = "fn f() {} // a\nfn f() {}\n/* b */;\nfn f() {}";
-    let root = tree(text, file_of(3));
-    let trivia_between = dump_tree(&root)
-        .lines()
-        .filter(|line| line.starts_with("  ") && !line.starts_with("   "))
-        .collect::<Vec<_>>()
-        .join("\n");
+    let root = tree("fn // a\nfn\n/* b */;\nfn", file_of(3));
     assert_eq!(
-        trivia_between,
-        r#"  FnDecl
+        dump_tree(&root),
+        r#"File
+  FnDecl
+    FnKw "fn"
   Whitespace " "
   Comment "// a"
   Newline "\n"
   FnDecl
+    FnKw "fn"
   Newline "\n"
   BlockComment "/* b */"
   Semicolon ";"
   Newline "\n"
-  FnDecl"#
+  FnDecl
+    FnKw "fn"
+"#
     );
 }
 
@@ -269,14 +308,24 @@ fn a_comment_after_code_stays_outside() {
 /// of the declaration's own line goes inside with the comments.
 #[test]
 fn comments_above_a_member_keep_the_indentation_outside() {
-    let mut events = vec![s(File), s(ImplDecl), T, s(Name), T, F, T];
-    events.extend(empty_fn());
-    events.extend([T, F, F]);
-    let root = tree("impl T {\n    // m\n    fn f() {}\n}", events);
-    let dump = dump_tree(&root);
-    let impl_body = dump.lines().take(12).collect::<Vec<_>>().join("\n");
+    let events = vec![
+        s(File),
+        s(ImplDecl),
+        T,
+        s(Name),
+        T,
+        F,
+        T,
+        s(FnDecl),
+        T,
+        F,
+        T,
+        F,
+        F,
+    ];
+    let root = tree("impl T {\n    // m\n    fn\n}", events);
     assert_eq!(
-        impl_body,
+        dump_tree(&root),
         r#"File
   ImplDecl
     ImplKw "impl"
@@ -288,22 +337,24 @@ fn comments_above_a_member_keep_the_indentation_outside() {
     Newline "\n"
     Whitespace "    "
     FnDecl
-      Comment "// m""#
+      Comment "// m"
+      Newline "\n"
+      Whitespace "    "
+      FnKw "fn"
+    Newline "\n"
+    RBrace "}"
+"#
     );
-    assert!(dump.contains(
-        "      Comment \"// m\"\n      Newline \"\\n\"\n      Whitespace \"    \"\n      FnKw"
-    ));
 }
 
 /// Block comments, `Error` tokens and doc comments the parser left as trivia are placed like
 /// comments. The byte order mark belongs to the file.
 #[test]
 fn other_trivia_attaches_like_comments() {
-    let root = tree("\u{FEFF}/* a */\n$\n/// b\nfn f() {}", file_of(1));
-    let dump = dump_tree(&root);
-    assert!(
-        dump.starts_with(
-            r#"File
+    let root = tree("\u{FEFF}/* a */\n$\n/// b\nfn", file_of(1));
+    assert_eq!(
+        dump_tree(&root),
+        r#"File
   Bom "\u{feff}"
   FnDecl
     BlockComment "/* a */"
@@ -314,8 +365,6 @@ fn other_trivia_attaches_like_comments() {
     Newline "\n"
     FnKw "fn"
 "#
-        ),
-        "{dump}"
     );
 }
 
@@ -325,32 +374,86 @@ fn other_trivia_attaches_like_comments() {
 fn comments_stay_outside_other_nodes() {
     let events = vec![s(File), s(Block), T, s(Name), T, F, T, F, F];
     let root = tree("{\n  // c\n  a\n}", events);
-    assert!(
-        dump_tree(&root).contains(
-            "    Comment \"// c\"\n    Newline \"\\n\"\n    Whitespace \"  \"\n    Name\n"
-        ),
-        "{}",
-        dump_tree(&root)
+    assert_eq!(
+        dump_tree(&root),
+        r#"File
+  Block
+    LBrace "{"
+    Newline "\n"
+    Whitespace "  "
+    Comment "// c"
+    Newline "\n"
+    Whitespace "  "
+    Name
+      Ident "a"
+    Newline "\n"
+    RBrace "}"
+"#
+    );
+}
+
+/// When nodes that take comments start at the same token, the outermost takes the whole run,
+/// indented or not.
+#[test]
+fn the_outermost_node_takes_the_comments() {
+    let events = || vec![s(File), s(ImplDecl), s(FnDecl), T, F, F, F];
+    let root = tree("  // a\n  // b\n  fn", events());
+    assert_eq!(
+        dump_tree(&root),
+        r#"File
+  Whitespace "  "
+  ImplDecl
+    Comment "// a"
+    Newline "\n"
+    Whitespace "  "
+    Comment "// b"
+    Newline "\n"
+    Whitespace "  "
+    FnDecl
+      FnKw "fn"
+"#
+    );
+    let root = tree("// a\nfn", events());
+    assert_eq!(
+        dump_tree(&root),
+        r#"File
+  ImplDecl
+    Comment "// a"
+    Newline "\n"
+    FnDecl
+      FnKw "fn"
+"#
+    );
+}
+
+/// A node that holds only nodes isn't empty.
+#[test]
+fn a_node_of_nodes_holds_tokens() {
+    let root = tree("a", vec![s(File), s(Skipped), s(Name), T, F, F, F]);
+    assert_eq!(
+        dump_tree(&root),
+        "File\n  Skipped\n    Name\n      Ident \"a\"\n"
     );
 }
 
 /// A doc comment the parser takes is a real token, first in its declaration.
 #[test]
 fn a_doc_comment_the_parser_takes_is_a_token() {
-    let text = "/// d\nfn f() {}";
+    let text = "/// d\nfn";
     let lexed = lex_str(text);
     let significant: Vec<usize> = (0..lexed.tokens.len())
         .filter(|&i| !lexed.tokens[i].kind.is_trivia())
         .collect();
-    let mut events = vec![s(File), s(FnDecl), T];
-    events.extend(empty_fn().into_iter().skip(1));
-    events.push(F);
+    let events = vec![s(File), s(FnDecl), T, T, F, F];
     let root = tree_with(text, &lexed, &significant, events);
-    assert!(
-        dump_tree_without_trivia(&root)
-            .starts_with("File\n  FnDecl\n    DocComment \"/// d\"\n    FnKw \"fn\"\n"),
-        "{}",
-        dump_tree(&root)
+    assert_eq!(
+        dump_tree(&root),
+        r#"File
+  FnDecl
+    DocComment "/// d"
+    Newline "\n"
+    FnKw "fn"
+"#
     );
 }
 
@@ -422,4 +525,10 @@ fn a_token_left_over_is_a_parser_bug() {
 #[should_panic(expected = "a join of tokens that aren't adjacent")]
 fn a_join_across_trivia_is_a_parser_bug() {
     tree("a > > b", vec![s(File), T, Event::Join(GtGt), T, F]);
+}
+
+#[test]
+#[should_panic(expected = "a join whose tokens don't spell its kind")]
+fn a_join_of_the_wrong_kind_is_a_parser_bug() {
+    tree("a >> b", vec![s(File), T, Event::Join(GtEq), T, F]);
 }
