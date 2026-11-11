@@ -46,7 +46,7 @@ These apply to every package, so an agent can guess a name correctly before look
 - Predicates start with `is_` or `has_`, or are `contains`.
 - Conversions are `to_x()`: widening ones return the value, narrowing ones return `Option` ([Types](../spec/reference/types.md)).
 - The same operation has the same name on every type: `len`, `is_empty`, `contains`, `get`, `insert`, `remove`, `map`, `filter`, `fold`, `sorted`.
-- A package's main error enum is named after it (`FsError`, `HttpError`). A second entry point with different failures gets its own enum (`ServeError` for `serve`, `ParseTimeError` for time parsing), so each `match` lists only what can happen. An error type for Net or Fs work carries `PermissionDenied` ([Program execution](../spec/quince-spec.md#capabilities-at-runtime)).
+- A package's main error enum is named after it (`FsError`, `HttpError`). A second entry point with different failures gets its own enum (`ServeError` for `serve`, `ParseTimeError` for time parsing), so each `match` lists only what can happen. An error type for Net or Fs work carries `PermissionDenied` ([Program execution](../spec/reference/execution.md)).
 - Every function that takes a closure declares an effect variable for it and passes it through, so pure and effectful closures both fit. The exception is `modify` and `update` on the reference types (`Ref`, `Atomic`, `ConcurrentMap`), which take pure closures on purpose ([Concurrency](../spec/reference/concurrency.md)).
 - A scoped helper that lends something to a closure is named for what it does (`pool.checkout`, `ffi.with_resource`, `time.with_timeout`). No std name, method or parameter is a keyword: `with`, `test` and the rest are reserved, so `Pool.checkout`, `replace(by:)`, `pred:` and `Headers.set` are used instead.
 - A function is always called through its package: `http.get(url)`, `json.decode(text)`, `time.with_timeout(...)`, `testing.fixed_clock(...)`. Only types, interfaces, effects and constants are imported by name, as in `import std.http.{self, Request, Response}` ([Packages and modules](../spec/reference/packages.md)). The prelude's `assert`, `todo`, `unreachable` and `dbg` are the only functions called bare.
@@ -421,12 +421,12 @@ The operator interfaces `Add`, `Sub`, `Mul`, `Div`, `Rem` and `Neg` ([Operators 
 
 | Signature | What | Notes |
 | --- | --- | --- |
-| `fn assert(condition: Bool, message: String = "")` | Panics when `condition` is false | A failed `assert(a == b)` prints both sides ([Testing](../spec/quince-spec.md#unit-tests)), so there is no `assert_eq` |
+| `fn assert(condition: Bool, message: String = "")` | Panics when `condition` is false | A failed `assert(a == b)` prints both sides ([Testing](../spec/reference/testing.md)), so there is no `assert_eq` |
 | `fn todo(reason: String) -> Never` | Marks unfinished code | Panics. `quince publish` refuses a library that contains `todo` or `dbg` ([Dependencies and publishing](../spec/quince-spec.md#enforced-semantic-versioning)) |
 | `fn unreachable(reason: String) -> Never` | Marks a case the author has proved can't happen | Panics |
 | `fn dbg<T>(value: T) -> T` | Prints the debug form and source location to standard error, returns `value` | Not an effect; rejected in release builds ([Prelude and special interfaces](../spec/reference/prelude.md)) |
 | `fn with_timeout<T, uses E>(limit: Duration, body: fn() -> T uses E) -> Result<T, TimedOut> uses E, Clock` | Cancels `body` after `limit` ([Cancellation](../spec/reference/concurrency.md#cancellation)) | Waits. Needs `Clock` because it reads a timer |
-| `fn with_resource<T, R, uses E>(resource: Resource<T>, body: fn(Resource<T>) -> R uses E) -> R uses E` | Lends an open resource to `body`, then cleans it up, even on panic or cancellation ([Interop with C](../spec/quince-spec.md#memory-across-the-boundary)) |  |
+| `fn with_resource<T, R, uses E>(resource: Resource<T>, body: fn(Resource<T>) -> R uses E) -> R uses E` | Lends an open resource to `body`, then cleans it up, even on panic or cancellation ([Interop with C](../spec/reference/interop.md)) |  |
 
 The first four are the prelude's only free functions, and the only functions called bare. The other two are called through their packages: `time.with_timeout` (its error `TimedOut` is imported from `std.time`) and `ffi.with_resource` (with `Resource` from `std.ffi`); they are listed here because they pair with the spec's cancellation and cleanup rules. `expect` is a method on `Option` and `Result`. `Never` is the type of an expression that doesn't return (v0.3 plan item 6).
 
@@ -462,7 +462,7 @@ A handler's methods may use `State` and the effect they handle, besides the effe
 
 | Operation | What | Notes |
 | --- | --- | --- |
-| `print(text: String)` | Writes a line to standard output | Also `write`, without the newline. A write to a closed standard output ends the program quietly with code 0, as Unix tools do on a broken pipe ([Program execution](../spec/quince-spec.md#built-in-effect-operations)) |
+| `print(text: String)` | Writes a line to standard output | Also `write`, without the newline. A write to a closed standard output ends the program quietly with code 0, as Unix tools do on a broken pipe ([Program execution](../spec/reference/execution.md)) |
 | `eprint(text: String)` | Writes a line to standard error |  |
 | `read_line() -> Option<String>` | One line without its newline; `None` at end of input | Waits |
 | `read_all() -> Bytes` | The rest of standard input | Waits |
@@ -509,7 +509,7 @@ Most code uses `std.http` instead and never calls these directly. `Outbound`, `I
 
 ### Random
 
-In production these draw from the operating system's secure generator, so they are safe for tokens and keys. Under `quince` `test` they are seeded ([Testing](../spec/quince-spec.md#unit-tests)).
+In production these draw from the operating system's secure generator, so they are safe for tokens and keys. Under `quince` `test` they are seeded ([Testing](../spec/reference/testing.md)).
 
 | Operation | What | Notes |
 | --- | --- | --- |
@@ -533,7 +533,7 @@ In production these draw from the operating system's secure generator, so they a
 | Operation | What | Notes |
 | --- | --- | --- |
 | `run(program: String, args: List<String>, input: Bytes = b"") -> Result<ProcessOutput, ProcessError>` | Runs a program to completion and captures its output. Arguments go as a list, never through a shell | Waits. Fails: `ProcessError.NotFound(program:)`, `PermissionDenied(program:)` or `Other(message:)`. A nonzero exit is not an error: check `output.status` |
-| `exit(code: Int) -> Never` | Cancels every scope, waits for cleanup, exits ([Program execution](../spec/quince-spec.md#capabilities-at-runtime)) |  |
+| `exit(code: Int) -> Never` | Cancels every scope, waits for cleanup, exits ([Program execution](../spec/reference/execution.md)) |  |
 
 ```
 let out = Process.run("git", args: ["rev-parse", "HEAD"])?
@@ -586,7 +586,7 @@ A counter shared by tasks is an `Atomic<Int>`: `hits.modify(fn(n) { n + 1 })`.
 | Signature | What | Cost | Notes |
 | --- | --- | --- | --- |
 | `Pool.new<T, Err, uses E>(max: Int, healthy: fn(T) -> Bool uses E, open: fn() -> Result<T, Err> uses E) -> Pool<T, Err, uses E>  requires max >= 1` | Opens values lazily, up to `max`. Every time a value comes back from `checkout`, the pool calls `healthy` on it and closes it if that returns `false`, so a dead connection is never handed out again. `healthy` is required, so every pool states its policy; `fn(_) { true }` keeps every value | O(1) | Pure until used. Crosses tasks even when `T` can't ([Types](../spec/reference/types.md)) |
-| `fn checkout<R, uses E2>(self, body: fn(T) -> R uses E2) -> Result<R, Err> uses E, E2, State` | Waits for a free value, lends it, returns it | O(1) plus `body` | Waits. Fails only when `open` fails. If `body` panics or is cancelled the value is closed and replaced ([Interop with C](../spec/quince-spec.md#memory-across-the-boundary)). Closing a value, here or when `healthy` rejects it, means the pool drops it: any `Resource` inside it closes at that point, and v1 has no close hook |
+| `fn checkout<R, uses E2>(self, body: fn(T) -> R uses E2) -> Result<R, Err> uses E, E2, State` | Waits for a free value, lends it, returns it | O(1) plus `body` | Waits. Fails only when `open` fails. If `body` panics or is cancelled the value is closed and replaced ([Interop with C](../spec/reference/interop.md)). Closing a value, here or when `healthy` rejects it, means the pool drops it: any `Resource` inside it closes at that point, and v1 has no close hook |
 | `fn size(self) -> Int uses State` | Also `idle` | O(1) |  |
 
 `Pool` names the error type and effects of `open`, because `checkout` may open a new value: `PgDb { pool: Pool<PgConn, PgError, uses Net> }`. `checkout` returns `Err` only when opening fails.
@@ -597,7 +597,7 @@ A counter shared by tasks is an `Atomic<Int>`: `hits.modify(fn(n) { n + 1 })`.
 
 ### Resource (std.ffi)
 
-`fn keep<O: CMemory>(self, owned: O)` ties the lifetime of a value the C side still points at to the resource. `CMemory` is a `std.ffi` interface with no methods, implemented by `Callback<F>`, `CBuf<T>` and `CString`, so one method takes all three and nothing is overloaded. `keep` moves the value into the resource and returns `Unit`. It needs no effect, costs O(1), and may be called any number of times: every kept value stays alive until the resource is closed or released, and is released after the resource's own cleanup runs, in reverse order of keeping. Keeping a second value never frees the first, since C may still hold the old pointer. Panics: the resource is already closed. Like `adopt` and `ptr`, it is only available in the package that declares the foreign type ([Interop with C](../spec/quince-spec.md#11-interop)).
+`fn keep<O: CMemory>(self, owned: O)` ties the lifetime of a value the C side still points at to the resource. `CMemory` is a `std.ffi` interface with no methods, implemented by `Callback<F>`, `CBuf<T>` and `CString`, so one method takes all three and nothing is overloaded. `keep` moves the value into the resource and returns `Unit`. It needs no effect, costs O(1), and may be called any number of times: every kept value stays alive until the resource is closed or released, and is released after the resource's own cleanup runs, in reverse order of keeping. Keeping a second value never frees the first, since C may still hold the old pointer. Panics: the resource is already closed. Like `adopt` and `ptr`, it is only available in the package that declares the foreign type ([Interop with C](../spec/reference/interop.md)).
 
 ## System packages
 
@@ -674,7 +674,7 @@ Defaults and order:
 | `fn is_absolute(self) -> Bool` |  | O(1) |  |
 | `fn to_string(self) -> String` | Equals `display()`; what `Fs` operations take | O(n) |  |
 | `pub struct Metadata { pub size: Int, pub is_dir: Bool, pub modified: Timestamp }` | From `Fs.metadata` |  | Use `is_dir`; there is no separate kind |
-| `pub enum FsError { NotFound(path: String), AlreadyExists(path: String), DirectoryNotEmpty(path: String), InvalidUtf8(path: String), PermissionDenied(path: String), Other(path: String, message: String) }` | Every Fs operation's error, as declared in the spec's [Built-in effect operations](../spec/reference/effects.md#built-in-effect-operations) |  | `PermissionDenied(path:)` holds the path as the program passed it, and covers manifest limits too ([Program execution](../spec/quince-spec.md#capabilities-at-runtime)). A refusal from a `[cmd.<name>]` limit displays with the manifest line that set it: `permission denied: /home/me/secrets.txt (quince.toml:12)` |
+| `pub enum FsError { NotFound(path: String), AlreadyExists(path: String), DirectoryNotEmpty(path: String), InvalidUtf8(path: String), PermissionDenied(path: String), Other(path: String, message: String) }` | Every Fs operation's error, as declared in the spec's [Built-in effect operations](../spec/reference/effects.md#built-in-effect-operations) |  | `PermissionDenied(path:)` holds the path as the program passed it, and covers manifest limits too ([Program execution](../spec/reference/execution.md)). A refusal from a `[cmd.<name>]` limit displays with the manifest line that set it: `permission denied: /home/me/secrets.txt (quince.toml:12)` |
 | `fn only(dir: String) -> FsOnly` | Handler that limits `Fs` to one directory tree: `with Fs = fs.only("./data") { ... }` |  | Other paths fail with `PermissionDenied` |
 | `fn read_only() -> FsReadOnly` | Handler that refuses every write |  |  |
 
@@ -704,7 +704,7 @@ The types `Net` and `Listen` operations return, and the narrowing handler. `Outb
 | --- | --- | --- |
 | `Outbound` | A connection from `Net.connect` | Used with `Net.send`, `Net.receive`, `Net.close` |
 | `Listener`, `Inbound` | A socket from `Listen.bind`, and a connection from `Listen.accept` | Used with `Listen.send`, `Listen.receive`, `Listen.close` |
-| `pub enum NetError { Refused, TimedOut, Reset, NameNotFound(host: String), PermissionDenied(host: String), Other(message: String) }` | Every Net and Listen error, as declared in the spec's [Built-in effect operations](../spec/reference/effects.md#built-in-effect-operations) | `PermissionDenied(host:)` holds the host without the port, and covers manifest limits ([Program execution](../spec/quince-spec.md#capabilities-at-runtime)). A refusal from a `[cmd.<name>]` limit displays with the manifest line that set it: `permission denied: api.example.com (quince.toml:14)` |
+| `pub enum NetError { Refused, TimedOut, Reset, NameNotFound(host: String), PermissionDenied(host: String), Other(message: String) }` | Every Net and Listen error, as declared in the spec's [Built-in effect operations](../spec/reference/effects.md#built-in-effect-operations) | `PermissionDenied(host:)` holds the host without the port, and covers manifest limits ([Program execution](../spec/reference/execution.md)). A refusal from a `[cmd.<name>]` limit displays with the manifest line that set it: `permission denied: api.example.com (quince.toml:14)` |
 | `fn only(host: String, also: List<String> = []) -> NetOnly` | Handler that limits `Net` to the listed hosts: `with Net = net.only("api.example.com") { ... }` | Other hosts fail with `NetError.PermissionDenied` |
 
 ### std.http
@@ -931,7 +931,7 @@ Calls look like `Log.info("order placed", fields: {"order_id": id.to_string()})`
 
 ### std.ffi
 
-Types for `foreign` blocks ([Interop with C](../spec/quince-spec.md#c-types)). The fixed-width C types are aliases (`CInt` is `Int32`), so they may appear in `pub` signatures like any number type. The target-width types, `CString`, `Ptr`, `ConstPtr`, `CBuf`, `Callback` and raw foreign declarations can't appear in a `pub` signature: the package that declares the `foreign` block wraps them.
+Types for `foreign` blocks ([Interop with C](../spec/reference/interop.md)). The fixed-width C types are aliases (`CInt` is `Int32`), so they may appear in `pub` signatures like any number type. The target-width types, `CString`, `Ptr`, `ConstPtr`, `CBuf`, `Callback` and raw foreign declarations can't appear in a `pub` signature: the package that declares the `foreign` block wraps them.
 
 | Name | What |
 | --- | --- |
@@ -941,26 +941,26 @@ Types for `foreign` blocks ([Interop with C](../spec/quince-spec.md#c-types)). T
 | `Ptr<T>` | A C pointer: `Ptr.null()`, `fn is_null(self) -> Bool`, `fn read(self) -> T`, `fn write(self, value: T)` for C types declared in the block. Panics: `read` or `write` on a null pointer. A foreign fn returning a `Ptr<T>` whose `T` has no `@cleanup` is marked `@borrowed` or `@owned(free_fn)` |
 | `ConstPtr<T>` | A pointer C may only read; `quince` `bind` emits it for `const T*`, and only such a parameter accepts a lent pointer. `fn lend(self) -> ConstPtr<UInt8>` on `Bytes` lends the bytes in place for one call; for empty `Bytes` it passes a valid non-null pointer to zero bytes |
 | `CBuf<T>` | A reference type for C-allocated memory, the only way to pass an out-parameter. One value: `CBuf.new<T>() -> CBuf<T>`, `fn get(self) -> T`, `fn set(self, value: T)`. An array: `CBuf.alloc<T>(count: Int) -> CBuf<T>`, whose `get` and `set` reach element 0. Bytes: `CBuf.from_bytes(data: Bytes) -> CBuf<UInt8>` copies `data` in, and `fn to_bytes(self, len: Int) -> Bytes`, only on `CBuf<UInt8>`, copies the first `len` bytes out. `fn ptr(self) -> Ptr<T>` points at element 0, only as a foreign-call argument. New memory is zeroed. All pure. Can't cross tasks. Panics: `len` past the allocated count |
-| `Callback<F>` | `Callback.new(f: F) -> Callback<F>`: captures must be crossable, and each call runs as its own task. `Callback.local(f: F) -> Callback<F>`: may capture a `Ref`, valid only during the creating task's own foreign calls. `fn unregister(self)`. All pure. Runs with the handlers of the call that registered it ([Interop with C](../spec/quince-spec.md#callbacks)) |
+| `Callback<F>` | `Callback.new(f: F) -> Callback<F>`: captures must be crossable, and each call runs as its own task. `Callback.local(f: F) -> Callback<F>`: may capture a `Ref`, valid only during the creating task's own foreign calls. `fn unregister(self)`. All pure. Runs with the handlers of the call that registered it ([Interop with C](../spec/reference/interop.md)) |
 
 A lent pointer (`bytes.lend()`), `res.ptr()` and `buf.ptr()` may be written only as an argument of a foreign call, never stored in a variable or returned. The entries in this package follow the C interop decisions accepted into the spec on 2026-11-10 (options doc: https://claude.ai/artifact/3Dvm7kZ2KDPCfvkgBZ4gUD).
 
-`std.ffi` also exports `Resource<T>` (see std.sync's Resource subsection) and `with_resource` (under Core functions, called as `ffi.with_resource`), since only code built on a `foreign` block opens resources. Every name in this package works only inside the package that declares the `foreign` block ([Interop with C](../spec/quince-spec.md#11-interop)), so a C library's raw types and pointers never leak into its callers' code.
+`std.ffi` also exports `Resource<T>` (see std.sync's Resource subsection) and `with_resource` (under Core functions, called as `ffi.with_resource`), since only code built on a `foreign` block opens resources. Every name in this package works only inside the package that declares the `foreign` block ([Interop with C](../spec/reference/interop.md)), so a C library's raw types and pointers never leak into its callers' code.
 
 ### std.testing
 
-`quince` `test` already fakes every effect ([Testing](../spec/quince-spec.md#unit-tests)). These handlers let a test set up the fake or read what the code did.
+`quince` `test` already fakes every effect ([Testing](../spec/reference/testing.md)). These handlers let a test set up the fake or read what the code did.
 
 | Signature | What | Notes |
 | --- | --- | --- |
-| `fn fixed_clock(at: Timestamp) -> FixedClock` | `Clock.now()` returns `at`; `sleep` moves the time forward without waiting, and whenever every task in the test is blocked the time jumps to the earliest pending deadline ([Testing](../spec/quince-spec.md#unit-tests)). `Clock.monotonic()` starts at `Duration` zero and moves forward by exactly as much as the time does, under this and every other clock fake | `with Clock = testing.fixed_clock(ts"2026-01-01T00:00:00Z") { ... }` |
+| `fn fixed_clock(at: Timestamp) -> FixedClock` | `Clock.now()` returns `at`; `sleep` moves the time forward without waiting, and whenever every task in the test is blocked the time jumps to the earliest pending deadline ([Testing](../spec/reference/testing.md)). `Clock.monotonic()` starts at `Duration` zero and moves forward by exactly as much as the time does, under this and every other clock fake | `with Clock = testing.fixed_clock(ts"2026-01-01T00:00:00Z") { ... }` |
 | `fn seeded_random(seed: Int) -> SeededRandom` | Repeatable `Random` | The default under `quince` `test` uses the run's seed |
 | `fn memory_fs(files: Map<String, String> = {:}) -> MemoryFs` | An in-memory `Fs` holding the given text files. Its root is `/` and its current directory is `/`, so a relative key or path resolves against `/`. Keys and paths are normalized the same way (`.` segments, `..` segments and repeated slashes), so `"words.txt"`, `"./words.txt"` and `"/words.txt"` name one file | `fn read(self, path: String) -> Option<String> uses State` to check what was written |
 | `fn capture_console(input: String = "") -> CapturedConsole` | Feeds `input` to standard input and records output | `fn stdout(self) -> String uses State`, also `stderr`. Each returns every byte written, newlines included, so `Console.print("a")` then `Console.print("b")` gives `"a\nb\n"` |
 | `fn capture_log() -> CapturedLog` | A `Log` handler that records entries | `fn entries(self) -> List<LogEntry> uses State`, where `pub struct LogEntry { pub level: Level, pub message: String, pub fields: Map<String, String> }` and `Level` is `std.log.Level` |
-| `fn fake_http<uses E>(handler: fn(Request) -> Result<Response, NetError> uses E) -> FakeNet<uses E>` | A `Net` handler that answers every outbound request by calling `handler`, with no real network. The handler gets the full `Request`: the absolute `url` with scheme and host, the method, the headers and the body. It returns `Ok(response)`, or an `Err` such as `NetError.Refused` or `NetError.Reset` to simulate a failed connection, which `http.get` reports as `HttpError.Net(error:)`. | The handler runs in the calling task, under the caller's handlers, so its effect calls (such as `Clock.sleep`) are cancellation points of the caller. A `timeout` given to `http.get` or `http.request` runs on the test's `Clock`. Fake time follows [Testing](../spec/quince-spec.md#unit-tests): whenever every task in the test is blocked, it jumps to the earliest pending deadline, so a timeout fires without real waiting even if nothing calls `sleep`. |
+| `fn fake_http<uses E>(handler: fn(Request) -> Result<Response, NetError> uses E) -> FakeNet<uses E>` | A `Net` handler that answers every outbound request by calling `handler`, with no real network. The handler gets the full `Request`: the absolute `url` with scheme and host, the method, the headers and the body. It returns `Ok(response)`, or an `Err` such as `NetError.Refused` or `NetError.Reset` to simulate a failed connection, which `http.get` reports as `HttpError.Net(error:)`. | The handler runs in the calling task, under the caller's handlers, so its effect calls (such as `Clock.sleep`) are cancellation points of the caller. A `timeout` given to `http.get` or `http.request` runs on the test's `Clock`. Fake time follows [Testing](../spec/reference/testing.md): whenever every task in the test is blocked, it jumps to the earliest pending deadline, so a timeout fires without real waiting even if nothing calls `sleep`. |
 | `fn fake_env(vars: Map<String, String> = {:}, args: List<String> = []) -> FakeEnv` |  |  |
-| `pub interface Generate { fn generate(gen: Gen) -> (Self, Gen) }` | Replaces the derived generator for `forall` ([Testing](../spec/quince-spec.md#property-tests)) | `Gen` is threaded like `Hasher`: each call takes the current state and returns the value with the next state, which the caller passes on, as in `let (name, gen) = gen.string(max_len: 20)` then `let (age, gen) = gen.int(0..120)`. Reusing an old `gen` gives the same value again |
+| `pub interface Generate { fn generate(gen: Gen) -> (Self, Gen) }` | Replaces the derived generator for `forall` ([Testing](../spec/reference/testing.md)) | `Gen` is threaded like `Hasher`: each call takes the current state and returns the value with the next state, which the caller passes on, as in `let (name, gen) = gen.string(max_len: 20)` then `let (age, gen) = gen.int(0..120)`. Reusing an old `gen` gives the same value again |
 | `Gen` | `fn int(self, range: Range<Int>) -> (Int, Gen)`, and likewise `float`, `bool`, `string(max_len:)`, `list<T: Generate>(max_len:)` and `choose(items)`: each takes `self` and returns the value with the next `Gen` | Values shrink automatically on failure |
 
 ```
@@ -1019,7 +1019,7 @@ David approved the recommendations for 1 to 3 on 2026-11-10, and the doc is writ
 1. **How built-in effect operations are called.** Decided: through the effect's name, the same way as package effects: `Fs.read_text(path)`, `Clock.now()`, `Console.print("hi")`, `Process.exit(1)`. The std package of the same name (`std.fs`) holds only types, the error enum and handlers, not wrapper functions. That gives one way to call any effect, `uses Fs` matches `Fs.` at the call, and `with Fs = ...` replaces exactly the operations listed. The spec uses this form throughout.
 2. **How much goes in std.** Recommended: the batteries-included map above, now 22 packages. The lean alternative ships only the prelude, the effect packages and `std.json`, and leaves HTTP, crypto, UUIDs and CLI parsing to third-party packages. Lean is less to build, but agents do best when each common job has exactly one obvious package.
 3. **Iterator adapters.** The spec ([Items](../spec/reference/items.md)) forbids default method bodies that call other methods, so `map`, `filter` and `take` can't be methods on every `Iterator`. Recommended: a concrete prelude type `Iter<T, uses E>` that carries the adapters as ordinary methods, reached by `xs.iter()` or `Iter.from(it)`, so chains read the way they do in Rust and TypeScript: `xs.iter().filter(...).map(...).to_list()`. The alternative is free functions in `std.iter` (`iter.map(it, f)`), which keeps the rule with no new type but breaks chaining.
-4. **Map and Set order.** Default: iteration follows insertion order, as in Python and JavaScript. Order is then the same on every run, whatever the hash seed, which deterministic tests ([Testing](../spec/quince-spec.md#deterministic-testing)) need. Lookups stay O(1) on average.
+4. **Map and Set order.** Default: iteration follows insertion order, as in Python and JavaScript. Order is then the same on every run, whatever the hash seed, which deterministic tests ([Testing](../spec/reference/testing.md)) need. Lookups stay O(1) on average.
 5. **Number formatting.** Interpolation takes only names ([Lexical structure](../spec/reference/lexical.md)), so `{price}` can't say "two decimals". Done as prelude methods `f.to_fixed(2)` and `s.pad_start(8, fill: ' ')`, used through a binding.
 6. **Prelude gaps.** Superseded by the spec. The prelude rule (2026-11-10) keeps only what the syntax or compiler needs: `From`, `DecodeError` and `ScopeFailed` are prelude; the reference types, `ChannelClosed`, `TimedOut` and `Resource` are imported from `std.sync`, `std.time` and `std.ffi`; `Generate` is in `std.testing`; `Encoder` and `Decoder` are in `std.encoding`. The spec's [table of prelude names](../spec/reference/prelude.md#prelude-names) lists the prelude.
 7. **`config.load` in [Effects](../spec/reference/effects.md).** Default: it is the program's own code, three lines over `toml.decode`, not a std function.
@@ -1032,7 +1032,7 @@ All of these are now settled: items 9 to 11 in the spec's own rounds, and items 
 9. **Associated constants.** Settled in the spec (2026-11-10): `pub const NAME: T = ...` inside the type's `impl` block, read as `Int.MAX`, `Status.OK` or `Self.MAX` (never bare), and usable as a default argument such as `zone: Zone = Zone.UTC`. Interfaces can't declare constants in v1.
 10. **Prelude names the spec's list leaves out.** Settled by the prelude rule (2026-11-10): `Ordering`, `Iter`, `Hasher` and `Never` are prelude; `Match` and `Captures` are imported from `std.regex`.
 11. **Method chains across lines.** Settled by the grammar round (2026-11-10): a line that starts with `.` continues the expression above, as in Swift and Kotlin.
-12. **Writing to a closed standard output.** Settled by the spec ([Program execution](../spec/quince-spec.md#built-in-effect-operations)), which wins over the earlier default here: `Console.write` returns `Unit`, and a write to a closed standard output ends the program quietly with code 0, as Unix tools do on a broken pipe.
+12. **Writing to a closed standard output.** Settled by the spec ([Program execution](../spec/reference/execution.md)), which wins over the earlier default here: `Console.write` returns `Unit`, and a write to a closed standard output ends the program quietly with code 0, as Unix tools do on a broken pipe.
 13. **`Pool` type parameters.** Decided (David, 2026-11-10): `Pool<T, Err, uses E>`, carrying the error type and effects of `open`. The spec already uses this form.
 14. **HTTP handler panics.** Decided (David, 2026-11-10): a panic in one request answers 500 and prints the usual panic report on standard error, as the runtime does for any task, without the server needing `uses Console`; the server keeps running.
 15. **`Log` needs `Clock`.** Decided (David, 2026-11-10): `pub effect Log uses Console, Clock`, as [Effects](../spec/reference/effects.md) now declares.
@@ -1061,7 +1061,7 @@ pub fn with_resource<T, R, uses E>(resource: Resource<T>, body: fn(Resource<T>) 
   uses E
 ```
 
-They are called through their packages: `time.with_timeout` from std.time, which needs `uses Clock` ([Cancellation](../spec/reference/concurrency.md#cancellation)), and `ffi.with_resource` from std.ffi ([Interop with C](../spec/quince-spec.md#memory-across-the-boundary)). Neither is in the prelude.
+They are called through their packages: `time.with_timeout` from std.time, which needs `uses Clock` ([Cancellation](../spec/reference/concurrency.md#cancellation)), and `ffi.with_resource` from std.ffi ([Interop with C](../spec/reference/interop.md)). Neither is in the prelude.
 
 ### Numbers, Bool and Char
 
@@ -1553,7 +1553,7 @@ impl<T, Err, uses E> Pool<T, Err, uses E> {
 - `modify` and `update` take pure closures ([Concurrency](../spec/reference/concurrency.md)).
 - There is no unbounded channel and no non-blocking `try_send` or `try_receive`, matching `select`, which has no default arm.
 - `Pool` names the error and effects of its `open` function, because `checkout` may open a new value: `PgDb { pool: Pool<PgConn, PgError, uses Net> }`. `checkout` returns `Err` only when opening fails.
-- `TaskScope` has no methods; tasks start with `spawn in` ([Concurrency](../spec/reference/concurrency.md)). `Resource` is built with `Resource.adopt` lent with res.ptr(), closed with res.close(), checked with res.is\_closed() and tied to a callback with res.keep(cb), all only in the package that declares the foreign type ([Interop with C](../spec/quince-spec.md#11-interop)).
+- `TaskScope` has no methods; tasks start with `spawn in` ([Concurrency](../spec/reference/concurrency.md)). `Resource` is built with `Resource.adopt` lent with res.ptr(), closed with res.close(), checked with res.is\_closed() and tied to a callback with res.keep(cb), all only in the package that declares the foreign type ([Interop with C](../spec/reference/interop.md)).
 
 ### Types the built-in effects use
 
@@ -1574,16 +1574,16 @@ Every standard library name this spec uses that isn't in the prelude. Each needs
 | Name | Package | Used in |
 | --- | --- | --- |
 | Log effect, Log.info, `log.json` | std.log | [Types](../spec/reference/types.md), [Effects](../spec/reference/effects.md), [Concurrency](../spec/reference/concurrency.md) |
-| fixed\_clock, Generate | std.testing | [Effects](../spec/reference/effects.md), [Testing](../spec/quince-spec.md#6-contracts-and-testing) |
+| fixed\_clock, Generate | std.testing | [Effects](../spec/reference/effects.md), [Testing](../spec/reference/testing.md) |
 | Encoder, Decoder, Encode and Decode methods | std.encoding | [Types](../spec/reference/types.md) |
 | json.decode, json.encode, json.Value | std.json | [Types](../spec/reference/types.md), [Packages and modules](../spec/reference/packages.md) |
 | toml, form formats | std.toml, std.form | [Types](../spec/reference/types.md) |
 | get, serve, Request, Response, ServeError | std.http | [Effects](../spec/reference/effects.md), [Packages and modules](../spec/reference/packages.md), [Concurrency](../spec/reference/concurrency.md) |
 | net.only(host) | std.net | [Effects](../spec/reference/effects.md) |
-| CInt and the other C types, CString, Ptr, ConstPtr, CBuf, Callback | std.ffi | [Types](../spec/reference/types.md), [Interop with C](../spec/quince-spec.md#11-interop) |
-| Ref, Atomic, ConcurrentMap, Channel, Pool, ChannelClosed | std.sync | [Types](../spec/reference/types.md), [Concurrency](../spec/reference/concurrency.md), [Interop with C](../spec/quince-spec.md#11-interop) |
+| CInt and the other C types, CString, Ptr, ConstPtr, CBuf, Callback | std.ffi | [Types](../spec/reference/types.md), [Interop with C](../spec/reference/interop.md) |
+| Ref, Atomic, ConcurrentMap, Channel, Pool, ChannelClosed | std.sync | [Types](../spec/reference/types.md), [Concurrency](../spec/reference/concurrency.md), [Interop with C](../spec/reference/interop.md) |
 | with\_timeout, TimedOut | std.time | [Concurrency](../spec/reference/concurrency.md) |
-| Resource, with\_resource | std.ffi | [Types](../spec/reference/types.md), [Interop with C](../spec/quince-spec.md#11-interop) |
+| Resource, with\_resource | std.ffi | [Types](../spec/reference/types.md), [Interop with C](../spec/reference/interop.md) |
 | FsError, Metadata | std.fs | [Effects](../spec/reference/effects.md), [Built-in effect operations](../spec/reference/effects.md#built-in-effect-operations) |
 | NetError, Outbound, Inbound, Listener | std.net | [Effects](../spec/reference/effects.md), [Built-in effect operations](../spec/reference/effects.md#built-in-effect-operations) |
 | ProcessError, ProcessOutput | std.process | [Built-in effect operations](../spec/reference/effects.md#built-in-effect-operations) |

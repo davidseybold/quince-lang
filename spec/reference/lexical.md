@@ -28,12 +28,12 @@ r[lex.no-contextual] There are no contextual keywords: every reserved word means
 ## Naming
 
 - r[lex.name.case] Types and enum variants: `PascalCase`. Functions, bindings, fields, packages, files: `snake_case`. Constants: `SCREAMING_SNAKE_CASE`.
-- r[lex.name.enforced] Naming case is enforced by the compiler, not the linter. r[lex.name.foreign-exempt] Names declared inside a foreign block are exempt and keep their exact C spelling, so they match the library's documentation ([Interop with C](../quince-spec.md#11-interop)).
+- r[lex.name.enforced] Naming case is enforced by the compiler, not the linter. r[lex.name.foreign-exempt] Names declared inside a foreign block are exempt and keep their exact C spelling, so they match the library's documentation ([Interop with C](interop.md)).
 
 ## Comments
 
 - r[lex.comment.line] `//` line comments only. No block comments, which break easily under partial edits.
-- r[lex.comment.doc] `///` doc comments attach to the next declaration and may contain executable examples (see [Testing](../quince-spec.md#executable-examples-in-doc-comments)).
+- r[lex.comment.doc] `///` doc comments attach to the next declaration and may contain executable examples (see [Testing](testing.md)).
 
 ## Tokens and identifiers
 
