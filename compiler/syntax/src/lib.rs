@@ -31,7 +31,8 @@ pub mod codes {
     pub const MULTILINE_LAYOUT: &str = "E0012";
     pub const LONE_CARRIAGE_RETURN: &str = "E0013";
     pub const INVALID_UTF8: &str = "E0014";
-    pub const ALL: [&str; 14] = [
+    pub const CONTROL_CHARACTER: &str = "E0015";
+    pub const ALL: [&str; 15] = [
         UNKNOWN_CHARACTER,
         SEMICOLON,
         BLOCK_COMMENT,
@@ -46,6 +47,7 @@ pub mod codes {
         MULTILINE_LAYOUT,
         LONE_CARRIAGE_RETURN,
         INVALID_UTF8,
+        CONTROL_CHARACTER,
     ];
 }
 

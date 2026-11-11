@@ -4,6 +4,7 @@ use crate::{Lexed, SyntaxKind, lex_str};
 use std::path::Path;
 
 mod chars;
+mod control;
 mod errors;
 mod multiline;
 mod numbers;

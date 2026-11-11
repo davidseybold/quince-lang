@@ -85,6 +85,11 @@ pub const REGISTRY: &[CodeInfo] = &[
         "source file isn't UTF-8",
         include_str!("../explain/E0014.md"),
     ),
+    error(
+        "E0015",
+        "control or bidirectional-format character in a literal or comment",
+        include_str!("../explain/E0015.md"),
+    ),
 ];
 
 const fn error(code: &'static str, title: &'static str, explain: &'static str) -> CodeInfo {

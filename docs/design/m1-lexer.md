@@ -152,9 +152,9 @@ StringStart  ( StringText | StringIndent | StringNewline | Interp... )*  [ Strin
 - An unknown tag is lexed as a tagged literal, with a raw body, so `foo"x"` is one literal and one E0010. When it is also unclosed, E0010 is its only error, since one slip gets one error.
 - `b"""` and a tag before `"""` are lexed as a raw multi-line string, so the closing `"""` line closes it rather than opening a new string, and only E0010 is reported for the prefix.
 - A lone CR is a line ending here too (decision 3), so it ends a one-line string or char literal. Only E0013 is reported then, not E0004 or E0009, since the missing quote is the CR's fault.
-- A multi-line string with no closing `"""` line runs to the end of the file. That one does swallow the file, and Risks covers it. Its lines aren't checked for escapes or interpolation, since they are more likely code than text, so one missing line is one E0005, not an error for every backslash and brace after it.
+- A multi-line string with no closing `"""` line runs to the end of the file. That one does swallow the file, and Risks covers it. Its lines aren't checked for escapes, interpolation or control characters, since they are more likely code than text, so one missing line is one E0005, not an error for every backslash and brace after it.
 - A string ends at its first `"""` that an escape doesn't take. After text on a line, that is an E0012 (`r[lex.lit.multiline-quotes]`), with a `needs-review` fix that moves the quotes to a line of their own, and the code after them is still checked. So quotes after text neither swallow the file nor join the next string into this one.
-- Text after the opening `"""` is one E0012 and one unchecked `StringText`. A `"""` later on that line closes the string, so `"""text"""` is one E0012 and can't swallow the file.
+- Text after the opening `"""` is one E0012 and one unchecked `StringText`, with no escapes or control characters checked. A `"""` later on that line closes the string, so `"""text"""` is one E0012 and can't swallow the file.
 - A line that doesn't start with the closing line's indentation is an E0012 at its indentation. When no line starts with it, the closing `"""` is what is out of place, so that is one E0012, at the closing line, not one per line.
 
 ### 9. Diagnostics
@@ -173,13 +173,13 @@ Codes are numbered in the order they are registered, from E0001, skipping the re
 | E0006 | An invalid escape: unknown (`\q`), `\'` in a string, `\}`, a bad `\u{...}`, a bad `\x` or one outside bytes | For `\'` and `\}`, delete the backslash (`safe`) | Q7 for `\u` and `\x` details |
 | E0007 | An interpolation that isn't a name or field path | For spaces inside the braces, delete them (`safe`) | Q2 |
 | E0008 | A malformed number (decision 7) | Remove a suffix (`needs-review`); lowercase an exponent `E` or a base prefix (`safe`) | Q4 |
-| E0009 | An invalid char literal: empty, more than one scalar value, or unclosed | For more than one, use `"` (`needs-review`), escaping `"` and `{` and unescaping `\'`. None when a name character comes right before the `'`, which would make the `"` a tag's, or a `"`, which would join it, or when the body has an invalid escape | |
+| E0009 | An invalid char literal: empty, more than one scalar value, or unclosed | For more than one, use `"` (`needs-review`), escaping `"` and `{` and unescaping `\'`. None when a name character comes right before the `'`, which would make the `"` a tag's, or a `"`, which would join it, or when the body has an invalid escape or a control character, whose fix comes first | |
 | E0010 | An unknown literal tag, or `b"""` or a tag before `"""` | None. The message lists the tags | |
 | E0011 | A non-ASCII character in a bytes literal | Replace it with the `\x` escapes of its UTF-8 bytes (`safe`). After a `\` it is part of an invalid escape, an E0006, so no E0011 shares its span | |
 | E0012 | A multi-line string layout error | For `"""` after text, move it to a line of its own (`needs-review`) | Q3 |
 | E0013 | A carriage return not followed by a line feed | Outside a literal, replace it with a line feed (`safe`). None inside a one-line literal, which the CR ends (decision 8) | Q1 |
 | E0014 | A file that isn't valid UTF-8 | None | Q1 |
-| E0015 | A control or bidirectional-format character in a literal or comment | In a `"` or `"""` string, replace it with its `\u{...}` escape (`safe`). None in raw and tagged bodies or comments | Q8 |
+| E0015 | A control or bidirectional-format character in a literal or comment, one per run. A character inside an invalid escape is part of its E0006, and a bidirectional character in bytes, which isn't ASCII, is an E0011 | In a `"` or `"""` string, a test's name or a char, replace each with its `\u{...}` escape, and in bytes with its `\x` escape (`safe`). None in raw and tagged bodies, comments, or an interpolation's braces | Q8 |
 
 **Messages describe Quince** (decided by David, 2026-11-11). Quince is optimized for AI models, but it is its own language: it borrows constructs from others, and its errors don't account for them. Each message says what Quince expects, the same way for every input, such as the escapes a string takes or what a path is. The lexer never looks for a construct from another language to call it out (`#` comments, `r#"` strings, C or Swift escapes, `\u` with four digits, `f"` strings, type suffixes, format specifiers), and has no per-case hints for one input shape (a word glued to a closing quote, `{Self}`, `{a b}`). Layers 1 to 6b first shipped such messages, and the layer under 6b2 removed them. Each was more code and tests to keep right for every form it could follow, for little gain: an agent that reads what Quince expects can write it.
 
@@ -395,8 +395,8 @@ Rule IDs in brackets are what each task's fixtures cite. Rules added by spec que
 - [x] No fixes in a lossy text (decision 9).
 
 **Layer 6c2: `m1/lexer-control`**
-- [ ] Spec: question 8, and a bump.
-- [ ] Control and bidirectional characters; E0015. [`lex.source.control`]
+- [x] Spec: question 8, and a bump.
+- [x] Control and bidirectional characters; E0015. [`lex.source.control`]
 
 **Layer 7: `m1/lexer-corpus`**
 - [ ] Spec: label every code block (question 5), and the `spec-rules` check for unlabelled blocks.
