@@ -91,6 +91,11 @@ fn a_declaration_closes_a_block() {
     let text = "fn f() {\n  g(\npub fn h() {}\n";
     assert_eq!(errors(text), ["E0017 7..8", "E0017 12..13"]);
     assert_eq!(decls(text), [SyntaxKind::FnDecl, SyntaxKind::FnDecl]);
+    // In an `impl`, a method closes the block of the one before it, but not the body.
+    assert_eq!(
+        errors("impl A {\n  fn f() {\n    g()\n  fn h() {}\n}\n"),
+        ["E0017 18..19"]
+    );
 }
 
 /// A member start ends the constructs it closes even after a token that continues the line,
@@ -127,8 +132,8 @@ fn a_statement_closes_a_list() {
 fn a_closing_bracket_further_out_closes_a_list() {
     assert_eq!(errors("fn f() {\n  g(a\n}\n"), ["E0017 12..13"]);
     assert_eq!(
-        errors("fn f() {\n  g(h(a\n}\n"),
-        ["E0017 12..13", "E0017 14..15"]
+        errors("fn f() {\n  g([a\n}\n"),
+        ["E0017 12..13", "E0017 13..14"]
     );
 }
 
@@ -143,6 +148,7 @@ fn a_closing_bracket_that_matches_nothing() {
     );
     assert_eq!(errors("fn f() {\n  g)\n}\n"), ["E0016 12..13"]);
     assert_eq!(errors("}\nfn f() {}"), ["E0016 0..1"]);
+    assert_eq!(messages("}\n"), ["expected a declaration, found `}`"]);
     assert_eq!(
         messages("fn f() {}\n}\n"),
         ["expected a declaration, found `}`"]
@@ -170,10 +176,10 @@ fn a_skip_stops_at_a_declaration() {
 fn the_end_of_the_file_closes_everything() {
     assert_eq!(errors("fn f() {\n  g(1"), ["E0017 7..8", "E0017 12..13"]);
     assert_eq!(
-        messages("fn f() ->"),
-        ["expected a type, found the end of the file"]
+        messages("const A: Int ="),
+        ["expected an expression, found the end of the file"]
     );
-    assert_eq!(errors("fn f() ->"), ["E0016 9..9"]);
+    assert_eq!(errors("const A: Int ="), ["E0016 14..14"]);
     // What the constructs around an unclosed bracket lack is part of that slip.
     assert_eq!(errors("fn f(a:"), ["E0017 4..5"]);
     assert_eq!(errors("fn f(a: Int"), ["E0017 4..5"]);
@@ -185,7 +191,7 @@ fn the_end_of_the_file_closes_everything() {
 fn an_unclosed_literal_ends_its_line() {
     assert_eq!(codes("fn f() {\n  log(\"done)\n}\n"), ["E0004"]);
     assert_eq!(
-        codes("fn f() {\n  let a = g(h(\"hello)\n  let b = 'c\n  h(x y\n}\n"),
+        codes("fn f() {\n  let a = [g(\"hello)\n  let b = 'c\n  h(x y\n}\n"),
         ["E0004", "E0009", "E0016"]
     );
     assert_eq!(codes("fn f() { log(\"done)\n}\n"), ["E0004"]);

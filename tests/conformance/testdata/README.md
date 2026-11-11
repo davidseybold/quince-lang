@@ -31,7 +31,7 @@ The runner reads a fixture as bytes and gives the backend those bytes unchanged,
 
 A `.stdout` file with no `.qnc` file of the same name is an error, because it's usually left behind by a rename. So is any failure to read a `.stdout` file other than "not found".
 
-Write the fixture from the spec text alone, before the code that makes it pass. The runner's backend is `SyntaxBackend`, and only `parse` is wired: it runs the lexer, and the parser once that lands. A `check` fixture fails with "no backend" until M2 wires the checker, and a `run` fixture until M6, never a skip, so a fixture lands in the same PR as the code that makes it pass.
+Write the fixture from the spec text alone, before the code that makes it pass. The runner's backend is `SyntaxBackend`, and only `parse` is wired: it runs the lexer and the parser. A `check` fixture fails with "no backend" until M2 wires the checker, and a `run` fixture until M6, never a skip, so a fixture lands in the same PR as the code that makes it pass.
 
 ## Coverage report
 

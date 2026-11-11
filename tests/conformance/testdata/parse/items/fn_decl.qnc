@@ -1,0 +1,14 @@
+// rule: grammar.fn_decl
+// rule: grammar.fn_sig
+// mode: parse
+// A function is `fn`, its name, its parameters in parentheses, an optional `->` and return
+// type, and its body, a block. Each part is required but the return type.
+fn none() {}
+fn returns() -> List<List<Int>> {
+  [[1]]
+}
+pub fn public(a: Int) -> Int { a }
+fn () {} //~ E0016
+fn no_parameters {} //~ E0016
+fn no_body() -> Int //~ E0016
+fn no_return_type() -> {} //~ E0016

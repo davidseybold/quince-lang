@@ -1,4 +1,4 @@
-//! Declarations: the file and `fn`, and their parts.
+//! Declarations: the file, `fn`, `test`, `const` and `impl`, and their parts.
 
 use super::{Break, Holds, Parser, Sync, exprs, types};
 use crate::SyntaxKind::{self, *};
@@ -6,17 +6,23 @@ use crate::SyntaxKind::{self, *};
 /// The file: declarations, one per line (`grammar.file`).
 pub(super) fn file(p: &mut Parser) {
     let marker = p.start();
-    p.lines(Holds::File, None, decl);
+    p.lines(Holds::File, None, |p| decl(p, Holds::File));
     p.complete(marker, File);
 }
 
-/// A declaration, with its `pub` (`grammar.decl`). Anything else is skipped as an error.
-fn decl(p: &mut Parser) {
+/// A declaration in the file, or a method in an `impl` body (`grammar.decl`,
+/// `grammar.impl_item`), with its `pub`. Anything else is skipped as an error. Layer 7 of the
+/// parser adds the other members.
+fn decl(p: &mut Parser, holds: Holds) {
     if p.kind() == PubKw && p.nth(1).is_some_and(|t| t.brk != Break::None) {
         // `pub` doesn't continue the line, so a break after it ends the declaration.
         let marker = p.start();
         p.bump();
-        p.expected("a declaration");
+        p.expected(if holds == Holds::File {
+            "a declaration"
+        } else {
+            "`fn`"
+        });
         p.complete(marker, Skipped);
         return;
     }
@@ -25,16 +31,25 @@ fn decl(p: &mut Parser) {
     } else {
         p.kind()
     };
-    if item != FnKw {
-        p.expected_member("a declaration");
-        return p.recover(Sync::Line, true);
-    }
+    let (kind, parse): (SyntaxKind, fn(&mut Parser)) = match (holds, item) {
+        (_, FnKw) => (FnDecl, fn_decl),
+        (Holds::File, ConstKw) => (ConstDecl, const_decl),
+        (Holds::File, TestKw) => (TestDecl, test_decl),
+        (Holds::File, ImplKw) => (ImplDecl, impl_decl),
+        (Holds::File, _) => return skip("a declaration", p),
+        _ => return skip("`fn` or `}`", p),
+    };
     let marker = p.start();
     if p.kind() == PubKw {
         p.bump();
     }
-    fn_decl(p);
-    p.complete(marker, FnDecl);
+    parse(p);
+    p.complete(marker, kind);
+}
+
+fn skip(what: &str, p: &mut Parser) {
+    p.expected_member(what);
+    p.recover(Sync::Line, true);
 }
 
 /// `fn` name `(` params `)` [ `->` type ] block (`grammar.fn_decl`, `grammar.fn_sig`). A line
@@ -112,6 +127,53 @@ fn param_type(p: &mut Parser) {
 
 fn starts_param(kind: SyntaxKind) -> bool {
     matches!(kind, Ident | SelfKw | VarKw | Underscore)
+}
+
+/// `test` string block (`grammar.test_decl`).
+fn test_decl(p: &mut Parser) {
+    p.bump();
+    if !p.at(StringStart) {
+        return p.expected("the test's name, a string");
+    }
+    exprs::literal(p);
+    if !p.at(LBrace) {
+        return p.expected("`{`");
+    }
+    exprs::block(p);
+}
+
+/// `const` NAME `:` type `=` expr (`grammar.const_decl`).
+fn const_decl(p: &mut Parser) {
+    p.bump();
+    if !name(p, "a constant name") {
+        return;
+    }
+    if !p.at(Colon) {
+        return p.expected("`:`");
+    }
+    p.bump();
+    if !types::type_(p) {
+        return;
+    }
+    if !p.at(Eq) {
+        return p.expected("`=`");
+    }
+    p.bump();
+    exprs::expr(p);
+}
+
+/// `impl` type `{` methods `}`: an inherent `impl`, with one `[ pub ] fn` per line
+/// (`grammar.impl_decl`).
+fn impl_decl(p: &mut Parser) {
+    p.bump();
+    if !types::type_(p) {
+        return;
+    }
+    if !p.at(LBrace) {
+        return p.expected("`{`");
+    }
+    p.bump();
+    p.lines(Holds::Body, Some(RBrace), |p| decl(p, Holds::Body));
 }
 
 /// A name being declared, as a `Name` node. A keyword can't be one (`r[lex.keyword-not-name]`).

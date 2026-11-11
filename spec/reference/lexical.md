@@ -138,6 +138,9 @@ r[lex.lit.char]
 r[lex.lit.char.escapes]
 - A char literal takes the same escapes as strings, plus \\'
 
+r[lex.lit.bool]
+- `true` and `false` are the literals of `Bool`.
+
 r[lex.lit.bytes]
 - Bytes: `b"GET /"`, `b"\x00\xFF"`. Type Bytes: ASCII characters, \\x escapes and the escapes \\n \\r \\t \\0 \\\\ \\". No interpolation
 

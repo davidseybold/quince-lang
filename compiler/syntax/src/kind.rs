@@ -89,7 +89,7 @@ syntax_kinds! {
         File,
         /// Tokens the parser skipped while recovering from an error.
         Skipped,
-        FnDecl, ParamList, Param, RetType, ImplDecl,
+        FnDecl, ParamList, Param, RetType, TestDecl, ConstDecl, ImplDecl,
         /// A type path with its type arguments.
         TypePath, TypeArgs,
         Block, LetStmt,
@@ -100,6 +100,7 @@ syntax_kinds! {
         Literal,
         /// An interpolation in a string: its braces and the tokens of its path.
         Interp,
+        ListLit, Range,
         /// A call of anything: a function, a method (`Field` as callee), a struct or a variant.
         Call,
         ArgList,
@@ -132,7 +133,7 @@ impl SyntaxKind {
     /// fields, enum variants, members and match arms. The README's CST section has the rule.
     pub fn attaches_comments(self) -> bool {
         use SyntaxKind::*;
-        matches!(self, FnDecl | ImplDecl)
+        matches!(self, FnDecl | TestDecl | ConstDecl | ImplDecl)
     }
 
     /// True for the kinds after which a line always continues, whatever their role

@@ -151,6 +151,8 @@ enum Holds {
     /// A list: no line holds a member.
     Items,
     File,
+    /// The body of an `impl`.
+    Body,
     Block,
 }
 
@@ -419,10 +421,16 @@ impl<'t> Parser<'t> {
             | ConstKw | TestKw => true,
             _ => false,
         };
+        let member_start = |n: usize| match self.nth_kind(n) {
+            FnKw => self.nth_kind(n + 1) == Ident,
+            TypeKw | ConstKw => true,
+            _ => false,
+        };
         let public = usize::from(self.kind() == PubKw);
         let holds = |holds: Holds| match holds {
             Holds::Items => false,
             Holds::File => item_start(public),
+            Holds::Body => member_start(public),
             Holds::Block => matches!(self.kind(), LetKw | VarKw | WhileKw),
         };
         self.frames.iter().rposition(|frame| holds(frame.holds))
@@ -550,7 +558,8 @@ impl<'t> Parser<'t> {
     /// Skips tokens into a `Skipped` node up to the next sync point of the innermost frame:
     /// `sync`, its closing bracket, or a [`Stop`]. With `force`, the current token is skipped
     /// even where it is a sync point. A bracket the skip opens is skipped up to its closing
-    /// bracket, unless a frame's closing bracket or a member start of the file comes first.
+    /// bracket, unless a frame's closing bracket or a member start of the file or an `impl`
+    /// body comes first.
     fn recover(&mut self, sync: Sync, force: bool) {
         let marker = self.start();
         let mut skipped = false;
@@ -575,7 +584,7 @@ impl<'t> Parser<'t> {
             } else if self.frame_closed_by(kind).is_some()
                 || self
                     .member_holder()
-                    .is_some_and(|at| self.frames[at].holds == Holds::File)
+                    .is_some_and(|at| matches!(self.frames[at].holds, Holds::File | Holds::Body))
             {
                 break;
             }
@@ -651,8 +660,8 @@ impl<'t> Parser<'t> {
     }
 
     /// The members of a line context, after its opening bracket, which the caller took: the
-    /// file or a block. Each member is parsed by `member`, which skips a token that can't
-    /// start one, and ends at a break.
+    /// file, an `impl` body or a block. Each member is parsed by `member`, which skips a
+    /// token that can't start one, and ends at a break.
     fn lines(&mut self, holds: Holds, closer: Option<SyntaxKind>, member: fn(&mut Parser)) {
         self.push_frame(holds, closer);
         loop {

@@ -1,0 +1,43 @@
+// rule: lex.keywords
+// rule: lex.ident-not-keyword
+// mode: parse
+// These are the keywords, and none of them can be a name, so none can name a function.
+fn fn() {} //~ E0016
+fn let() {} //~ E0016
+fn var() {} //~ E0016
+fn type() {} //~ E0016
+fn struct() {} //~ E0016
+fn enum() {} //~ E0016
+fn interface() {} //~ E0016
+fn impl() {} //~ E0016
+fn match() {} //~ E0016
+fn is() {} //~ E0016
+fn if() {} //~ E0016
+fn else() {} //~ E0016
+fn for() {} //~ E0016
+fn in() {} //~ E0016
+fn while() {} //~ E0016
+fn return() {} //~ E0016
+fn break() {} //~ E0016
+fn continue() {} //~ E0016
+fn import() {} //~ E0016
+fn pub() {} //~ E0016
+fn uses() {} //~ E0016
+fn requires() {} //~ E0016
+fn ensures() {} //~ E0016
+fn test() {} //~ E0016
+fn forall() {} //~ E0016
+fn with() {} //~ E0016
+fn concurrent() {} //~ E0016
+fn spawn() {} //~ E0016
+fn background() {} //~ E0016
+fn foreign() {} //~ E0016
+fn true() {} //~ E0016
+fn false() {} //~ E0016
+fn self() {} //~ E0016
+fn Self() {} //~ E0016
+fn const() {} //~ E0016
+fn effect() {} //~ E0016
+fn select() {} //~ E0016
+fn as() {} //~ E0016
+fn name() {}

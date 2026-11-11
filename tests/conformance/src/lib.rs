@@ -37,15 +37,15 @@ pub struct RunOutput {
     pub stdout: String,
 }
 
-/// The compiler as far as it exists: `parse` runs the lexer, and the parser once it lands.
-/// `check` waits for M2, which decides how to wire the type checker, and `run` for M6.
+/// The compiler as far as it exists: `parse` runs the lexer and the parser. `check` waits for
+/// M2, which decides how to wire the type checker, and `run` for M6.
 pub struct SyntaxBackend;
 
 impl Backend for SyntaxBackend {
     fn parse(&self, path: &str, source: &[u8]) -> Option<Vec<Diagnostic>> {
         // The runner rejects a fixture too large to decode before it calls a backend.
         let decoded = quince_syntax::decode_source(source).ok()?;
-        Some(quince_syntax::lex(&decoded).diagnostics(&decoded.text, path))
+        Some(quince_syntax::parse(&decoded).diagnostics(&decoded.text, path))
     }
 
     fn check(&self, _path: &str, _source: &[u8]) -> Option<Vec<Diagnostic>> {

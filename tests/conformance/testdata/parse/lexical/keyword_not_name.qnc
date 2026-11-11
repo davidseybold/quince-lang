@@ -1,0 +1,12 @@
+// rule: lex.keyword-not-name
+// mode: parse
+// A keyword can't name a binding, a parameter or a method.
+impl Job {
+  fn if(self) {} //~ E0016
+  fn run(self, match: Int) {} //~ E0016
+}
+fn f(job: Job) {
+  let while = 1 //~ E0016
+  job.select() //~ E0016
+  job.run()
+}

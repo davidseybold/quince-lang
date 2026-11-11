@@ -90,6 +90,16 @@ pub const REGISTRY: &[CodeInfo] = &[
         "control or bidirectional-format character in a literal or comment",
         include_str!("../explain/E0015.md"),
     ),
+    error(
+        "E0016",
+        "a token that can't go here",
+        include_str!("../explain/E0016.md"),
+    ),
+    error(
+        "E0017",
+        "an opening bracket with no closing one",
+        include_str!("../explain/E0017.md"),
+    ),
 ];
 
 const fn error(code: &'static str, title: &'static str, explain: &'static str) -> CodeInfo {
