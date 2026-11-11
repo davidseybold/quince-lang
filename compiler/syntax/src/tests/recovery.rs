@@ -1,4 +1,5 @@
-//! Errors: E0016, "expected X, found Y", and the skip after it, so one slip is one error.
+//! Error recovery: the slips of the parser design doc's decision 9 and their diagnostics, one
+//! slip to one error, and the errors the parser leaves to the lexer.
 
 use super::errors::describe;
 use super::parser::{check_error_ranges, checked};
@@ -19,8 +20,21 @@ fn messages(text: &str) -> Vec<String> {
     parse.errors().iter().map(|e| e.message.clone()).collect()
 }
 
-/// An item on the next line after a list item is an E0016, whose fix inserts the missing
-/// `,`. The skip then closes the `(` at the block's `}`, with nothing more reported.
+/// A member start closes the lists it can't be in, with an E0017 at each opener.
+#[test]
+fn a_statement_start_closes_a_call() {
+    assert_eq!(
+        errors("fn f() {\n  g(a, b\n  let y = 2\n}\n"),
+        ["E0017 12..13"]
+    );
+    assert_eq!(
+        messages("fn f() {\n  g(a, b\n  let y = 2\n}\n"),
+        ["this `(` has no matching `)`"]
+    );
+}
+
+/// An item on the next line that isn't a member start is an E0016, whose fix inserts the
+/// missing `,`. The skip then closes the `(` silently at the block's `}`.
 #[test]
 fn an_item_on_the_next_line_needs_a_comma() {
     assert_eq!(
@@ -63,52 +77,116 @@ fn decls(text: &str) -> Vec<SyntaxKind> {
         .collect()
 }
 
-/// The skip after an error takes a bracket whole, and stops at a sync point: a `,` in a list,
-/// a break in a line context.
+/// After an error, a construct closed while the parser skips gets no E0017: once the first
+/// slip is fixed, the missing closers show.
 #[test]
-fn the_skip_takes_brackets_whole() {
+fn closers_after_an_error_are_silent() {
+    assert_eq!(errors("fn f() {\n  g(a b\nfn h() {}\n"), ["E0016 15..16"]);
+}
+
+#[test]
+fn a_declaration_closes_a_block() {
+    assert_eq!(errors("fn f() {\n  g()\nfn h() {}\n"), ["E0017 7..8"]);
+}
+
+/// A closing bracket closes every list inside the bracket it matches.
+#[test]
+fn a_closing_bracket_further_out_closes_a_list() {
+    assert_eq!(errors("fn f() {\n  g(a\n}\n"), ["E0017 12..13"]);
     assert_eq!(
-        errors("fn f() {\n  g(a b (c, d), e)\n}\n"),
-        ["E0016 15..16"]
-    );
-    assert_eq!(
-        codes("fn match() {\n  let a = 1\n}\nfn g() {}\n"),
-        ["E0016"]
+        errors("fn f() {\n  g(h(a\n}\n"),
+        ["E0017 12..13", "E0017 14..15"]
     );
 }
 
-/// A list or block closed by something else expects its closing bracket.
-#[test]
-fn a_missing_closing_bracket() {
-    assert_eq!(
-        messages("fn f() {\n  g(a\n}\n"),
-        ["expected `)`, found `}`"]
-    );
-    assert_eq!(errors("fn f() {\n  g(1"), ["E0016 14..14"]);
-    assert_eq!(
-        messages("fn f() {\n  g(1"),
-        ["expected `)`, found the end of the file"]
-    );
-}
-
-/// A closing bracket that matches nothing is skipped as an E0016.
+/// A closing bracket that matches nothing open closes the innermost list in its place, with
+/// one E0016. In a line context it is skipped, as one with nothing open is.
 #[test]
 fn a_closing_bracket_that_matches_nothing() {
+    assert_eq!(errors("fn f() {\n  g(a, b]\n}\n"), ["E0016 17..18"]);
+    assert_eq!(
+        messages("fn f() {\n  g(a, b]\n}\n"),
+        ["expected `,` or `)`, found `]`"]
+    );
     assert_eq!(errors("fn f() {\n  g)\n}\n"), ["E0016 12..13"]);
     assert_eq!(errors("}\nfn f() {}"), ["E0016 0..1"]);
     assert_eq!(
         messages("fn f() {}\n}\n"),
         ["expected a declaration, found `}`"]
     );
+    assert_eq!(
+        messages("fn f() {\n  g(]\n}\n"),
+        ["expected an expression or `)`, found `]`"]
+    );
+    // Closed in its place, the list doesn't swallow the next line.
+    assert_eq!(codes("fn f() {\n  g(a]\n  h(\n}\n"), ["E0016", "E0017"]);
 }
 
+/// A skip stops at a declaration, even inside a bracket it skipped, so the declaration is
+/// parsed.
 #[test]
-fn the_end_of_the_file() {
+fn a_skip_stops_at_a_declaration() {
+    assert_eq!(
+        errors("fn match() {\n  let a = 1\n\nfn g() {\n  h(\n}\n"),
+        ["E0016 3..8", "E0017 38..39"]
+    );
+}
+
+/// The end of the file closes every open bracket, with an E0017 at each.
+#[test]
+fn the_end_of_the_file_closes_everything() {
+    assert_eq!(errors("fn f() {\n  g(1"), ["E0017 7..8", "E0017 12..13"]);
     assert_eq!(
         messages("fn f() ->"),
         ["expected a type, found the end of the file"]
     );
     assert_eq!(errors("fn f() ->"), ["E0016 9..9"]);
+    // What the constructs around an unclosed bracket lack is part of that slip.
+    assert_eq!(errors("fn f(a:"), ["E0017 4..5"]);
+    assert_eq!(errors("fn f(a: Int"), ["E0017 4..5"]);
+}
+
+/// An unclosed one-line literal ends its line's lists with no error, and nothing else on the
+/// line is reported. A block's `{` stays open.
+#[test]
+fn an_unclosed_literal_ends_its_line() {
+    assert_eq!(codes("fn f() {\n  log(\"done)\n}\n"), ["E0004"]);
+    assert_eq!(
+        codes("fn f() {\n  let a = g(h(\"hello)\n  let b = 'c\n  h(x y\n}\n"),
+        ["E0004", "E0009", "E0016"]
+    );
+    assert_eq!(codes("fn f() { log(\"done)\n}\n"), ["E0004"]);
+    assert_eq!(codes("fn f() {\n  g('c\n}\n"), ["E0009"]);
+    // Not even an error before the literal.
+    assert_eq!(codes("fn f() {\n  let = \"abc\n}\n"), ["E0004"]);
+    // A bracket skipped after the error at `b`, itself not reported, closes at the line's end
+    // too, so the next line is parsed, and its own slip reported.
+    assert_eq!(
+        codes("fn f() {\n  g(a b (\"x\n  h(\n}\n"),
+        ["E0004", "E0017"]
+    );
+}
+
+/// An unclosed multi-line string or block comment swallows the end of the file, so the
+/// parser reports nothing there.
+#[test]
+fn nothing_is_reported_at_a_swallowed_end() {
+    assert_eq!(codes("fn f() {\n  g(\"\"\"\n  text\n"), ["E0005"]);
+    assert_eq!(codes("fn f() {\n  g(\n  /* never closed\n"), ["E0003"]);
+    assert_eq!(codes("fn f /* never closed"), ["E0003"]);
+    // A closed one still lets the end of the file report.
+    assert_eq!(
+        codes("fn f() {\n  g(\n  /* closed */\n"),
+        ["E0017", "E0017", "E0003"]
+    );
+}
+
+/// What the parser would report right after a character that starts no token is the
+/// lexer's error alone.
+#[test]
+fn nothing_is_reported_after_an_error_token() {
+    assert_eq!(errors("fn f() {\n  let x = $\n}\n"), ["E0001 19..20"]);
+    assert_eq!(codes("fn f() {\n  let x = 1 $ 2\n}\n"), ["E0001"]);
 }
 
 /// A `;` is the lexer's error, and a hard break: it ends the statement even before a `.`.

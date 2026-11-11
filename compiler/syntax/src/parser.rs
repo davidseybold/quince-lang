@@ -61,7 +61,7 @@ pub fn parse_str(text: &str) -> Parse {
 }
 
 fn parse_lexed(text: &str, lexed: Lexed) -> Parse {
-    let input = Input::new(&lexed);
+    let input = Input::new(text, &lexed);
     let significant: Vec<usize> = input.tokens.iter().map(|t| t.index).collect();
     let mut parser = Parser::new(text, &lexed, input);
     items::file(&mut parser);
@@ -145,11 +145,32 @@ struct Marker(usize);
 #[derive(Clone, Copy)]
 struct Completed(usize);
 
+/// What the members of a line context can be (decision 9's member starts).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Holds {
+    /// A list: no line holds a member.
+    Items,
+    File,
+    Block,
+}
+
 /// An open construct that error recovery knows about: the file, and each bracket.
 #[derive(Debug, Clone, Copy)]
 struct Frame {
-    /// The closing bracket, if the frame has one.
-    closer: Option<SyntaxKind>,
+    /// The closing bracket, and the index of the opening one among the significant tokens.
+    bracket: Option<(SyntaxKind, usize)>,
+    holds: Holds,
+}
+
+/// Why the innermost frame must close at the current token without its closing bracket.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Stop {
+    Eof,
+    /// A closing bracket of a frame further out, or a member start that only a frame further
+    /// out can hold.
+    Outer,
+    /// The line that opened this list held an unclosed one-line literal, and has ended.
+    LineEnd,
 }
 
 /// Where error recovery stops skipping.
@@ -171,6 +192,10 @@ struct Parser<'t> {
     /// An error was reported and the parser hasn't taken a token since, so nothing more is
     /// reported (decision 9).
     recovering: bool,
+    /// A frame closed without its closing bracket and the parser hasn't taken a token since,
+    /// so what the constructs around it lack is part of that slip. Unlike `recovering`, it
+    /// doesn't silence the E0017s of the frames around it.
+    closed_early: bool,
     /// The parser is in a `fn` header, where a line that starts with `->` or `{` continues.
     in_fn_header: bool,
     lookahead: Cell<u32>,
@@ -186,6 +211,7 @@ impl<'t> Parser<'t> {
             steps: Vec::new(),
             frames: Vec::new(),
             recovering: false,
+            closed_early: false,
             in_fn_header: false,
             lookahead: Cell::new(0),
         }
@@ -246,6 +272,7 @@ impl<'t> Parser<'t> {
 
     fn bump(&mut self) {
         self.recovering = false;
+        self.closed_early = false;
         self.take();
     }
 
@@ -304,8 +331,10 @@ impl<'t> Parser<'t> {
 
     // Frames.
 
-    fn push_frame(&mut self, closer: Option<SyntaxKind>) {
-        self.frames.push(Frame { closer });
+    fn push_frame(&mut self, holds: Holds, closer: Option<SyntaxKind>) {
+        let opener = self.pos.checked_sub(1);
+        let bracket = closer.map(|closer| (closer, opener.expect("a bracket was taken")));
+        self.frames.push(Frame { bracket, holds });
     }
 
     fn top(&self) -> Frame {
@@ -313,7 +342,7 @@ impl<'t> Parser<'t> {
     }
 
     fn own_closer(&self) -> Option<SyntaxKind> {
-        self.top().closer
+        self.top().bracket.map(|(closer, _)| closer)
     }
 
     /// Closes the innermost frame at its closing bracket, which the caller takes next.
@@ -322,40 +351,89 @@ impl<'t> Parser<'t> {
         self.lookahead.set(0);
     }
 
-    /// Closes the innermost frame without its closing bracket, with an E0016 that expects it
-    /// unless the slip is already reported.
-    fn close_frame(&mut self) {
+    /// Closes the innermost frame without its closing bracket, with an E0017 at its opening
+    /// one unless the slip is already reported.
+    fn close_frame(&mut self, stop: Stop) {
         let frame = self.frames.pop().expect("a frame to close");
         self.lookahead.set(0);
-        if let Some(closer) = frame.closer {
-            // What closes it is the token there, not a break before it.
-            let error = self.unexpected(&format!("`{}`", punctuation(closer)), false);
-            self.report(error);
+        self.closed_early = true;
+        let Some((closer, opener)) = frame.bracket else {
+            return;
+        };
+        let silent = self.recovering
+            || stop == Stop::LineEnd
+            || (stop == Stop::Eof && self.input.eof_swallowed);
+        if !silent {
+            let range = self.input.tokens[opener].range.clone();
+            let open = &self.text[range.clone()];
+            let close = punctuation(closer);
+            let message = format!("this `{open}` has no matching `{close}`");
+            self.emit(SyntaxError::new(range, codes::UNCLOSED_BRACKET, message));
         }
     }
 
-    /// The innermost frame must close here without its closing bracket: at the end of the
-    /// file, or at the closing bracket of a frame further out.
-    fn stops(&self) -> bool {
+    /// Why the innermost frame must close here without its closing bracket, if it must
+    /// (decision 9).
+    fn stop(&self) -> Option<Stop> {
         let Some(token) = self.current() else {
-            return true;
+            return Some(Stop::Eof);
         };
-        self.frame_closed_by(token.kind)
-            .is_some_and(|at| at < self.frames.len() - 1)
+        let top = self.frames.len() - 1;
+        let frame = self.top();
+        if let (Some(line_start), Holds::Items, Some((_, opener))) =
+            (token.closes_line_from, frame.holds, frame.bracket)
+            && self.input.tokens[opener].range.start >= line_start
+        {
+            return Some(Stop::LineEnd);
+        }
+        if let Some(at) = self.frame_closed_by(token.kind)
+            && at < top
+        {
+            return Some(Stop::Outer);
+        }
+        match self.member_holder() {
+            Some(at) if at < top => Some(Stop::Outer),
+            _ => None,
+        }
     }
 
     /// The innermost frame whose closing bracket is `kind`.
     fn frame_closed_by(&self, kind: SyntaxKind) -> Option<usize> {
         self.frames
             .iter()
-            .rposition(|frame| frame.closer == Some(kind))
+            .rposition(|frame| frame.bracket.is_some_and(|(closer, _)| closer == kind))
+    }
+
+    /// When the current token starts a line and can only start a member of some containers,
+    /// the innermost open one.
+    fn member_holder(&self) -> Option<usize> {
+        if !self.starts_line() {
+            return None;
+        }
+        let item_start = |n: usize| match self.nth_kind(n) {
+            FnKw => self.nth_kind(n + 1) == Ident,
+            StructKw | EnumKw | TypeKw | InterfaceKw | ImplKw | EffectKw | ForeignKw | ImportKw
+            | ConstKw | TestKw => true,
+            _ => false,
+        };
+        let public = usize::from(self.kind() == PubKw);
+        let holds = |holds: Holds| match holds {
+            Holds::Items => false,
+            Holds::File => item_start(public),
+            Holds::Block => matches!(self.kind(), LetKw | VarKw | WhileKw),
+        };
+        self.frames.iter().rposition(|frame| holds(frame.holds))
     }
 
     // Errors.
 
-    /// Reports an E0016 at the current token: it isn't `what`, which may go here. At a break
-    /// that holds a `;`, the lexer's E0002 is the error, so the parser only recovers.
+    /// Reports an E0016 at the current token: it isn't `what`, which may go here. A frame
+    /// that must close here reports its own E0017 instead, or closes silently. At a break that
+    /// holds a `;`, the lexer's E0002 is the error, so the parser only recovers.
     fn expected(&mut self, what: &str) {
+        if self.frame_closes_here() {
+            return;
+        }
         if self.at_break() && self.current().is_some_and(|t| t.brk == Break::Hard) {
             self.recovering = true;
             return;
@@ -374,6 +452,9 @@ impl<'t> Parser<'t> {
     /// [`Parser::expected`], after a list item, with a fix that inserts the `,` when the
     /// current token starts another item on the next line.
     fn expected_in_list(&mut self, what: &str, starts_item: fn(SyntaxKind) -> bool) {
+        if self.frame_closes_here() {
+            return;
+        }
         let mut error = self.unexpected(what, false);
         if self.starts_line() && starts_item(self.kind()) {
             let end = self.input.tokens[self.pos - 1].range.end;
@@ -384,6 +465,14 @@ impl<'t> Parser<'t> {
             );
         }
         self.report(error);
+    }
+
+    fn frame_closes_here(&self) -> bool {
+        match self.stop() {
+            Some(Stop::Outer | Stop::LineEnd) => true,
+            Some(Stop::Eof) => self.top().bracket.is_some(),
+            None => false,
+        }
     }
 
     /// "expected `what`, found" the current token, or the end of the file. With `breaks`, a
@@ -434,42 +523,61 @@ impl<'t> Parser<'t> {
     /// Reports `error` unless the slip it is part of is already reported, and starts error
     /// recovery either way.
     fn report(&mut self, error: SyntaxError) {
-        if !self.recovering {
-            self.steps.push(Step::Error(error));
+        let after_error = self
+            .current()
+            .map_or(self.input.eof_after_error, |t| t.after_error);
+        if !self.recovering && !self.closed_early && !after_error {
+            self.emit(error);
         }
         self.recovering = true;
+    }
+
+    /// Adds `error`, unless it lies on a line an unclosed one-line literal ends, or at the end
+    /// of a file that an unclosed string or comment swallowed.
+    fn emit(&mut self, error: SyntaxError) {
+        let start = error.range.start as usize;
+        let swallowed = self.input.eof_swallowed && start == self.text.len();
+        if !swallowed && !self.input.on_unclosed_line(start) {
+            self.steps.push(Step::Error(error));
+        }
     }
 
     // Recovery.
 
     /// Skips tokens into a `Skipped` node up to the next sync point of the innermost frame:
-    /// `sync`, its closing bracket, the closing bracket of a frame further out, or the end of
-    /// the file. With `force`, the current token is skipped even where it is a sync point. A
-    /// bracket the skip opens is skipped up to its closing bracket, unless a frame's closing
-    /// bracket comes first.
+    /// `sync`, its closing bracket, or a [`Stop`]. With `force`, the current token is skipped
+    /// even where it is a sync point. A bracket the skip opens is skipped up to its closing
+    /// bracket, unless a frame's closing bracket or a member start of the file comes first.
     fn recover(&mut self, sync: Sync, force: bool) {
         let marker = self.start();
         let mut skipped = false;
-        // The closing brackets the skip has opened.
-        let mut groups: Vec<SyntaxKind> = Vec::new();
+        // The closing brackets the skip has opened, with where each opener's line starts.
+        let mut groups: Vec<(SyntaxKind, usize)> = Vec::new();
         while let Some(token) = self.current() {
-            let kind = token.kind;
-            if let Some(at) = groups.iter().rposition(|&closer| closer == kind) {
+            let (kind, start) = (token.kind, token.range.start);
+            if let Some(line_start) = token.closes_line_from {
+                groups.retain(|&(_, opened)| opened < line_start);
+            }
+            if let Some(at) = groups.iter().rposition(|&(closer, _)| closer == kind) {
                 groups.truncate(at);
             } else if groups.is_empty() {
                 let at_sync = match sync {
                     Sync::Line => self.at_break(),
                     Sync::List => kind == Comma,
                 };
-                let closes = Some(kind) == self.own_closer() || self.stops();
+                let closes = Some(kind) == self.own_closer() || self.stop().is_some();
                 if closes || (at_sync && !(force && !skipped)) {
                     break;
                 }
-            } else if self.frame_closed_by(kind).is_some() {
+            } else if self.frame_closed_by(kind).is_some()
+                || self
+                    .member_holder()
+                    .is_some_and(|at| self.frames[at].holds == Holds::File)
+            {
                 break;
             }
             if let Some(closer) = closer_of(kind) {
-                groups.push(closer);
+                groups.push((closer, start));
             }
             self.take();
             skipped = true;
@@ -488,10 +596,11 @@ impl<'t> Parser<'t> {
     fn list(
         &mut self,
         closer: SyntaxKind,
+        what_item: &str,
         item: fn(&mut Parser),
         starts_item: fn(SyntaxKind) -> bool,
     ) {
-        self.push_frame(Some(closer));
+        self.push_frame(Holds::Items, Some(closer));
         let close = format!("`{}`", punctuation(closer));
         loop {
             if self.kind() == closer {
@@ -499,15 +608,23 @@ impl<'t> Parser<'t> {
                 self.bump();
                 return;
             }
-            if self.stops() {
-                self.close_frame();
+            if let Some(stop) = self.stop() {
+                self.close_frame(stop);
+                return;
+            }
+            if self.unmatched_closer() {
+                self.close_in_place(&format!("{what_item} or {close}"));
                 return;
             }
             item(self);
             match self.kind() {
                 Comma => self.bump(),
                 kind if kind == closer => {}
-                _ if self.stops() => {}
+                _ if self.stop().is_some() => {}
+                _ if self.unmatched_closer() => {
+                    self.close_in_place(&format!("`,` or {close}"));
+                    return;
+                }
                 _ => {
                     self.expected_in_list(&format!("`,` or {close}"), starts_item);
                     self.recover(Sync::List, false);
@@ -516,23 +633,37 @@ impl<'t> Parser<'t> {
         }
     }
 
+    /// The current token is a closing bracket that matches no open frame.
+    fn unmatched_closer(&self) -> bool {
+        is_closer(self.kind()) && self.frame_closed_by(self.kind()).is_none()
+    }
+
+    /// A closing bracket that matches nothing open closes the innermost list in its place,
+    /// with an E0016 that names the bracket expected.
+    fn close_in_place(&mut self, what: &str) {
+        let error = self.unexpected(what, false);
+        self.report(error);
+        self.pop_frame();
+        self.take();
+    }
+
     /// The members of a line context, after its opening bracket, which the caller took: the
     /// file or a block. Each member is parsed by `member`, which skips a token that can't
     /// start one, and ends at a break.
-    fn lines(&mut self, closer: Option<SyntaxKind>, member: fn(&mut Parser)) {
-        self.push_frame(closer);
+    fn lines(&mut self, holds: Holds, closer: Option<SyntaxKind>, member: fn(&mut Parser)) {
+        self.push_frame(holds, closer);
         loop {
             if closer.is_some() && Some(self.kind()) == closer {
                 self.pop_frame();
                 self.bump();
                 return;
             }
-            if self.stops() {
-                self.close_frame();
+            if let Some(stop) = self.stop() {
+                self.close_frame(stop);
                 return;
             }
             member(self);
-            let ends = Some(self.kind()) == closer || self.stops() || self.at_break();
+            let ends = Some(self.kind()) == closer || self.stop().is_some() || self.at_break();
             if !ends {
                 let what = match closer {
                     Some(_) => "a line break or `}`",
@@ -553,6 +684,10 @@ fn closer_of(kind: SyntaxKind) -> Option<SyntaxKind> {
         LBrace => Some(RBrace),
         _ => None,
     }
+}
+
+fn is_closer(kind: SyntaxKind) -> bool {
+    matches!(kind, RParen | RBracket | RBrace)
 }
 
 /// The text of a punctuation kind, for messages.

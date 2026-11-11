@@ -118,10 +118,18 @@ The parser reads the significant tokens: every token but the trivia and the doc 
 - **Where a break ends a construct.** In a line context (the file and a block), a break ends the statement or declaration unless the token before it continues the line (`SyntaxKind::continues_line()`), the next token is `.`, or the parser is in a `fn` header and the next token is `->`, `uses`, `requires`, `ensures` or `{`. A hard break always ends it. Inside brackets, a break before a `,` or a closing bracket is spacing, but an expression in brackets still ends at a break, as a statement does.
 - **Errors.** Every syntax error is reported once, and then the parser skips to a sync point, reporting nothing more until it next takes a token as part of a construct. The skipped tokens go in a `Skipped` node, and a bracket the skip meets is skipped up to its closing bracket.
   - A list syncs at its next `,` and at its closing bracket. A line context syncs at its next break, which ends the member that went wrong.
-  - A closing bracket that matches a bracket further out closes everything inside it, and the end of the file closes everything still open. Each bracket closed that way expects its closing bracket, an E0016 unless the slip is already reported. A closing bracket that matches nothing open is skipped as an E0016.
+  - A token at the start of a line that can only start a member of some open container closes every construct inside the innermost such container, with an E0017 at each opening bracket it closes. For the file those tokens are `fn` and a name, `struct`, `enum`, `type`, `interface`, `impl`, `effect`, `foreign`, `import`, `const` and `test`, each also after `pub`. For a block they are `let`, `var` and `while`.
+  - A closing bracket that matches a bracket further out closes everything inside it, with an E0017 at each opener. One that matches nothing open closes the innermost list in its place, with one E0016 that names the bracket expected, and in a line context it is skipped as an E0016. The end of the file closes everything still open, with an E0017 at each opener.
+  - A bracket closed while the parser is skipping after an error gets no E0017, since that error covers the slip.
+  - After a bracket closes without its closing bracket, what the constructs around it lack is part of that slip, until the parser next takes a token.
   - An E0016 after a list item, at an item that starts the next line, has a fix that inserts the `,` (`needs-review`).
+- **Errors the parser leaves to the lexer.** Beyond the lexer's own list (above):
+  - The parser drops an error it would report right after an `Error` token, with only trivia between, so `let x = $` is the E0001 alone.
+  - An unclosed one-line string or char closes, at its line's end, the parentheses and square brackets opened on that line, with no E0017, and the parser reports nothing on that line. A block's `{` stays open.
+  - When a multi-line string or a block comment runs unclosed to the end of the file, the parser reports nothing at the end of the file and gives no E0017 for what the end closes.
 - **Loop safety.** Every parser loop takes a token, closes a construct or exits. Debug and fuzz builds panic when the parser looks at the tokens 256 times without taking one, closing a construct or completing a node.
 
 | Code | Reported for | Fix |
 | --- | --- | --- |
 | E0016 | A token that can't go here: "expected X, found Y", where Y can be a line break or the end of the file. A keyword where a name goes is one, which the message names | Insert the missing `,` between list items on separate lines (`needs-review`). Otherwise none |
+| E0017 | An opening bracket with no closing one, at the opener | None |
