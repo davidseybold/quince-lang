@@ -1,5 +1,5 @@
 //! One-line strings: their tokens, invalid escapes (E0006), interpolation (E0007) and a
-//! missing closing quote (E0004).
+//! missing closing quote (E0004), which raw, bytes and tagged literals share.
 
 use super::Lexer;
 use crate::literal::{BadEscape, escape};
@@ -11,15 +11,11 @@ impl Lexer<'_> {
     /// A string, at its `"`. A test's name, the string after `test` and any spaces, doesn't
     /// interpolate (`r[test.name]`), but takes a string's escapes (`r[test.name-escapes]`).
     pub(super) fn string(&mut self) {
-        let prefixed = self.tokens.last().map(|t| t.kind) == Some(SyntaxKind::Ident);
-        if prefixed {
-            return self.unchecked_string();
-        }
         let test_name = (self.tokens.iter().rev())
             .find(|t| t.kind != SyntaxKind::Whitespace)
             .is_some_and(|t| t.kind == SyntaxKind::TestKw);
         if self.rest().starts_with("\"\"\"") {
-            return self.multiline_string(false, !test_name);
+            return self.multiline_string(0, false, !test_name);
         }
         let open = self.pos;
         let first_error = self.errors.len();
@@ -30,30 +26,12 @@ impl Lexer<'_> {
             match self.rest().chars().next() {
                 Some('"') => return self.bump(SyntaxKind::StringEnd, 1),
                 Some('{') if self.pos < end => self.interpolation(end, true),
-                _ => return self.unclosed_string(open, first_error, dangling),
-            }
-        }
-    }
-
-    /// Until raw, bytes and tagged strings have their own rules: from a `"` to the next `"` on
-    /// the line, with no escapes or interpolation, so `b"""` is an empty string and then
-    /// another. The `"` rules would report false errors in them, such as escapes in
-    /// `r"C:\path"`.
-    fn unchecked_string(&mut self) {
-        loop {
-            self.bump(SyntaxKind::StringStart, 1);
-            let len = (self.rest().find(['"', '\n', '\r'])).unwrap_or(self.rest().len());
-            if len > 0 {
-                self.bump(SyntaxKind::StringText, len);
-            }
-            if !self.rest().starts_with('"') {
-                self.unclosed_literal_end = Some(self.pos);
-                return;
-            }
-            self.bump(SyntaxKind::StringEnd, 1);
-            // `""` and then `"` is a `"""`.
-            if len > 0 || !self.rest().starts_with('"') {
-                return;
+                _ => {
+                    let message = "this string has no closing `\"` on its line: a `\"` string \
+                                   stays on one line, and text over several lines goes between \
+                                   `\"\"\"` lines";
+                    return self.unclosed_string(open..open + 1, first_error, dangling, message);
+                }
             }
         }
     }
@@ -88,6 +66,7 @@ impl Lexer<'_> {
                             start + len,
                             problem,
                             interpolates,
+                            false,
                         ));
                     }
                     len += escape.len;
@@ -135,23 +114,24 @@ impl Lexer<'_> {
         self.bump(SyntaxKind::InterpEnd, 1);
     }
 
-    /// A string that `open` starts has reached a line ending, or the end of input, with no
-    /// closing `"`: an E0004, unless a lone CR ended it. It goes before the string's other
-    /// errors, from `first_error` on, which are later in the text.
-    fn unclosed_string(&mut self, open: usize, first_error: usize, dangling: bool) {
+    /// A one-line literal whose `StringStart` is `open` has reached a line ending, or the end
+    /// of input, with no closing `"`: an E0004 with `message`, unless a lone CR ended it. It
+    /// goes before the literal's other errors, from `first_error` on, which are later in the
+    /// text. When it is `dangling`, its text ends with a `\` that would escape an inserted `"`.
+    pub(super) fn unclosed_string(
+        &mut self,
+        open: Range<usize>,
+        first_error: usize,
+        dangling: bool,
+        message: &str,
+    ) {
         let end = self.pos;
         self.unclosed_literal_end = Some(end);
         // The CR is what is wrong, and E0013 reports it alone.
         if self.rest().starts_with('\r') && !self.rest().starts_with("\r\n") {
             return;
         }
-        let error = LexError::new(
-            open..open + 1,
-            codes::UNCLOSED_STRING,
-            "this string has no closing `\"` on its line: a `\"` string stays on one line, and \
-             text over several lines goes between `\"\"\"` lines"
-                .to_string(),
-        );
+        let error = LexError::new(open, codes::UNCLOSED_STRING, message.to_string());
         // After a `\`, an inserted `"` would be escaped, and the string still unclosed.
         let error = if dangling {
             error
@@ -329,17 +309,20 @@ fn space_deletions(at: usize, body: &str) -> Option<Vec<(Range<usize>, String)>>
     (!edits.is_empty()).then_some(edits)
 }
 
-/// The E0006 for the escape `text`, at `at`, which the text `after` follows.
-fn escape_error(
+/// The E0006 for the escape `text`, at `at`, which the text `after` follows, in a string
+/// that `interpolates` or in a bytes literal when `bytes` is true.
+pub(super) fn escape_error(
     text: &str,
     after: &str,
     at: usize,
     problem: BadEscape,
     interpolates: bool,
+    bytes: bool,
 ) -> LexError {
     let error =
         |message: String| LexError::new(at..at + text.len(), codes::INVALID_ESCAPE, message);
     let example = "as in `\\u{1F600}`";
+    let literal = if bytes { "a bytes literal" } else { "a string" };
     let message = match problem {
         BadEscape::Dangling => {
             "a `\\` at the end of a line escapes nothing: a backslash is written `\\\\`".to_string()
@@ -349,12 +332,32 @@ fn escape_error(
                 '}' if interpolates => ": only `{` opens an interpolation, so a lone `}` is text",
                 _ => "",
             };
-            return error(format!("`{c}` needs no escape in a string{why}")).with_fix(
+            return error(format!("`{c}` needs no escape in {literal}{why}")).with_fix(
                 "delete the backslash",
                 Applicability::Safe,
                 vec![(at..at + 1, String::new())],
             );
         }
+        BadEscape::Hex(_) if bytes => {
+            "a `\\x` escape takes exactly two hex digits, as in `\\x0A`".to_string()
+        }
+        BadEscape::NotInBytes(Some(c)) => {
+            let mut utf8 = [0; 4];
+            let escapes: String = (c.encode_utf8(&mut utf8).bytes())
+                .map(|b| format!("\\x{b:02X}"))
+                .collect();
+            let what = if c.is_ascii() {
+                "the byte"
+            } else {
+                "its UTF-8 bytes"
+            };
+            format!(
+                "a bytes literal takes `\\x` escapes, not `\\u{{...}}`: write {what} as `{escapes}`"
+            )
+        }
+        BadEscape::NotInBytes(None) => "a bytes literal takes `\\x` escapes, not `\\u`: write \
+                                        each byte as `\\x` and two hex digits, as in `\\xFF`"
+            .to_string(),
         BadEscape::Hex(Some(b)) if b.is_ascii() => format!(
             "`\\x` escapes appear only in bytes literals: in a string, write `\\u{{{b:X}}}`"
         ),
@@ -409,7 +412,13 @@ fn escape_error(
                     'v' => 0xB,
                     _ => 0x1B,
                 };
-                format!("`{text}` isn't a Quince escape: write the character as `\\u{{{code:X}}}`")
+                if bytes {
+                    format!("`{text}` isn't a Quince escape: write the byte as `\\x{code:02X}`")
+                } else {
+                    format!(
+                        "`{text}` isn't a Quince escape: write the character as `\\u{{{code:X}}}`"
+                    )
+                }
             }
             // Swift's `\(name)`, where the string interpolates.
             '(' if interpolates => {
@@ -425,6 +434,11 @@ fn escape_error(
                     None => "`\\(` isn't an escape: Quince interpolates with `{name}`".to_string(),
                 }
             }
+            _ if bytes => format!(
+                "`{text}` isn't an escape: a bytes literal's escapes are `\\x` with two hex \
+                 digits, `\\n`, `\\t`, `\\r`, `\\0`, `\\\\` and `\\\"`, so a backslash is written \
+                 `\\\\`"
+            ),
             _ => format!(
                 "`{text}` isn't an escape: a string's escapes are `\\n`, `\\t`, `\\r`, `\\0`, \
                  `\\\\`, `\\\"`, `\\{{` and `\\u{{...}}`, so a backslash is written `\\\\`"

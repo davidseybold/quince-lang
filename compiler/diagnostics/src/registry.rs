@@ -56,6 +56,16 @@ pub const REGISTRY: &[CodeInfo] = &[
         include_str!("../explain/E0008.md"),
     ),
     error(
+        "E0010",
+        "unknown literal tag",
+        include_str!("../explain/E0010.md"),
+    ),
+    error(
+        "E0011",
+        "non-ASCII character in a bytes literal",
+        include_str!("../explain/E0011.md"),
+    ),
+    error(
         "E0012",
         "multi-line string layout",
         include_str!("../explain/E0012.md"),

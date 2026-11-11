@@ -1,0 +1,16 @@
+// rule: lex.lit.multiline-forms
+// mode: parse
+// Only """ and r""" are multi-line, so b""" and a tag before """ are errors. Each is
+// still read to its closing """ line, so that line doesn't open a new string.
+fn f() -> List<String> {
+  let bytes = b"""
+    GET /
+    """
+  //~^^^ E0010
+  let pattern = re"""
+    [a-z]+
+    """
+  //~^^^ E0010
+  let after = "\q" //~ E0006
+  [after]
+}

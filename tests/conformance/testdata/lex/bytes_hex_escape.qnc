@@ -1,0 +1,10 @@
+// rule: lex.lit.bytes.hex-escape
+// mode: parse
+// \x takes exactly two hex digits, and appears only in bytes literals.
+fn f() -> List<Bytes> {
+  let bytes = b"\x00\xFF\xab\x7f0"
+  let short = b"\x4" //~ E0006
+  let not_hex = b"\xG0" //~ E0006
+  let in_string = "\x41" //~ E0006
+  [bytes]
+}

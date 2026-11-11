@@ -1,5 +1,8 @@
 //! Literal values, computed from token text on demand rather than stored in tokens.
 
+/// The tags of tagged literals (`r[lex.lit.tagged]`).
+pub const TAGS: [&str; 4] = ["url", "re", "dur", "ts"];
+
 /// The value of an `Int` token's text, or `None` when it doesn't fit in a `u128`.
 /// Underscores don't count. For a malformed literal, which the lexer has already reported,
 /// it reads the base's digits up to the first character that isn't one, so `None` still means
@@ -68,21 +71,46 @@ pub fn string_value(text: &str) -> String {
     value
 }
 
+/// The value of one `StringText` token's text in a bytes literal, with its escapes decoded.
+/// For a problem the lexer has already reported, a non-ASCII character is its UTF-8 bytes and
+/// `\'`, `\{` and `\}` are the character, as their fixes make them, and any other invalid
+/// escape is kept as written.
+pub fn bytes_value(text: &str) -> Vec<u8> {
+    let mut value = Vec::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(i) = rest.find('\\') {
+        value.extend_from_slice(&rest.as_bytes()[..i]);
+        let escape = byte_escape(&rest[i..]);
+        match escape.value {
+            Ok(b) => value.push(b),
+            Err(BadEscape::Needless(c)) => value.push(c as u8),
+            Err(_) => value.extend_from_slice(&rest.as_bytes()[i..i + escape.len]),
+        }
+        rest = &rest[i + escape.len..];
+    }
+    value.extend_from_slice(rest.as_bytes());
+    value
+}
+
 /// An escape: its length in bytes, and the character it stands for or what is wrong with it.
 pub(crate) struct Escape {
     pub len: usize,
     pub value: Result<char, BadEscape>,
 }
 
-/// What is wrong with an escape in a `"` string (`r[lex.lit.string.escapes]`).
+/// What is wrong with an escape in a `"` string (`r[lex.lit.string.escapes]`) or a bytes
+/// literal (`r[lex.lit.bytes]`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BadEscape {
     /// A `\` at a line end or the end of the text.
     Dangling,
-    /// `\'` or `\}`, whose character needs no escape.
+    /// `\'` or `\}`, or `\{` in bytes, whose character needs no escape.
     Needless(char),
-    /// `\x`, with the value of the two hex digits after it, if there are two.
+    /// `\x`, with the value of the two hex digits after it, if there are two. In bytes, only
+    /// without them.
     Hex(Option<u8>),
+    /// `\u` in bytes, with the character it names, if it is a valid string escape.
+    NotInBytes(Option<char>),
     /// `\u` with no braces, with what `\u` and four hex digits would mean in other languages.
     UnicodeNoBraces(Option<char>),
     UnicodeUnclosed,
@@ -124,6 +152,28 @@ pub(crate) fn escape(text: &str) -> Escape {
         'u' => unicode_escape(text),
         c => bad(1 + c.len_utf8(), BadEscape::Unknown(c)),
     }
+}
+
+/// An escape in a bytes literal: its length in bytes, and the byte it stands for or what is
+/// wrong with it.
+pub(crate) struct ByteEscape {
+    pub len: usize,
+    pub value: Result<u8, BadEscape>,
+}
+
+/// The escape at the start of `text`, which starts with `\`, in a bytes literal: `\x` and two
+/// hex digits, `\n`, `\r`, `\t`, `\0`, `\\` or `\"` (`r[lex.lit.bytes]`). It takes as much text
+/// as a string's escape would, so a `\u{...}` is one error.
+pub(crate) fn byte_escape(text: &str) -> ByteEscape {
+    let Escape { len, value } = escape(text);
+    let value = match (text.as_bytes().get(1), value) {
+        (Some(b'x'), Err(BadEscape::Hex(Some(b)))) => Ok(b),
+        (Some(b'u'), value) => Err(BadEscape::NotInBytes(value.ok())),
+        (Some(b'{'), _) => Err(BadEscape::Needless('{')),
+        (_, Ok(c)) => Ok(u8::try_from(c).expect("the other escapes stand for ASCII")),
+        (_, Err(problem)) => Err(problem),
+    };
+    ByteEscape { len, value }
 }
 
 /// `\u{...}` at the start of `text` (`r[lex.lit.string.unicode-escape]`).
@@ -185,7 +235,7 @@ fn hex_run(text: &str, max: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::{float_value, int_value, string_value};
+    use super::{bytes_value, float_value, int_value, string_value};
 
     #[test]
     fn int_values() {
@@ -259,5 +309,23 @@ mod tests {
         assert_eq!(string_value("a\\"), "a\\");
         assert_eq!(string_value(r"\u{ab\}"), r"\u{ab\}");
         assert_eq!(string_value("\\\u{e9}"), "\\\u{e9}");
+    }
+
+    #[test]
+    fn bytes_values() {
+        assert_eq!(bytes_value("GET /"), b"GET /");
+        assert_eq!(
+            bytes_value(r#"\x00\xFF\xab\n\r\t\0\\\"{}"#),
+            b"\x00\xff\xab\n\r\t\0\\\"{}"
+        );
+        assert_eq!(bytes_value(""), b"");
+    }
+
+    #[test]
+    fn invalid_bytes_decode_as_their_fixes_make_them_or_stay_as_written() {
+        assert_eq!(bytes_value("caf\u{e9}"), "caf\u{e9}".as_bytes());
+        assert_eq!(bytes_value(r"\'\{\}"), b"'{}");
+        assert_eq!(bytes_value(r"\x4 \u{41} \q"), br"\x4 \u{41} \q");
+        assert_eq!(bytes_value("a\\"), b"a\\");
     }
 }

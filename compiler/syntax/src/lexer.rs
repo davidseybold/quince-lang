@@ -6,6 +6,7 @@ use std::ops::Range;
 
 mod multiline;
 mod number;
+mod prefixed;
 mod string;
 
 /// A token is its kind and its length in bytes. It starts where the previous token ends.
@@ -154,13 +155,17 @@ impl<'a> Lexer<'a> {
                 self.bump(kind, self.to_line_end());
             }
             '/' if rest.starts_with("/*") => self.block_comment(),
-            'r' if rest.starts_with("r\"\"\"") => self.multiline_string(true, false),
             'a'..='z' | 'A'..='Z' | '_' => {
                 let len = self.run_of(|c| c.is_ascii_alphanumeric() || c == '_');
                 let kind = match &rest[..len] {
                     "_" => SyntaxKind::Underscore,
                     word => SyntaxKind::keyword(word).unwrap_or(SyntaxKind::Ident),
                 };
+                // An identifier glued to a `"` is a literal's prefix. A keyword never is, so
+                // `test"adds"` is `test` and a string.
+                if kind == SyntaxKind::Ident && rest[len..].starts_with('"') {
+                    return self.prefixed_string(len);
+                }
                 self.bump(kind, len);
             }
             '0'..='9' => self.number(),

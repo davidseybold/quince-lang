@@ -140,6 +140,7 @@ StringStart  ( StringText | StringIndent | StringNewline | Interp... )*  [ Strin
 - `}` alone is text (`r[lex.lit.string.lone-brace]`).
 - Raw, bytes and tagged forms produce only `StringText` between start and end, with no escapes (raw and tagged) or a reduced set (bytes, `r[lex.lit.bytes]`).
 - A known tag is one of `url`, `re`, `dur`, `ts`. An identifier glued to `"` that isn't a tag (`foo"x"`, `br"x"`, `f"x"`) is an E0010 listing the tags. A keyword is never a tag, so `test"adds"` is `test` and a string.
+- `b"""` and a tag before `"""` (`re"""`) are E0010 too, since only `"""` and `r"""` are multi-line (`r[lex.lit.multiline-forms]`, decided by David, 2026-11-11).
 - `Char` is one token, `'a'`, with the string escapes plus `\'` (`r[lex.lit.char.escapes]`).
 
 *Alternative:* each string as one token, with interpolation found later by re-scanning its text. Simpler for the lexer, but every consumer of names (resolution, rename, the language server) would need a special case for names inside strings. Rejected.
@@ -148,6 +149,8 @@ StringStart  ( StringText | StringIndent | StringNewline | Interp... )*  [ Strin
 - A one-line string with no closing quote ends before its line ending (`r[lex.lit.string.one-line]`), with no `StringEnd`, so one missing quote can't swallow the file.
 - A broken interpolation (`{a + b}`, `{}`, `{ name }`, a `{` never closed) becomes an `Error` token up to and including the next `}`, or up to but excluding the next `"` or line ending, and the string goes on. So `"{"` reports one E0007, and its closing quote still ends the string.
 - A char literal with no closing `'` ends before its line ending.
+- An unknown tag is lexed as a tagged literal, with a raw body, so `foo"x"` is one literal and one E0010. When it is also unclosed, E0010 is its only error, since one slip gets one error. Glued to a closing quote, as in `"say "hi" now"`, the E0010 says the quote before it was probably meant as text, written `\"`.
+- `b"""` and a tag before `"""` are lexed as a raw multi-line string, so the closing `"""` line closes it rather than opening a new string, and only E0010 is reported for the prefix.
 - A lone CR is a line ending here too (decision 3), so it ends a one-line string or char literal. Only E0013 is reported then, not E0004 or E0009, since the missing quote is the CR's fault.
 - A multi-line string with no closing `"""` line runs to the end of the file. That one does swallow the file, and Risks covers it. Its lines aren't checked for escapes or interpolation, since they are more likely code than text, so one missing line is one E0005, not an error for every backslash and brace after it.
 - A string ends at its first `"""` that an escape doesn't take. After text on a line, as Java and Kotlin close a string, that is an E0012 (`r[lex.lit.multiline-quotes]`), with a `needs-review` fix that moves the quotes to a line of their own, and the code after them is still checked. So the habit agents bring from those languages neither swallows the file nor joins the next string into this one.
@@ -170,9 +173,9 @@ Codes are numbered in the order they are registered, from E0001, skipping the re
 | E0006 | An invalid escape: unknown (`\q`), `\'` in a string, `\}`, a bad `\u{...}`, a bad `\x` or one outside bytes | For `\'` and `\}`, delete the backslash (`safe`) | Q7 for `\u` and `\x` details |
 | E0007 | An interpolation that isn't a name or field path | For spaces inside the braces, delete them (`safe`) | Q2 |
 | E0008 | A malformed number (decision 7) | Remove a suffix (`needs-review`); lowercase an exponent `E` or a base prefix (`safe`) | Q4 |
-| E0009 | An invalid char literal: empty, more than one scalar value, or unclosed | For more than one character, use `"` (`needs-review`) | |
-| E0010 | An unknown literal tag | None. The message lists the tags | |
-| E0011 | A non-ASCII character in a bytes literal | Replace it with the `\x` escapes of its UTF-8 bytes (`safe`) | |
+| E0009 | An invalid char literal: empty, more than one scalar value, or unclosed | For more than one character, use `"` (`needs-review`), escaping `"` and `{` and unescaping `\'`. None when a name character comes right before the `'`, which would make the `"` a tag's, or when the body has an invalid escape | |
+| E0010 | An unknown literal tag, or `b"""` or a tag before `"""` | None. The message lists the tags | |
+| E0011 | A non-ASCII character in a bytes literal | Replace it with the `\x` escapes of its UTF-8 bytes (`safe`). After a `\` it is part of an invalid escape, an E0006, so no E0011 shares its span | |
 | E0012 | A multi-line string layout error | For `"""` after text, move it to a line of its own (`needs-review`) | Q3 |
 | E0013 | A carriage return not followed by a line feed | Outside a literal, replace it with a line feed (`safe`). None inside a one-line literal, which the CR ends (decision 8) | Q1 |
 | E0014 | A file that isn't valid UTF-8 | None | Q1 |
@@ -237,11 +240,12 @@ Each layer builds and passes `cargo xtask ci` on its own:
 4. `m1/lexer-numbers`: spec question 4, and a bump; numbers, the tuple-index rule and `literal`'s number values; E0008.
 5. `m1/lexer-strings`: spec questions 2 and 7, and a bump; one-line strings, escapes and interpolation; E0004, E0006 and E0007.
 6a. `m1/lexer-multiline`: spec question 3, and a bump; multi-line and raw multi-line strings; E0005 and E0012.
-6b. `m1/lexer-literals`: raw, bytes, tagged and char literals; E0009 to E0011; the fallback rule is removed.
+6b. `m1/lexer-literals`: raw, bytes and tagged literals; E0010 and E0011; the fallback for prefixed strings is removed.
+6b2. `m1/lexer-chars`: char literals; E0009; the rest of the fallback rule is removed.
 6c. `m1/lexer-control`: spec question 8, and a bump; control and bidirectional characters; E0015.
 7. `m1/lexer-corpus`: spec question 5 (labels, no bump); the corpus and mutation tests.
 
-Each layer should come in at around 500 to 900 changed lines. Layer 2 was first planned to hold layers 2 to 4, but it would have run to about 1,600 lines, so it is split into the token stream, its errors, and numbers. Layer 6 was planned as one layer with six codes, but layer 5 alone, with three, came to about 1,200 lines, so it is split into 6a to 6c (decided by David, 2026-11-11). The codes keep the numbers the table gives, so E0008 is registered after E0013 and E0014.
+Each layer should come in at around 500 to 900 changed lines. Layer 2 was first planned to hold layers 2 to 4, but it would have run to about 1,600 lines, so it is split into the token stream, its errors, and numbers. Layer 6 was planned as one layer with six codes, but layer 5 alone, with three, came to about 1,200 lines, so it is split into 6a to 6c (decided by David, 2026-11-11). Layer 6b, with three codes and four forms, was estimated at about 1,150 lines, so char literals moved to 6b2 (decided by David, 2026-11-11). The codes keep the numbers the table gives, so E0008 is registered after E0013 and E0014.
 
 **Literals before their layer.** Layers 2 to 5 must stand alone, so they lex the literal forms they don't handle yet by a fallback rule. Everything from a `"` to the next `"` on the same line is `StringStart`, `StringText` and `StringEnd`, with no validation. Everything from a `'` to the next `'` on the line is a `Char`. A prefix is a separate `Ident`. Until layer 4, a digit and the letters, digits and underscores after it are one `Int`. Until layer 6a, `"""` lexes as an empty string followed by another string, so a multi-line string lexes wrongly. Nothing depends on that: no fixture uses those forms, and no command lexes user code until the parser lands.
 
@@ -375,12 +379,15 @@ Rule IDs in brackets are what each task's fixtures cite. Rules added by spec que
 - [x] `r[lex.lit.multiline-value]` in unit tests, through the README's rule for reading the value from the tokens. A `parse` fixture can't see values.
 
 **Layer 6b: `m1/lexer-literals`**
-- [ ] Raw strings. [`lex.lit.raw-string`]
-- [ ] Bytes; E0011. [`lex.lit.bytes`, `lex.lit.bytes.hex-escape`]
-- [ ] Tagged literals; E0010. [`lex.lit.tagged`, `lex.lit.tagged.raw`]
+- [x] Raw strings. [`lex.lit.raw-string`]
+- [x] Bytes, `literal::bytes_value`; E0011. [`lex.lit.bytes`, `lex.lit.bytes.hex-escape`]
+- [x] Tagged literals; E0010. [`lex.lit.tagged`, `lex.lit.tagged.raw`]
+- [x] `b"""` and tagged multi-line literals don't exist; E0010. [`lex.lit.multiline-forms`]
+- [x] Remove the fallback for prefixed strings (decision 12) and its part of the README's "Literals not lexed yet".
+
+**Layer 6b2: `m1/lexer-chars`**
 - [ ] Char literals; E0009. [`lex.lit.char`, `lex.lit.char.escapes`]
-- [ ] `b"""` and tagged multi-line literals don't exist. [`lex.lit.multiline-forms`]
-- [ ] Remove the fallback rule (decision 12) and the README's "Literals not lexed yet".
+- [ ] Remove the rest of the fallback rule and the README's "Literals not lexed yet".
 
 **Layer 6c: `m1/lexer-control`**
 - [ ] Spec: question 8, and a bump.
