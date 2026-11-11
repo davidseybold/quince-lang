@@ -533,4 +533,7 @@ One `gh stack`, a PR per layer (decision 11). Tick each box as it lands on its b
   - [x] final-target check in `spec-compare`: each link a `refs.tsv` row wrote leads to its final target once its unit sits in a chapter file or `std/API.md`, skipping links into the legacy file, so it runs from this layer on and covers every link once the legacy file is gone; leftover check extended to headings (first PR, `move-tooling-tables`)
   - [x] `spec-compare` takes `docs/design-principles.md` and the repo plan's Pipeline section as landing files (first PR, `move-tooling-tables`)
   - [x] chapters 18 to 20; `docs/design-principles.md`; Pipeline to `docs/repo-plan.md`; `quince-spec.md` and `legacy` deleted; every baseline heading has a row; diagnostics example test path; README lists Part II and notes the split (second PR, `move-tooling`)
-- [ ] 11. `cleanup`: `docs/repo-plan.md`, `docs/milestones.md` (chapters, v0.4, M9 notes); `spec-compare` and baseline deleted; the `legacy` chapter support in `quince_spec` and its README deleted; status "done"
+- [ ] 11. `cleanup`, as three PRs: `cleanup-docs`, `cleanup` and `cleanup-legacy`
+  - [x] `docs/repo-plan.md` layout; `docs/milestones.md`: chapter names instead of section numbers, the stale v0.4 mentions, M9's notes from decision 12 (first PR, `cleanup-docs`)
+  - [ ] `spec-compare`, its `ci` step and the baseline deleted (second PR, `cleanup`)
+  - [ ] the `legacy` chapter support in `quince_spec` and its README deleted; status "done" (third PR, `cleanup-legacy`)
