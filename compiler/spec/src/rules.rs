@@ -483,18 +483,18 @@ fn placement_problem(lines: &[&str], index: usize) -> Option<String> {
         }
         end += 1;
     }
-    let ends_at_blank = lines.get(end).is_some_and(|line| line.trim().is_empty());
-    let indented_after_blank = lines[end.min(lines.len())..]
+    // An item's own text ends at a blank line or a block start. The next non-blank line is
+    // nested in the item if it's indented, whether or not a blank line comes before it.
+    let nested = lines[end.min(lines.len())..]
         .iter()
         .position(|line| !line.trim().is_empty())
         .map(|offset| end + offset)
-        .filter(|&at| item && ends_at_blank && lines[at].starts_with(char::is_whitespace));
-    if let Some(at) = indented_after_blank {
+        .filter(|&at| item && lines[at].starts_with(char::is_whitespace));
+    if let Some(at) = nested {
         let line_no = at + 1;
         return Some(format!(
-            "covers a list item with indented content after a blank line (line {line_no}); a \
-             rule never extends into nested blocks, so make that content a top-level block or \
-             join it to the item"
+            "covers a list item with a nested block (line {line_no}); a rule never extends into \
+             nested blocks, so make that content a top-level block or join it to the item"
         ));
     }
     None
@@ -851,16 +851,29 @@ mod tests {
     }
 
     #[test]
-    fn tagged_items_have_no_indented_content_after_a_blank_line() {
+    fn tagged_items_have_no_nested_blocks() {
         assert_eq!(
             placement("r[bind.let]\n- Covered.\n\n  A nested paragraph.\n", 1),
-            "covers a list item with indented content after a blank line (line 4); a rule never extends into nested blocks, so make that content a top-level block or join it to the item"
+            "covers a list item with a nested block (line 4); a rule never extends into nested blocks, so make that content a top-level block or join it to the item"
         );
-        assert!(
-            placement("r[bind.let]\n- Covered.\n\n\n  - Nested.\n", 1).starts_with(
-                "covers a list item with indented content after a blank line (line 5)"
-            )
+        let nested_at = |spec: &str, line: usize| {
+            let problem = placement(spec, 1);
+            let expected = format!("covers a list item with a nested block (line {line})");
+            assert!(problem.starts_with(&expected), "{spec:?}: {problem}");
+        };
+        nested_at("r[bind.let]\n- Covered.\n\n\n  - Nested.\n", 5);
+        nested_at(
+            "r[bind.let]\n- Covered.\n  - Nested.\n\n  More nested.\n",
+            3,
         );
+        nested_at("r[bind.let]\n- Covered.\n  ```\n  code\n  ```\n", 3);
+        nested_at("r[bind.let]\n- Covered.\n  | A | B |\n  | - | - |\n", 3);
+        nested_at("r[bind.let]\n- Covered\n  and continued.\n  - Nested.\n", 4);
+    }
+
+    #[test]
+    fn tagged_items_keep_their_lazy_continuation_lines() {
+        assert!(messages("r[bind.let]\n- Covered\n  and continued.\n- Next.\n").is_empty());
     }
 
     #[test]

@@ -298,10 +298,8 @@ r[ffi.cmem.keep]
 r[ffi.cmem.cleanup-limit]
 - Cleanup is shielded from cancellation and has a time limit, 10 seconds unless the resource's declaration sets another. Past the limit the cleanup is cancelled, and the C-level release still runs ([Cancellation](concurrency.md#cancellation)).
 
-**Sharing resources between tasks.**
-
 r[ffi.cresource.crossing]
-A `Resource<T>` can't cross a task boundary unless its foreign type is marked `@shareable`, a promise that the C handle is safe to use from several threads.
+**Sharing resources between tasks.** A `Resource<T>` can't cross a task boundary unless its foreign type is marked `@shareable`, a promise that the C handle is safe to use from several threads.
 
 r[ffi.pool.def]
 For the usual case, a handle that isn't, the standard library's `Pool<T, Err, uses E>` holds up to `max` of them and hands each one to a single task at a time:

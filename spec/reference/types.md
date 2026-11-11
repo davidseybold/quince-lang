@@ -118,10 +118,8 @@ All built-in collections and structs have value semantics.
 r[type.mut.shared-in-ref]
 Mutable state shared between functions lives only in a reference type (listed under [Reference types](#mutation)), and reading or writing one requires the `State` effect ([Effects](effects.md)), except where its item in the Reference types list below says otherwise. A signature therefore shows which state a function can reach, through its parameter types, and whether it touches that state, through `uses State`. A constant can't hold a reference type ([Items](items.md)), so there is no global mutable state to reach any other way.
 
-**Local mutation.**
-
 r[type.mut.local]
-On a `var` binding, collections and struct fields can be changed in place:
+**Local mutation.** On a `var` binding, collections and struct fields can be changed in place:
 
 ```
 fn word_counts(text: String) -> Map<String, Int> {

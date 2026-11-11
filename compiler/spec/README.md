@@ -37,9 +37,9 @@ r[effect.net]
 ```
 
 - A tag is a line holding only `r[<id>]`, at column 0. A blank line, a heading or the start of the file comes before it, and the block it covers comes directly after it: a paragraph, or a top-level `-` or `*` list item.
-- A tag covers exactly that block: the paragraph, or the item's own text and its lazy continuation lines. A tagged item has no indented content after a blank line, so a rule never extends into a nested block. An untagged item directly after a tagged one, in the same list, is not covered by the tag.
+- A tag covers exactly that block: the paragraph, or the item's own text and its lazy continuation lines. A tagged item has no nested block after its own text (an indented list, code block, table or paragraph, with or without a blank line before it), so a rule never extends into one. An untagged item directly after a tagged one, in the same list, is not covered by the tag.
 - Every other block is untagged: examples, code, tables, rationale and lead-in text. No tag sits inside a paragraph, a table, a nested list item, a blockquote or a code block. A rule that needs several blocks is several rules, each with its own tag.
-- A tag line can't be followed by a numbered item, a table, a heading, a code block, a blockquote, an HTML block, a thematic break, a blank line or another tag line. A tagged paragraph has no setext underline (`---` or `===`), which would make it and its tag a heading.
+- A tag line can't be followed by an indented line, a `+` item, a numbered item, a table, a heading, a code block, a blockquote, an HTML block, a thematic break, a blank line or another tag line. A tagged paragraph has no setext underline (`---` or `===`), which would make it and its tag a heading.
 - `r[` anywhere but a tag line, outside code blocks and inline code spans, is an error, so a misplaced tag can never silently drop out of coverage: `Text r[bind.var] more`, `(r[bind.var] y)`, `**r[bind.var]**` and an indented tag line all fail. A backtick run left open at the end of a line is literal text, as in CommonMark.
 - GitHub shows a tag line joined to its paragraph ("r[x] Text…"), or on its own line above a bullet item.
 

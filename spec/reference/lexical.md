@@ -41,7 +41,7 @@ r[lex.lit.int.context]
 - An integer literal takes another integer type from context, as in let b: UInt8 = 200, and a literal that doesn't fit that type is a compile error.
 
 r[lex.lit.int.neg]
-- A minus sign directly before a literal in prefix position is part of it, so Int.MIN can be written -9\_223\_372\_036\_854\_775\_808
+- A minus sign directly before an integer literal in prefix position is part of it, so Int.MIN can be written -9\_223\_372\_036\_854\_775\_808
 
 r[lex.lit.float.forms]
 - Float: `3.14`, `1e-9`

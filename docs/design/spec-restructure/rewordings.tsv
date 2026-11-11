@@ -13,6 +13,7 @@ expr.op.bits.parens	No level: must be parenthesized as an operand of any other o
 expr.op.shift.panic	Panics when the count	A shift panics when the count
 lex.lit.int.default	Default type `Int`	An integer literal's default type is `Int`
 lex.lit.int.context	Takes another integer type from context	An integer literal takes another integer type from context
+lex.lit.int.neg	A minus sign directly before a literal	A minus sign directly before an integer literal
 lex.lit.float.default	Default type `Float`	A float literal's default type is `Float`
 lex.lit.float.context	Takes Float32 from context the same way	A float literal takes Float32 from context the same way
 lex.lit.string.escapes	Escapes:	String escapes:
