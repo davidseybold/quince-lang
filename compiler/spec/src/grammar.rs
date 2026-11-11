@@ -1,17 +1,14 @@
-//! `spec/grammar.ebnf`: the two grammar appendices of the spec, copied verbatim under a header.
+//! `spec/grammar.ebnf`: every `ebnf` code block in the spec, copied verbatim under a header.
 //!
 //! The header is the leading `//` lines, and is the only hand-edited part of the file. One of
 //! them, `// terminals: ...`, lists the names the spec defines in prose instead of as
 //! productions. A blank line separates the header from the grammar.
 
-use crate::SpecError;
+use crate::{ChapterFile, FileError, SPEC_DIR};
 use std::collections::{HashMap, HashSet};
 
-/// The headings whose code block holds each half of the grammar, in file order.
-pub const APPENDIX_HEADINGS: [&str; 2] = [
-    "## Appendix: Expression grammar",
-    "### Declarations, types and patterns",
-];
+/// The info string of a fenced code block that holds grammar. Any other block is an example.
+pub const GRAMMAR_INFO: &str = "ebnf";
 
 /// The production every other production is reachable from, so nothing needs to reference it.
 pub const ROOT_PRODUCTION: &str = "file";
@@ -29,74 +26,84 @@ pub const DEFAULT_HEADER: &str = "\
 
 const TERMINALS_PREFIX: &str = "// terminals:";
 
-/// The grammar as it appears in the spec, with the spec line each grammar line came from.
+/// The grammar as it appears in the spec, with the chapter file and line each grammar line came
+/// from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Extracted {
-    /// Both appendix code blocks, separated by a blank line, ending with a newline.
+    /// Every `ebnf` block, separated by a blank line, ending with a newline.
     pub text: String,
-    /// `spec_lines[i]` is the 1-based spec line of grammar line `i + 1`.
-    spec_lines: Vec<usize>,
+    /// The chapter files the blocks came from, relative to the repo root.
+    paths: Vec<String>,
+    /// `origins[i]` is the source of grammar line `i + 1`: an index into `paths` and a 1-based
+    /// line in that file.
+    origins: Vec<(usize, usize)>,
 }
 
 impl Extracted {
-    /// The 1-based spec line that 1-based grammar line `line` was copied from.
-    pub fn spec_line(&self, line: usize) -> usize {
-        self.spec_lines
+    /// The chapter file and 1-based line that 1-based grammar line `line` was copied from, or
+    /// `("spec", 0)` for a line past the end.
+    pub fn origin(&self, line: usize) -> (&str, usize) {
+        self.origins
             .get(line.wrapping_sub(1))
-            .copied()
-            .unwrap_or(0)
+            .map_or((SPEC_DIR, 0), |&(path, line)| {
+                (self.paths[path].as_str(), line)
+            })
     }
 }
 
-/// Finds both appendix code blocks. Each heading must be followed by exactly one code block
-/// before the next heading, so a second block can't be silently skipped.
-pub fn extract(spec: &str) -> Result<Extracted, SpecError> {
-    let lines: Vec<&str> = spec.lines().collect();
-    let is_fence = |i: usize| lines[i].trim_start().starts_with("```");
+/// Collects every code block whose info string is `ebnf`, in the order of `files` and then of
+/// each file, separated by one blank line.
+pub fn extract(files: &[ChapterFile]) -> Result<Extracted, FileError> {
     let mut text_lines: Vec<&str> = Vec::new();
-    let mut spec_lines = Vec::new();
-    for (n, heading) in APPENDIX_HEADINGS.into_iter().enumerate() {
-        let start = lines
-            .iter()
-            .position(|line| line.trim_end() == heading)
-            .ok_or_else(|| SpecError {
-                line: 0,
-                message: format!("heading `{heading}` not found in the spec"),
-            })?;
-        let open = (start + 1..lines.len())
-            .find(|&i| is_fence(i))
-            .ok_or_else(|| SpecError {
-                line: start + 1,
-                message: format!("no code block after `{heading}`"),
-            })?;
-        let close = (open + 1..lines.len())
-            .find(|&i| is_fence(i))
-            .ok_or_else(|| SpecError {
-                line: open + 1,
-                message: format!("the code block after `{heading}` is never closed"),
-            })?;
-        let next_heading = (close + 1..lines.len())
-            .find(|&i| lines[i].starts_with('#'))
-            .unwrap_or(lines.len());
-        if let Some(extra) = (close + 1..next_heading).find(|&i| is_fence(i)) {
-            return Err(SpecError {
-                line: extra + 1,
-                message: format!(
-                    "`{heading}` has a second code block; the grammar check reads exactly one \
-                     block per appendix heading, so merge them or move this one under its own heading"
-                ),
+    let mut paths = Vec::new();
+    let mut origins = Vec::new();
+    for file in files {
+        let path = paths.len();
+        paths.push(file.path.clone());
+        // The 1-based line of the open fence, and whether its block is grammar.
+        let mut open: Option<(usize, bool)> = None;
+        for (index, line) in file.text.lines().enumerate() {
+            let line_no = index + 1;
+            let fence = line.trim_start().strip_prefix("```");
+            match (open, fence) {
+                (None, Some(info)) => {
+                    let grammar = info.trim() == GRAMMAR_INFO;
+                    if grammar && !origins.is_empty() {
+                        text_lines.push("");
+                        origins.push((path, line_no));
+                    }
+                    open = Some((line_no, grammar));
+                }
+                (Some(_), Some(_)) => open = None,
+                (Some((_, true)), None) => {
+                    text_lines.push(line);
+                    origins.push((path, line_no));
+                }
+                _ => {}
+            }
+        }
+        if let Some((line, true)) = open {
+            return Err(FileError {
+                path: file.path.clone(),
+                line,
+                message: format!("this `{GRAMMAR_INFO}` code block is never closed"),
             });
         }
-        if n > 0 {
-            text_lines.push("");
-            spec_lines.push(open);
-        }
-        text_lines.extend(&lines[open + 1..close]);
-        spec_lines.extend(open + 2..close + 1);
+    }
+    if origins.is_empty() {
+        return Err(FileError {
+            path: SPEC_DIR.to_string(),
+            line: 0,
+            message: format!(
+                "no chapter has a code block marked `{GRAMMAR_INFO}`; grammar goes in fenced \
+                 blocks whose info string is `{GRAMMAR_INFO}`"
+            ),
+        });
     }
     Ok(Extracted {
         text: format!("{}\n", text_lines.join("\n")),
-        spec_lines,
+        paths,
+        origins,
     })
 }
 
@@ -167,27 +174,42 @@ pub fn productions(grammar: &str) -> Vec<Production> {
     out
 }
 
+/// Maps a 1-based grammar line to the file and line reported, so errors point at the spec.
+pub type Locate<'a> = &'a dyn Fn(usize) -> (String, usize);
+
+/// Errors keyed by grammar line, sorted, then located. Grammar lines follow manifest order and
+/// then document order, so the errors come out in file order.
+fn located(mut errors: Vec<(usize, String)>, locate: Locate) -> Vec<FileError> {
+    errors.sort_by_key(|(line, _)| *line);
+    errors
+        .into_iter()
+        .map(|(line, message)| {
+            let (path, line) = locate(line);
+            FileError {
+                path,
+                line,
+                message,
+            }
+        })
+        .collect()
+}
+
 /// Checks that no production is defined twice, that every referenced name is a production or
 /// a declared terminal, and that every production except `file` is used by another one.
-/// `spec_line` maps a grammar line to the line reported, so errors point at the spec.
-pub fn check_closure(
-    grammar: &str,
-    terminals: &HashSet<String>,
-    spec_line: &dyn Fn(usize) -> usize,
-) -> Vec<SpecError> {
+pub fn check_closure(grammar: &str, terminals: &HashSet<String>, locate: Locate) -> Vec<FileError> {
     let productions = productions(grammar);
     let mut errors = Vec::new();
     let mut defined: HashMap<&str, usize> = HashMap::new();
     for p in &productions {
         if let Some(&first) = defined.get(p.name.as_str()) {
-            errors.push(SpecError {
-                line: spec_line(p.line),
-                message: format!(
-                    "production `{}` is defined twice; first on line {}",
-                    p.name,
-                    spec_line(first)
+            let (first_path, first_line) = locate(first);
+            errors.push((
+                p.line,
+                format!(
+                    "production `{}` is defined twice; first at {first_path}:{first_line}",
+                    p.name
                 ),
-            });
+            ));
         } else {
             defined.insert(&p.name, p.line);
         }
@@ -201,52 +223,50 @@ pub fn check_closure(
             }
             let known = defined.contains_key(name.as_str()) || terminals.contains(name);
             if !known && reported.insert(name) {
-                errors.push(SpecError {
-                    line: spec_line(p.line),
-                    message: format!(
+                errors.push((
+                    p.line,
+                    format!(
                         "`{name}`, used in production `{}` (which starts on this line), is \
                          neither a production nor a terminal in the header",
                         p.name
                     ),
-                });
+                ));
             }
         }
     }
     for p in &productions {
         if p.name != ROOT_PRODUCTION && !used.contains(p.name.as_str()) {
-            errors.push(SpecError {
-                line: spec_line(p.line),
-                message: format!(
+            errors.push((
+                p.line,
+                format!(
                     "production `{}` is never used by another production; remove it or reference it",
                     p.name
                 ),
-            });
+            ));
         }
     }
-    errors.sort_by_key(|e| e.line);
-    errors
+    located(errors, locate)
 }
 
 /// Productions whose derived ID `grammar.<name>` is retired: a removed production name can't
 /// come back with a new meaning.
-pub fn check_retired(
-    grammar: &str,
-    retired: &HashSet<String>,
-    spec_line: &dyn Fn(usize) -> usize,
-) -> Vec<SpecError> {
-    productions(grammar)
+pub fn check_retired(grammar: &str, retired: &HashSet<String>, locate: Locate) -> Vec<FileError> {
+    let errors = productions(grammar)
         .into_iter()
         .filter_map(|p| {
             let id = format!("grammar.{}", p.name);
-            retired.contains(&id).then(|| SpecError {
-                line: spec_line(p.line),
-                message: format!(
-                    "production `{}` has the retired rule ID `{id}` (spec/retired-rules.txt); give it a new name",
-                    p.name
-                ),
+            retired.contains(&id).then(|| {
+                (
+                    p.line,
+                    format!(
+                        "production `{}` has the retired rule ID `{id}` (spec/retired-rules.txt); give it a new name",
+                        p.name
+                    ),
+                )
             })
         })
-        .collect()
+        .collect();
+    located(errors, locate)
 }
 
 /// A unified line diff of `expected` against `actual`: `-` for lines only in `actual`, `+`
@@ -359,63 +379,95 @@ mod tests {
     const SPEC: &str = "\
 # Spec
 
-## Appendix: Expression grammar
+## Expressions
 
 Prose with r[lex.x] a tag.
 
-```
+```ebnf
 expr = term { \"+\" term }   // a comment with words
 term = \"(\" expr \")\" | name
 ```
 
-### Declarations, types and patterns
-
 ```
+example = not grammar
+```
+";
+
+    const ITEMS: &str = "\
+# Items
+
+```ebnf
 file = { expr NEWLINE }
 ```
 ";
+
+    fn file(path: &str, text: &str) -> ChapterFile {
+        ChapterFile {
+            prefix: "x".into(),
+            title: "X".into(),
+            path: path.into(),
+            file: path.into(),
+            text: text.into(),
+        }
+    }
+
+    fn spec() -> Vec<ChapterFile> {
+        vec![file("spec/a.md", SPEC), file("spec/b.md", ITEMS)]
+    }
 
     fn terms(names: &[&str]) -> HashSet<String> {
         names.iter().map(|s| s.to_string()).collect()
     }
 
-    fn same_line(line: usize) -> usize {
-        line
+    fn in_g(line: usize) -> (String, usize) {
+        ("g".to_string(), line)
     }
 
     #[test]
-    fn extracts_both_blocks() {
-        let extracted = extract(SPEC).unwrap();
+    fn extracts_every_ebnf_block_in_order() {
+        let extracted = extract(&spec()).unwrap();
         assert_eq!(
             extracted.text,
             "expr = term { \"+\" term }   // a comment with words\nterm = \"(\" expr \")\" | name\n\nfile = { expr NEWLINE }\n"
         );
-        assert_eq!([1, 2, 4].map(|line| extracted.spec_line(line)), [8, 9, 15]);
-    }
-
-    #[test]
-    fn missing_heading() {
-        let err =
-            extract("# Spec\n\n## Appendix: Expression grammar\n\n```\nx = y\n```\n").unwrap_err();
         assert_eq!(
-            err.message,
-            "heading `### Declarations, types and patterns` not found in the spec"
+            [1, 2, 3, 4, 5].map(|line| extracted.origin(line)),
+            [
+                ("spec/a.md", 8),
+                ("spec/a.md", 9),
+                ("spec/b.md", 3),
+                ("spec/b.md", 4),
+                ("spec", 0)
+            ]
         );
     }
 
     #[test]
-    fn second_code_block_is_an_error() {
-        let spec = SPEC.replace(
-            "### Declarations",
-            "More prose.\n\n```\nextra = name\n```\n\n### Declarations",
-        );
-        let err = extract(&spec).unwrap_err();
-        assert_eq!(err.line, 14);
+    fn several_blocks_in_one_file() {
+        let text = "```ebnf\na = b\n```\n\n```  ebnf  \nb = name\n```\n";
+        let extracted = extract(&[file("spec/a.md", text)]).unwrap();
+        assert_eq!(extracted.text, "a = b\n\nb = name\n");
+        assert_eq!(extracted.origin(3), ("spec/a.md", 6));
+    }
+
+    #[test]
+    fn no_grammar_blocks() {
+        let err = extract(&[file("spec/a.md", "# Spec\n\n```\nx = y\n```\n")]).unwrap_err();
+        assert_eq!(err.path, "spec");
         assert!(
             err.message
-                .starts_with("`## Appendix: Expression grammar` has a second code block"),
+                .starts_with("no chapter has a code block marked `ebnf`"),
             "{}",
             err.message
+        );
+    }
+
+    #[test]
+    fn unclosed_grammar_block() {
+        let err = extract(&[file("spec/a.md", "# Spec\n\n```ebnf\nx = y\n")]).unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "spec/a.md:3: this `ebnf` code block is never closed"
         );
     }
 
@@ -439,7 +491,7 @@ file = { expr NEWLINE }
 
     #[test]
     fn productions_ignore_strings_and_comments() {
-        let grammar = extract(SPEC).unwrap().text;
+        let grammar = extract(&spec()).unwrap().text;
         let found = productions(&grammar);
         let names: Vec<_> = found.iter().map(|p| p.name.as_str()).collect();
         assert_eq!(names, ["expr", "term", "file"]);
@@ -455,11 +507,13 @@ file = { expr NEWLINE }
 
     #[test]
     fn closure_passes() {
-        let extracted = extract(SPEC).unwrap();
+        let extracted = extract(&spec()).unwrap();
+        let locate = |line| {
+            let (path, line) = extracted.origin(line);
+            (path.to_string(), line)
+        };
         assert_eq!(
-            check_closure(&extracted.text, &terms(&["name", "NEWLINE"]), &|line| {
-                extracted.spec_line(line)
-            }),
+            check_closure(&extracted.text, &terms(&["name", "NEWLINE"]), &locate),
             Vec::new()
         );
     }
@@ -469,7 +523,7 @@ file = { expr NEWLINE }
         let errors = check_closure(
             "file = a\na = type_list b\nb = name\n",
             &terms(&["name"]),
-            &same_line,
+            &in_g,
         );
         assert_eq!(errors.len(), 1, "{errors:?}");
         assert_eq!(errors[0].line, 2);
@@ -485,11 +539,11 @@ file = { expr NEWLINE }
         let errors = check_closure(
             "file = arg\narg = name\narg = name\n",
             &terms(&["name"]),
-            &|line| line + 100,
+            &|line| ("spec/a.md".to_string(), line + 100),
         );
         assert_eq!(
             errors[0].to_string(),
-            "line 103: production `arg` is defined twice; first on line 102"
+            "spec/a.md:103: production `arg` is defined twice; first at spec/a.md:102"
         );
     }
 
@@ -498,7 +552,7 @@ file = { expr NEWLINE }
         let errors = check_closure(
             "file = a\na = name | a\nold_arg = name\n",
             &terms(&["name"]),
-            &same_line,
+            &in_g,
         );
         assert_eq!(errors.len(), 1, "{errors:?}");
         assert_eq!(errors[0].line, 3);
@@ -512,7 +566,7 @@ file = { expr NEWLINE }
     #[test]
     fn retired_production_name() {
         let retired = terms(&["grammar.old_arg"]);
-        let errors = check_retired("file = old_arg\nold_arg = name\n", &retired, &same_line);
+        let errors = check_retired("file = old_arg\nold_arg = name\n", &retired, &in_g);
         assert_eq!(errors.len(), 1);
         assert_eq!(errors[0].line, 2);
         assert!(

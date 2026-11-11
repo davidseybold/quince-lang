@@ -1,6 +1,6 @@
 [package]
 name = "quince_spec"
-description = "Reads the Quince language spec: its chapter manifest, rule IDs and grammar appendices."
+description = "Reads the Quince language spec: its chapter manifest, rule IDs and grammar blocks."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

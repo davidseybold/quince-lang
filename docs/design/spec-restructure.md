@@ -495,11 +495,11 @@ None. David settled the chapter list, the tooling chapters, the ID scheme, moved
 One `gh stack`, a PR per layer (decision 11). Tick each box as it lands on its branch. Run the pr-reviewer loop on the whole stack before handing it to David.
 
 - [x] 1. `design`: this doc reviewed and approved
-- [ ] 2. `manifest`, as two PRs to stay under the size limit: `manifest`, then `grammar-blocks`
+- [x] 2. `manifest`, as two PRs to stay under the size limit: `manifest`, then `grammar-blocks`
   - [x] `chapters.txt` with `legacy`; manifest parsing in `quince_spec`
   - [x] `spec/README.md` with the header (test: within 10 lines); manual diff in the PR
-  - [ ] `ebnf` info strings (with `grammar-blocks`)
-  - [ ] grammar assembled from `ebnf` blocks; errors with file and line (second PR, `grammar-blocks`)
+  - [x] `ebnf` info strings (with `grammar-blocks`)
+  - [x] grammar assembled from `ebnf` blocks; errors with file and line (second PR, `grammar-blocks`)
   - [x] rule parsing across files; `--strip` across files
   - [x] coverage by chapter; `spec_version` from the README
   - [x] pointers to `spec/quince-spec.md` moved to `spec/README.md`; `compiler/spec/README.md` and the testdata README updated
