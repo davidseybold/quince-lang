@@ -271,10 +271,16 @@ impl<'a> Lexer<'a> {
         let line_start = self.text[..start].rfind(['\n', '\r']).map_or(0, |i| i + 1);
         let indent = self.text[line_start..start].trim_start_matches('\u{FEFF}');
         let after = &self.text[end..];
-        if !blank(indent) || !blank(&after[..after.find(['\n', '\r']).unwrap_or(after.len())]) {
+        let body = &self.text[start + 2..end - 2];
+        // `lines()` doesn't split at a lone CR, which ends a line, so a `//` line would stop at
+        // it and turn the text after it into code. E0013 reports the CR, and its fix comes first.
+        let lone_cr = body.replace("\r\n", "\n").contains('\r');
+        if lone_cr
+            || !blank(indent)
+            || !blank(&after[..after.find(['\n', '\r']).unwrap_or(after.len())])
+        {
             return None;
         }
-        let body = &self.text[start + 2..end - 2];
         // Each line, without a leading `* ` as in `/** ... */` comments.
         let lines: Vec<&str> = (body.lines())
             .map(|line| match line.trim() {
@@ -297,7 +303,8 @@ impl<'a> Lexer<'a> {
         let after = self.rest()[1..].trim_start_matches([' ', '\t']);
         let at_line_end =
             after.is_empty() || after.starts_with(['\n', '\r']) || after.starts_with("//");
-        let error = if at_line_end {
+        let joins_slashes = self.text[..start].ends_with('/') && self.rest()[1..].starts_with('/');
+        let error = if at_line_end && !joins_slashes {
             LexError::new(
                 start..start + 1,
                 codes::SEMICOLON,
@@ -335,13 +342,17 @@ impl<'a> Lexer<'a> {
             len += c.len_utf8();
         }
         let run = &self.text[start..start + len];
-        let after_r = self.tokens.last().is_some_and(|t| {
-            t.kind == SyntaxKind::Ident && self.text[..start].ends_with('r') && t.len == 1
-        });
+        // The `#`s of a Rust raw string, `r#"..."#`: before its opening quote, or after its end.
+        let previous = self.tokens.last().map(|t| t.kind);
+        let opens = previous == Some(SyntaxKind::Ident)
+            && self.text[..start].ends_with('r')
+            && self.tokens.last().is_some_and(|t| t.len == 1)
+            && self.text[start + len..].starts_with('"');
+        let raw_hashes = run.starts_with('#') && (opens || previous == Some(SyntaxKind::StringEnd));
         let mut error = LexError::new(
             start..start + len,
             codes::UNKNOWN_CHARACTER,
-            unknown_message(run, after_r),
+            unknown_message(run, raw_hashes),
         );
         if run.chars().all(is_other_space) {
             let spaces = " ".repeat(run.chars().count());
@@ -377,19 +388,20 @@ fn is_other_space(c: char) -> bool {
     c.is_whitespace() && !matches!(c, ' ' | '\t' | '\n' | '\r')
 }
 
-fn unknown_message(run: &str, after_r: bool) -> String {
+fn unknown_message(run: &str, raw_hashes: bool) -> String {
     let first = run.chars().next().expect("a run isn't empty");
-    let shown = if first.is_ascii_graphic() {
-        format!("`{first}`")
-    } else {
-        format!("U+{:04X}", first as u32)
+    let shown = match first {
+        '`' => "a backtick".to_string(),
+        c if c.is_ascii_graphic() => format!("`{c}`"),
+        c => format!("U+{:04X}", c as u32),
     };
     let more = match run.chars().count() {
         1 => String::new(),
+        2 => " and the character after it".to_string(),
         n => format!(" and the {} characters after it", n - 1),
     };
     let why = match first {
-        '#' if after_r => {
+        '#' if raw_hashes => {
             "Quince has no `r#\"` strings: raw text that holds quotes is written `r\"\"\"`"
         }
         '#' => "comments start with `//`",

@@ -57,6 +57,12 @@ fn block_comments() {
         errors("/* a\rb */ x"),
         ["E0003 0..9", r#"E0013 4..5 => "/* a\nb */ x""#]
     );
+    // A `//` line would end at the lone CR and turn `b` into code, so only E0013 has a fix.
+    assert_eq!(
+        errors("/* a\rb */\nx"),
+        ["E0003 0..9", r#"E0013 4..5 => "/* a\nb */\nx""#]
+    );
+    assert_eq!(errors("/* a\r\nb */"), [r#"E0003 0..10 => "// a\r\n// b""#]);
 }
 
 #[test]
@@ -78,6 +84,8 @@ fn semicolons() {
         ]
     );
     assert_eq!(errors("a; b"), ["E0002 1..2"]);
+    // Deleting it would make `///`, a doc comment.
+    assert_eq!(errors("x /;// c"), ["E0002 3..4"]);
 }
 
 #[test]
@@ -95,7 +103,11 @@ fn unknown_characters() {
     let message = |text| lex_str(text).errors[0].message.clone();
     assert!(message("# x").contains("comments start with `//`"));
     assert!(message("r#\"x\"#").contains("`r\"\"\"`"));
+    assert!(lex_str("r#\"x\"#").errors[1].message.contains("`r\"\"\"`"));
+    assert!(message("r#x").contains("comments start with `//`"));
+    assert!(message("`x`").starts_with("a backtick can't appear here"));
     assert!(message("`x`").contains("interpolate with `{name}`"));
+    assert!(message("$$").starts_with("`$` and the character after it can't"));
     assert!(message("$$$").starts_with("`$` and the 2 characters after it"));
     // Non-ASCII is fine in comments and literals.
     assert_eq!(

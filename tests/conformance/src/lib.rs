@@ -310,7 +310,7 @@ pub fn run_fixture(
         .collect();
     let no_backend = |what: &str| {
         format!(
-            "no backend: the compiler can't {what} fixtures yet (nothing is wired into the runner)"
+            "no backend: the compiler can't {what} fixtures yet (only `parse` is wired; `check` comes in M2 and `run` in M6)"
         )
     };
     match fixture.mode {
