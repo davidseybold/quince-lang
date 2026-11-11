@@ -1587,6 +1587,6 @@ Every standard library name this spec uses that isn't in the prelude. Each needs
 | FsError, Metadata | std.fs | [Effects](../spec/quince-spec.md#5-effects-and-capabilities), [Built-in effect operations](../spec/quince-spec.md#built-in-effect-operations) |
 | NetError, Outbound, Inbound, Listener | std.net | [Effects](../spec/quince-spec.md#5-effects-and-capabilities), [Built-in effect operations](../spec/quince-spec.md#built-in-effect-operations) |
 | ProcessError, ProcessOutput | std.process | [Built-in effect operations](../spec/quince-spec.md#built-in-effect-operations) |
-| Match, Captures | std.regex | [None](#duration-timestamp-url-and-regex) |
+| Match, Captures | std.regex | [Duration, Timestamp, Url and Regex](#duration-timestamp-url-and-regex) |
 
 Names in examples that are not std: `retry` in [Effects](../spec/quince-spec.md#5-effects-and-capabilities) is an illustrative signature, and `load_config` and the database types (`Db`, `PgDb`, `Rows`, `DbError`) belong to the example program.

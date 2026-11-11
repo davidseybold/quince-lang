@@ -321,16 +321,9 @@ fn prose_of(line: &str) -> String {
 
 /// The positional references in one line of prose, in order.
 fn reference_matches(prose: &str) -> Vec<String> {
-    let lower = prose.to_lowercase();
-    if lower.len() != prose.len() {
-        // Lowercasing changed byte offsets, which only non-ASCII case changes do; match the
-        // line as written instead.
-        return reference_matches_in(prose, prose);
-    }
-    reference_matches_in(prose, &lower)
-}
-
-fn reference_matches_in(prose: &str, lower: &str) -> Vec<String> {
+    // Every pattern is ASCII, and ASCII lowercasing never moves a byte offset, so a match in
+    // `lower` is the same range of `prose`, whatever else the line holds.
+    let lower = prose.to_ascii_lowercase();
     let digits = |at: usize| lower[at..].bytes().take_while(u8::is_ascii_digit).count();
     let mut found: Vec<(usize, usize)> = Vec::new();
     for (at, word) in lower.match_indices("section") {
@@ -351,7 +344,7 @@ fn reference_matches_in(prose: &str, lower: &str) -> Vec<String> {
     for (at, word) in lower.match_indices("appendix") {
         found.push((at, at + word.len()));
     }
-    for (at, word) in prose.match_indices("(see ") {
+    for (at, word) in lower.match_indices("(see ") {
         if prose[at + word.len()..].starts_with(|c: char| c.is_ascii_uppercase()) {
             let end = prose[at..]
                 .find(')')
@@ -500,6 +493,7 @@ Its type is pure (section 5), as in sections 2 and §3 or § 11.
 See [Appendix: Prelude](a.md) and [Effects](appendix.md#section-5), `section 9`.
 A count below the bit width (see Ranges) and (see the list) and (listed below) (above).
 Nothing (belowground), (aboveboard) or Subsection 1 here; this appendix.
+İstanbul's Section 7 (See Effects).
 ```
 (section 3)
 ```
@@ -520,6 +514,8 @@ Nothing (belowground), (aboveboard) or Subsection 1 here; this appendix.
             (4, "(above)"),
             (5, "section 1"),
             (5, "appendix"),
+            (6, "Section 7"),
+            (6, "(See Effects)"),
         ]
         .map(|(line, text)| (line, text.to_string()));
         assert_eq!(found, expected);

@@ -753,7 +753,7 @@ r[mod.pkg.project] A project is a folder with a `quince``.toml` manifest at its 
 
 - **Library.** r[mod.pkg.library-files] Every source file in the project except those under `cmd/`, `tests/` and folders whose names start with a dot, and except any `testdata/` folder, whose files are never compiled, so a tool can keep `.qnc` fixtures there. r[mod.pkg.library-name] Its import name is the `name` in `quince``.toml`. r[mod.pkg.program-import] A program imports it by that name, `import <name>.{...}`, and a program folder may share the library's name, since folders are not namespaces. r[mod.pkg.one-library] A project has at most one library, and it has none when every file is in a program.
 
-* **Programs.** Each `cmd/<name>/` ([Packages](#packages)). r[mod.pkg.program-visibility] A program sees only the library's `pub` names, exactly as a dependent does. r[mod.pkg.program-no-import] Nothing imports a program, and programs never import each other, so code that two programs share goes in the library.
+* **Programs.** Each `cmd/<name>/` ([Modules and imports](#modules-and-imports)). r[mod.pkg.program-visibility] A program sees only the library's `pub` names, exactly as a dependent does. r[mod.pkg.program-no-import] Nothing imports a program, and programs never import each other, so code that two programs share goes in the library.
 
 - **Test packages.** r[mod.pkg.test-packages] Each file directly in `tests/`, and each folder `tests/<name>/`, is one test package ([Testing](#integration-tests)). A folder lets several test files share helpers. r[mod.pkg.test-visibility] A test package sees only the library's `pub` names.
 

@@ -90,7 +90,7 @@ spec	prelude.not-ref-types	section 3	[Types](#mutation)	spec/reference/types.md
 spec	mod.pkg.project	(section 5)	([Program execution](#capabilities-at-runtime))	spec/reference/execution.md
 spec	mod.pkg.project	(section 11)	([Interop with C](#linking))	spec/reference/interop.md
 spec	mod.pkg.project	under The manifest below	under [The manifest](#the-manifest)	spec/tooling/dependencies.md#the-manifest
-spec	L762	(above)	([Packages](#packages))	spec/reference/packages.md#packages
+spec	L762	(above)	([Modules and imports](#modules-and-imports))	spec/reference/packages.md#modules-and-imports
 spec	mod.pkg.test-packages	(section 6)	([Testing](#integration-tests))	spec/reference/testing.md
 spec	mod.pkg.multi-project	(The manifest, below)	([The manifest](#the-manifest))	spec/tooling/dependencies.md#the-manifest
 spec	L780	(section 11)	(Interop with C)	spec/reference/interop.md
@@ -256,5 +256,5 @@ std	L1586	Sections 3, 11	[Types](../spec/quince-spec.md#3-type-system), [Interop
 std	L1587	Section 5, Appendix: Prelude	[Effects](../spec/quince-spec.md#5-effects-and-capabilities), [Built-in effect operations](../spec/quince-spec.md#built-in-effect-operations)	spec/reference/effects.md spec/reference/effects.md#built-in-effect-operations
 std	L1588	Section 5, Appendix: Prelude	[Effects](../spec/quince-spec.md#5-effects-and-capabilities), [Built-in effect operations](../spec/quince-spec.md#built-in-effect-operations)	spec/reference/effects.md spec/reference/effects.md#built-in-effect-operations
 std	L1589	Appendix: Prelude	[Built-in effect operations](../spec/quince-spec.md#built-in-effect-operations)	spec/reference/effects.md#built-in-effect-operations
-std	L1590	Appendix: Prelude	[None](#duration-timestamp-url-and-regex)	std/API.md#duration-timestamp-url-and-regex
+std	L1590	Appendix: Prelude	[Duration, Timestamp, Url and Regex](#duration-timestamp-url-and-regex)	std/API.md#duration-timestamp-url-and-regex
 std	L1592	in section 5	in [Effects](../spec/quince-spec.md#5-effects-and-capabilities)	spec/reference/effects.md
