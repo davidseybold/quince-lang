@@ -119,6 +119,9 @@ r[lex.comment.line]
 r[lex.comment.doc]
 - `///` doc comments attach to the next declaration and may contain executable examples (see [Testing](testing.md)).
 
+r[lex.comment.doc-exact]
+- A doc comment starts with exactly three slashes: `////` starts an ordinary comment.
+
 ## Tokens and identifiers
 
 r[lex.grammar-rules]
