@@ -130,19 +130,12 @@ impl Lexer<'_> {
             "" => String::new(),
             _ => format!(", indented with {}", describe(shared)),
         };
-        let as_text = if raw {
-            "an `r\"\"\"` string can't hold `\"\"\"`, so text with them is a `\"\"\"` string \
-             that writes `\\\"\"\"`"
-        } else {
-            "for quotes in the text, write `\\\"\"\"`"
-        };
         let error = LexError::new(
             at..at + QUOTES.len(),
             codes::MULTILINE_LAYOUT,
             format!(
                 "a multi-line string's text can't hold `\"\"\"`, and its closing `\"\"\"` goes on \
-                 a line of its own: to end the string here, move it to the next line{indented}; \
-                 {as_text}"
+                 a line of its own: to end the string here, move it to the next line{indented}"
             ),
         )
         .with_fix(
@@ -183,20 +176,6 @@ impl Lexer<'_> {
             return false;
         };
         let content = &tail[..close];
-        let one_line = match (raw, content.contains('"')) {
-            _ if content.trim_matches([' ', '\t']).is_empty() => {
-                "an empty string is written `\"\"`".to_string()
-            }
-            (false, false) => "for text on one line, write a `\"` string".to_string(),
-            (false, true) => {
-                "for text on one line, write a `\"` string, with each `\"` in it written `\\\"`"
-                    .to_string()
-            }
-            (true, false) => "for text on one line, write an `r\"` string".to_string(),
-            (true, true) => "an `r\"` string can't hold a quote, so put the text on a line of \
-                             its own, between the `r\"\"\"` and `\"\"\"` lines"
-                .to_string(),
-        };
         // The text without its trailing spaces, or the closing quotes when there is none.
         let range = match content.trim_end_matches([' ', '\t']).len() {
             0 => start + close..start + close + QUOTES.len(),
@@ -205,7 +184,7 @@ impl Lexer<'_> {
         self.errors.push(LexError::new(
             range,
             codes::MULTILINE_LAYOUT,
-            format!("{starts_late}, and it closes on a line of its own: {one_line}"),
+            format!("{starts_late}, and it closes on a line of its own"),
         ));
         if !content.is_empty() {
             self.bump(SyntaxKind::StringText, content.len());

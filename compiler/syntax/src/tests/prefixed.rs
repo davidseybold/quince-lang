@@ -155,7 +155,7 @@ fn prefixed_multiline_forms_dont_exist() {
     assert!(message("b\"\"\"\n\"\"\"").starts_with("bytes literals have no multi-line form"));
     assert_eq!(
         message("re\"\"\"\n\"\"\""),
-        "tagged literals have no multi-line form: write `re\"...\"` on one line"
+        "tagged literals have no multi-line form: a tagged literal stays on one line"
     );
     assert!(message("B\"\"\"\n\"\"\"").starts_with("`B\"` isn't a literal"));
     // `r"""` is the one prefixed multi-line form.

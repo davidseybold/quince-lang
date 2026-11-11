@@ -184,7 +184,7 @@ fn unknown_tag_error(range: Range<usize>, prefix: &str, multiline: bool) -> LexE
          `\\n` for each line break"
             .to_string()
     } else if multiline && TAGS.contains(&prefix) {
-        format!("tagged literals have no multi-line form: write `{prefix}\"...\"` on one line")
+        "tagged literals have no multi-line form: a tagged literal stays on one line".to_string()
     } else {
         format!(
             "`{prefix}\"` isn't a literal: the tags are `url`, `re`, `dur` and `ts`, and `r\"` \
