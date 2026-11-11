@@ -72,6 +72,9 @@ r[tool.fmt.check]
 r[tool.fmt.field-shorthand]
 - `quince` `fmt` rewrites `profile: profile` to that form, so each literal has one canonical layout.
 
+r[tool.fmt.hex-digits]
+- `quince` `fmt` writes hex digits uppercase.
+
 ## Compilation
 
 r[tool.build.native]

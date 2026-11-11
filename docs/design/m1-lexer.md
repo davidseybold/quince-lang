@@ -117,7 +117,7 @@ A test reads the keyword list from `spec/reference/lexical.md` through `quince_s
 
 - `Int` covers `42`, `1_000_000`, `0xFF`, `0b1010` and `0o17`. `Float` covers `3.14`, `1e-9` and `2.5e10`. The exact forms are spec question 4.
 - A `.` belongs to a float only when a digit follows it. So `1..10` is `1`, `..`, `10`, and `3.14159.to_fixed(2)` is a float then `.to_fixed`. An `e` after digits starts an exponent.
-- **After a `.` token with no trivia between, only digits are lexed.** So `pair.0.1` is `pair` `.` `0` `.` `1`, not `pair` `.` `0.1`, and the grammar's `"." int` works for nested tuples. This is the only place the lexer looks back, and only one token.
+- **After a `.` token with no trivia between, only digits are lexed.** So `pair.0.1` is `pair` `.` `0` `.` `1`, not `pair` `.` `0.1`, and the grammar's `"." int` works for nested tuples. This is the only place the lexer looks back, and only one token. Layer 4 reads "only digits" as a decimal integer with no point, exponent or base prefix: letters glued to it are still a suffix (`t.0u8` is one malformed `Int`), and a leading zero is still an error (`t.01`).
 - A minus sign is always its own token. `r[lex.lit.int.neg]` joins it to the literal in prefix position, which the parser knows and the lexer doesn't.
 - A malformed number (`0b102`, `1__0`, `1_`, `0x`, `1e`, `007`) keeps its `Int` or `Float` kind and gets an E0008, so the parser sees a literal and reports nothing more.
 - Letters glued to a number (`1u8`, `10px`, `1.5f32`) stay part of it, as a malformed literal of the kind its digits give. The message says literal types come from context (`let b: UInt8 = 1`), and the fix removes the suffix (`needs-review`).
@@ -165,7 +165,7 @@ Codes are numbered in the order they are registered, from E0001, skipping the re
 | E0005 | A multi-line string with no closing `"""` line | None | |
 | E0006 | An invalid escape: unknown (`\q`), `\'` in a string, `\}`, a bad `\u{...}`, a bad `\x` or one outside bytes | For `\'` and `\}`, delete the backslash (`safe`) | Q7 for `\u` and `\x` details |
 | E0007 | An interpolation that isn't a name or field path | For spaces inside the braces, delete them (`safe`) | Q2 |
-| E0008 | A malformed number (decision 7) | Remove a suffix (`needs-review`); lowercase an exponent `E` (`safe`) | Q4 |
+| E0008 | A malformed number (decision 7) | Remove a suffix (`needs-review`); lowercase an exponent `E` or a base prefix (`safe`) | Q4 |
 | E0009 | An invalid char literal: empty, more than one scalar value, or unclosed | For more than one character, use `"` (`needs-review`) | |
 | E0010 | An unknown literal tag | None. The message lists the tags | |
 | E0011 | A non-ASCII character in a bytes literal | Replace it with the `\x` escapes of its UTF-8 bytes (`safe`) | |
@@ -316,6 +316,7 @@ Found while writing this. None of them block the lexer.
 - **Booleans.** `true` and `false` are keywords, and the grammar's `literal` doesn't say it includes them, but a pattern `true =>` needs it to.
 - **Line breaks before a closing bracket.** `r[tool.fmt.check]` says unformatted code compiles, so a call broken over lines without its trailing comma (`f(\n  a,\n  b\n)`) must parse. The line break before `)` can't end a statement there.
 - **C names that are keywords.** A C function whose name is a keyword (POSIX `select`) can't be declared: `r[ffi.cbind.keyword-param]` covers parameters only, and `r[lex.no-contextual]` rules out reading `select` as a name inside `foreign`.
+- **`;` ends a statement outright** (decided by David, 2026-11-11). A `;` isn't a line break, so the leading-dot continuation (`r[lex.continue.more]`) doesn't join across it: `a;` followed by a line `.b()` is two statements. E0002's fix, which deletes the `;`, would join them, so there it is `needs-review`.
 - **Negative literals.** `r[lex.lit.int.neg]` says the minus is "directly before" the literal. Whether `- 1` counts decides whether the parser checks adjacency.
 - **Rules this doc hands over** (decision 11): fixtures for `lex.keywords`, `lex.no-contextual`, `lex.no-shift-token`, `lex.grammar-rules`, `lex.ident-classes`, `lex.indentation`, `lex.comment.doc` and `lex.comment.doc-exact`. The formatter doc takes `lex.source.canonical`.
 - **Coverage ratchet.** M0 left this for M1. Decide it once the parser adds real coverage.
@@ -351,8 +352,8 @@ Rule IDs in brackets are what each task's fixtures cite. Rules added by spec que
 - [x] `compiler/syntax/README.md`: the error contract (decisions 2 and 9).
 
 **Layer 4: `m1/lexer-numbers`**
-- [ ] Spec: the approved wording from question 4, `r[tool.fmt.hex-digits]`, and a minor version bump.
-- [ ] Numbers, the tuple-index rule, `literal::int_value` and `float_value`; E0008. [`lex.lit.int.forms`, `lex.lit.float.forms`, `lex.lit.underscore`, `lex.lit.int.prefix`, `lex.lit.int.leading-zero`, `lex.lit.float.shape`, `lex.lit.no-suffix`]
+- [x] Spec: the approved wording from question 4, `r[tool.fmt.hex-digits]`, and a minor version bump.
+- [x] Numbers, the tuple-index rule, `literal::int_value` and `float_value`; E0008. [`lex.lit.int.forms`, `lex.lit.float.forms`, `lex.lit.underscore`, `lex.lit.int.prefix`, `lex.lit.int.leading-zero`, `lex.lit.float.shape`, `lex.lit.no-suffix`]
 
 **Layer 5: `m1/lexer-strings`**
 - [ ] Spec: questions 2 and 7, retiring `lex.lit.string.interp-path`, and a bump.

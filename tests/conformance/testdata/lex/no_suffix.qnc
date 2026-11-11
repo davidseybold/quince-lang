@@ -1,0 +1,10 @@
+// rule: lex.lit.no-suffix
+// mode: parse
+// A number has no type suffix: its type comes from context.
+fn f() {
+  let a: UInt8 = 1
+  let b = 1u8 //~ E0008
+  let c = 1.5f32 //~ E0008
+  let d = 10px //~ E0008
+  let e = 0xFFu8 //~ E0008
+}

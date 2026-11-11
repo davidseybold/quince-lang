@@ -32,7 +32,7 @@ syntax_kinds! {
         Whitespace, Newline, Comment, DocComment, BlockComment, Bom,
         /// Characters that start no token. Trivia to the parser.
         Error,
-        Ident, Int, Char, StringStart, StringText, StringEnd,
+        Ident, Int, Float, Char, StringStart, StringText, StringEnd,
         /// Reported as E0002, and read by the parser as a line break.
         Semicolon,
     ],

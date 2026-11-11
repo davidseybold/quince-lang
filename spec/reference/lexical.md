@@ -72,6 +72,21 @@ r[lex.lit.float.default]
 r[lex.lit.float.context]
 - A float literal takes Float32 from context the same way
 
+r[lex.lit.underscore]
+- In any numeric literal, including a float's fraction and exponent, an underscore may appear only between two digits. So `1_000` and `1_000.5` are valid, and `_1`, `1_`, `1__0`, `0x_FF` and `1_.5` are not.
+
+r[lex.lit.int.prefix]
+- The base prefixes are lowercase (`0x`, `0b`, `0o`). Hex digits may be either case.
+
+r[lex.lit.int.leading-zero]
+- A decimal literal, or a float's integer part, doesn't start with `0` unless it is `0`. So `007` and `00.5` are errors, rather than octal as in C, and `0.5` is fine.
+
+r[lex.lit.float.shape]
+- A float has digits on both sides of its point (`1.0`, not `1.` or `.5`), and its exponent is a lowercase `e`, an optional sign and digits. `1E9` is an error whose fix lowercases the `E`.
+
+r[lex.lit.no-suffix]
+- A numeric literal has no type suffix: its type comes from context.
+
 r[lex.lit.string.interp]
 - String: `"hello {name}"`. UTF-8; interpolation with {} is the only formatting syntax.
 

@@ -1,0 +1,15 @@
+// rule: lex.lit.int.forms
+// mode: parse
+// Integers are written in decimal, hex, binary or octal. A base prefix needs at least
+// one digit after it, and each digit must belong to the base.
+fn f() {
+  let a = 42
+  let b = 1_000_000
+  let c = 0xFF
+  let d = 0b1010
+  let e = 0o17
+  let g = 0
+  let h = 0x //~ E0008
+  let i = 0b102 //~ E0008
+  let j = 0o78 //~ E0008
+}

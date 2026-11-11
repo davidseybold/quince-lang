@@ -1,0 +1,16 @@
+// rule: lex.lit.float.shape
+// mode: parse
+// A point is part of a float only with digits on both sides, so a range and a method
+// call on a float need no spaces. An exponent is a lowercase `e`, an optional sign and
+// digits.
+fn f() {
+  let a = 1.0
+  let b = 1e9
+  let c = 1e+9
+  let d = 2.5e-3
+  let r = 1..10
+  let s = 3.14159.to_fixed(2)
+  let g = 1E9 //~ E0008
+  let h = 1.5E-3 //~ E0008
+  let i = 1e //~ E0008
+}

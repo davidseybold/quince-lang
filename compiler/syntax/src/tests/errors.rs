@@ -2,10 +2,10 @@
 
 use super::check_invariants;
 use crate::{LexError, Lexed, SyntaxKind, decode_source, lex, lex_str};
-use quince_diagnostics::{Code, Position, lookup};
+use quince_diagnostics::{Applicability, Code, Position, lookup};
 
 /// Each error as `code start..end`, then its fixed text when it has one fix.
-fn errors(text: &str) -> Vec<String> {
+pub(super) fn errors(text: &str) -> Vec<String> {
     let lexed = lex_str(text);
     check_error_ranges(text, &lexed);
     lexed.errors.iter().map(|e| describe(text, e)).collect()
@@ -84,8 +84,28 @@ fn semicolons() {
         ]
     );
     assert_eq!(errors("a; b"), ["E0002 1..2"]);
-    // Deleting it would make `///`, a doc comment.
+    // Deleting it would make `///`, a doc comment. It still ends the line.
     assert_eq!(errors("x /;// c"), ["E0002 3..4"]);
+    assert!(
+        lex_str("x /;// c").errors[0]
+            .message
+            .contains("ends at the line break")
+    );
+}
+
+/// `a;` then `.b()` is two statements, and deleting the `;` makes one, so that fix needs review.
+#[test]
+fn semicolon_before_a_line_that_starts_with_a_dot() {
+    let applicability = |text| lex_str(text).errors[0].fixes[0].applicability;
+    assert_eq!(errors("a;\n.b()"), [r#"E0002 1..2 => "a\n.b()""#]);
+    assert_eq!(applicability("a;\n.b()"), Applicability::NeedsReview);
+    assert_eq!(
+        applicability("a; // x\n\n  // y\r\n\t.b()"),
+        Applicability::NeedsReview
+    );
+    assert_eq!(applicability("a;\nb.c()"), Applicability::Safe);
+    assert_eq!(applicability("a;\n..b"), Applicability::Safe);
+    assert_eq!(applicability("a;"), Applicability::Safe);
 }
 
 #[test]
