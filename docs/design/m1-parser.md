@@ -1,6 +1,6 @@
 # M1: Parser
 
-Status: passed design review (four passes). David decided the three dependency questions on 2026-11-11. The spec questions wait on him. This is the second design doc of M1 (Syntax), after [the lexer](m1-lexer.md). The formatter doc (`quince fmt`) follows it.
+Status: passed design review (four passes). On 2026-11-11 David decided the three dependency questions, approved spec questions 2 to 12 as proposed, and chose parentheses for question 14. Questions 1 and 13 wait on him. This is the second design doc of M1 (Syntax), after [the lexer](m1-lexer.md). The formatter doc (`quince fmt`) follows it.
 
 ## Why
 
@@ -348,6 +348,8 @@ Each spec question lands in the layer that enforces it, with a minor version bum
 
 ## Spec questions
 
+**Decided by David, 2026-11-11:** questions 2 to 12 are approved as proposed, and question 14 with parentheses for function types, as written below. Questions 1 and 13 are open.
+
 Questions 1 to 5 come from the lexer doc's handover. The rest came up while reading the grammar. Each gives proposed wording and the tag it would have. Every ID uses a construct already listed in `spec/chapters.txt`, and a question that changes a rule's meaning retires its ID and adds a new one (`AGENTS.md`, "Rule IDs").
 
 **1. Naming classes (layer 8).** `r[lex.name.case]` names the styles but doesn't define them, and `r[lex.name.enforced]` makes the answer a compile error. `T` and `URL` fit two classes. Proposed, in Lexical structure's Naming section:
@@ -408,7 +410,7 @@ This gives one way to write it.
 
 No preference beyond saying which. Allowing it is the reversible direction, since forbidding it later breaks code.
 
-**14. Whose effects follow a returned function type (layer 2).** In `fn make() -> fn(Int) -> Int uses Io {`, the `uses Io` can belong to the returned function type or to `make`. The grammar has no parenthesized type, so neither reading can be forced. Proposed (decided by David, 2026-11-11, pending the wording):
+**14. Whose effects follow a returned function type (layer 2).** In `fn make() -> fn(Int) -> Int uses Io {`, the `uses Io` can belong to the returned function type or to `make`. The grammar has no parenthesized type, so neither reading can be forced. Decided by David, 2026-11-11:
 - `r[effect.uses-return]` "When a function's return type is a function type written without parentheses, a `uses` after it belongs to the outer function." The same holds for closures, and for a function type whose return type is a function type.
 - `r[type.fn-parens]` "A function type may be written in parentheses, which end it: `fn make() -> (fn(Int) -> Int uses Io) uses Net`. Only a function type takes them: `(Int)` is an error, since a single type needs no grouping." Its fix removes the parentheses.
 - For the grammar, a `fn_type` production, used both bare and in parentheses:
@@ -465,7 +467,8 @@ Rule IDs in brackets are what each task's fixtures cite. Grammar productions are
 **Before building**
 - [x] David decides questions A, B and C (2026-11-11).
 - [ ] Design review passes.
-- [ ] David decides spec questions 1 to 14.
+- [x] David decides spec questions 2 to 12 and 14 (2026-11-11).
+- [ ] David decides spec questions 1 and 13.
 
 **Layer 0: `m1/parser-cst`**
 - [ ] Add `rowan`, pinned after checking its dependencies and minimum Rust version.
