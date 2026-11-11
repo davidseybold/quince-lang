@@ -1,6 +1,6 @@
 # Packages and modules
 
-r[mod.namespace] A package is one namespace, and a project holds one library package plus its programs and tests ([Packages](#packages)): files organize code but never change what a name is called or how it is imported. r[mod.name-sources] Every name used in a file is either defined in the package, listed in an import, or in the prelude ([Prelude and special interfaces](../quince-spec.md#modules-and-imports)). r[mod.pkg.one-version] Each dependency, meaning one repository folder at one major version, resolves to one exact version, pinned in the lockfile by content hash, so nothing a dependent relies on changes without a change to its lockfile.
+r[mod.namespace] A package is one namespace, and a project holds one library package plus its programs and tests ([Packages](#packages)): files organize code but never change what a name is called or how it is imported. r[mod.name-sources] Every name used in a file is either defined in the package, listed in an import, or in the prelude ([Prelude and special interfaces](prelude.md)). r[mod.pkg.one-version] Each dependency, meaning one repository folder at one major version, resolves to one exact version, pinned in the lockfile by content hash, so nothing a dependent relies on changes without a change to its lockfile.
 
 ## Modules and imports
 

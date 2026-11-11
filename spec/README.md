@@ -13,6 +13,10 @@ Part I, the language:
 - [Packages and modules](reference/packages.md): imports, the layout of a project's library, programs and tests, and editions.
 - [Items](reference/items.md): constants, structs, enums, newtypes, methods, interfaces, generics, arguments and attributes.
 - [Types](reference/types.md): the built-in types, type arguments, mutation and reference types, and inference.
+- [Prelude and special interfaces](reference/prelude.md): the names every file can use, and the interfaces the language calls for operators, iteration, equality and serialization.
+- [Expressions](reference/expressions.md): blocks, operators, ranges, indexing, `match`, `is`, jumps and closures.
+- [Statements](reference/statements.md): bindings, assignment and loops.
+- [Patterns](reference/patterns.md): what a pattern matches and binds.
 
 Still being split:
 

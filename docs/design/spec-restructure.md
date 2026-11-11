@@ -521,10 +521,10 @@ One `gh stack`, a PR per layer (decision 11). Tick each box as it lands on its b
 - [x] 7. `references`, as two PRs: `references-tables`, then `references`
   - [x] `spec-compare` applies `refs.tsv` and `rewordings.tsv`, ignores link targets, and allows the headings `headings.tsv` lists as `new` (its mapping rows come with layer 8) (first PR, `references-tables`)
   - [x] scan; `refs.tsv` with final targets; `rewordings.tsv`; removals not tied to a move; `### Prelude names` interim heading; `grammar.ebnf` header and `DEFAULT_HEADER` wording; leftover check on (prose only)
-- [ ] 8. `move-core`, as three PRs: `move-core-tables`, `move-core` (chapters 1 to 5) and `move-core-2` (chapters 6 to 9)
+- [x] 8. `move-core`, as three PRs: `move-core-tables`, `move-core` (chapters 1 to 5) and `move-core-2` (chapters 6 to 9)
   - [x] `spec-compare` reads `headings.tsv`'s `moved` and `dropped` rows and checks headings on their own: a baseline heading without a row must still be in the legacy file (so once it is deleted, every one needs a row), each row's heading must be where it says, and every other heading must be a chapter title; the Introduction's link to the signature-listing note is allowed as the one added paragraph (first PR, `move-core-tables`)
   - [x] chapters 1 to 5; `headings.tsv` rows; links retargeted; flagged units listed in the PR (second PR, `move-core`)
-  - [ ] chapters 6 to 9, and the Introduction's link to the signature-listing note in the Prelude chapter (third PR, `move-core-2`)
+  - [x] chapters 6 to 9, and the Introduction's link to the signature-listing note in the Prelude chapter (third PR, `move-core-2`)
 - [ ] 9. `move-semantics`: chapters 10 to 17; flagged units listed
 - [ ] 10. `move-tooling`: chapters 18 to 20; `docs/design-principles.md`; Pipeline to `docs/repo-plan.md`; `quince-spec.md` and `legacy` deleted; final-target check; diagnostics example test path; leftover check extended to headings
 - [ ] 11. `cleanup`: `docs/repo-plan.md`, `docs/milestones.md` (chapters, v0.4, M9 notes); `spec-compare` and baseline deleted; status "done"
