@@ -46,7 +46,7 @@ Phase 1 ends when `quince check` parses and resolves a multi-file project, and `
 - Lexer and hand-written recursive-descent parser producing a lossless CST, with error recovery.
 - Parse diagnostics with codes and spans; operator precedence and the rules against mixing `&&` with `||` or chaining comparisons.
 - `quince fmt` for `.qnc` files, including attribute and comment placement.
-- *Exit:* every `parse` and `fmt` fixture in `testdata` passes, and `fmt` is idempotent on every fixture; a fuzzer finds no panics and printing the CST returns the input byte for byte. No test lexes, parses or formats the spec's code.
+- *Exit:* every `parse` and `fmt` fixture in `testdata` passes, and `fmt` is idempotent on every fixture; the parser's fuzz target has been run, and every crash it found is fixed and has a regression test; printing the CST returns the input byte for byte. No test lexes, parses or formats the spec's code.
 
 **M2. Projects, modules and names.** Packages and modules, and the manifest in Dependencies and publishing (path dependencies only).
 

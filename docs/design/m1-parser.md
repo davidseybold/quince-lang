@@ -4,7 +4,7 @@ Status: draft, after one design-review pass. David decided the three dependency 
 
 ## Why
 
-M1 ends when every `parse` and `fmt` fixture passes, `fmt` is idempotent on every fixture, a fuzzer finds no panics, and printing the CST gives back the input byte for byte ([milestones](../milestones.md)). The lexer gives a token stream. This doc covers the step from tokens to a tree: the parser, the lossless CST, and the diagnostics for syntax errors.
+M1 ends when every `parse` and `fmt` fixture passes, `fmt` is idempotent on every fixture, every crash the parser's fuzz target has found is fixed with a regression test, and printing the CST gives back the input byte for byte ([milestones](../milestones.md)). The lexer gives a token stream. This doc covers the step from tokens to a tree: the parser, the lossless CST, and the diagnostics for syntax errors.
 
 The tree matters more than the parser code. The formatter, `fix`, `query`, name resolution and the language server all read it, so its shape, and how trivia sits in it, gets harder to change with every consumer. The parser is also where most of the grammar is enforced (80 productions in `spec/grammar.ebnf`), along with the line-break rules, the operator rules and the naming rules. Several of those leave cases open, so this doc has spec questions.
 
@@ -300,7 +300,7 @@ Past the limit, E0022 is reported at the token that goes past it, and the parser
   - That crate is outside the workspace, with its own `[workspace]` table, as `cargo fuzz init` writes. So `cargo xtask ci` and stable builds never build it or its `libfuzzer-sys` dependency. Its `Cargo.lock` is committed, so a run can be reproduced.
   - It runs on nightly Rust, only where someone runs it. `rust-toolchain.toml` pins a stable release, so `AGENTS.md` gives the command as `cargo +nightly fuzz run parse`.
   - The target decodes the input bytes, parses them and checks the invariants. Its seed corpus is the fixtures.
-  - It isn't a CI step. M1's exit criterion is met by a fuzz run of at least four hours with no crash before M1 closes, recorded in the milestone's last PR. Every crash a run finds becomes a unit test or a fixture, so CI guards against it coming back.
+  - It isn't a CI step, and no run has a set length (decided by David, 2026-11-11). As in rust-analyzer, which keeps its parser's fuzz targets outside CI the same way, fuzzing is a way to find bugs, and a clean run proves nothing. So M1's exit asks that the target has been run before M1 closes, and that every crash it found is fixed and has a regression test: a unit test or a fixture, so CI guards against it coming back. The milestone's last PR says when the run was and what it found.
   - The lexer's mutation test stays as it is.
 
 ### 12. The coverage ratchet
@@ -426,7 +426,7 @@ No preference beyond saying which. Allowing it is the reversible direction, sinc
 
 ## Rollback
 
-Revert the stack's PRs. Nothing changes outside `quince_syntax`, the conformance runner and its fixtures, xtask's conformance step, `AGENTS.md`, `docs/repo-plan.md` and `spec/`, and nothing depends on the parser until the formatter lands.
+Revert the stack's PRs. Nothing changes outside `quince_syntax`, the conformance runner and its fixtures, xtask's conformance step, `AGENTS.md`, `docs/repo-plan.md`, `docs/milestones.md` (M1's exit, reworded in this doc's PR) and `spec/`, and nothing depends on the parser until the formatter lands.
 
 ## For the formatter doc
 
@@ -496,4 +496,4 @@ Rule IDs in brackets are what each task's fixtures cite. Grammar productions are
 - [ ] The fuzz crate and target, and its command in `AGENTS.md`.
 - [ ] The nesting limit, measured; E0022; the deep-nesting tests on spawned threads.
 - [ ] Every grammar production cited by a passing fixture.
-- [ ] Before M1 closes: a fuzz run of at least four hours with no crash.
+- [ ] Before M1 closes: run the fuzz target, and fix every crash it finds, each with a regression test.
