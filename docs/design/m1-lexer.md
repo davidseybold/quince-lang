@@ -6,36 +6,38 @@ Status: draft, not yet approved. The first design doc of M1 (Syntax). A parser d
 
 M1 ends with every code block in the spec parsing, `quince fmt` idempotent, and a lossless CST that prints back the input byte for byte ([milestones](../milestones.md)). Every one of those needs a token stream first, and so does every later stage that reads source. The lexer is also where most of the spec's [Lexical structure](../../spec/reference/lexical.md) chapter is enforced, and where the first diagnostic codes and the first conformance backend arrive.
 
-Getting the token contract right now matters more than the code, which is small. The parser, the formatter, `fix`, `query` and the language server all read tokens, and changing what a token is later means changing all of them.
+Getting the token contract right now matters more than the code, which is small. The parser, the formatter, `fix`, `query` and the language server all read tokens. Changing what a token is later means changing all of them, and every fixture and CST test that depends on token boundaries.
 
 ## Impact and approvals
 
 - **Code:** `compiler/syntax` (`quince_syntax`) gets its first modules and a `README.md` holding the token contract. `quince_diagnostics` gets a line index. `quince_conformance` gets its first backend.
-- **Spec (needs David's approval):** the chapter leaves several things open that a lexer must decide. Spec questions, below, proposes wording for each. The approved wording lands in layer 1 with the code that enforces it, and bumps the spec to Draft v0.6 once.
-- **Diagnostic codes:** E0001 to E0014, the first codes in the registry (decision 9).
-- **Dependencies:** none. No `logos`, no `rowan`. Whether the CST uses `rowan` is the parser doc's question.
-- **Delivery:** a stack of three PRs, each under about 800 changed lines (decision 12).
+- **Crate dependencies:** `quince_syntax` gains `quince_diagnostics` (and through it the approved `serde` and `serde_json`), and `quince_spec` as a dev-dependency. `quince_conformance`, and so xtask, gain `quince_syntax`. M0 listed xtask's dependencies as `quince_spec`, `quince_diagnostics`, `quince_conformance` and `serde_json` ([M0 decision 2](m0-repo-harness.md#2-cargo-xtask-ci)). Decision 10 says why the change is fine.
+- **Spec (needs David's approval):** the chapter leaves several things open that a lexer must decide. Spec questions, below, proposes wording for each. Each approved rule lands in the layer whose code enforces it, and each such layer bumps the spec's minor version.
+- **Diagnostic codes:** up to fifteen, the first in the registry (decision 9). A code whose rule waits on a spec question is registered only after approval.
+- **Dependencies:** none new. No `logos`, no `rowan`. Whether the CST uses `rowan` is the parser doc's question.
+- **Delivery:** a stack of five PRs (decision 12).
 
 ## Context
 
 - `quince_syntax` is an empty crate with a one-line doc comment. It depends on nothing and must stay free of LLVM.
-- The Lexical structure chapter has 42 rules. 24 of them are the lexer's (Tasks lists which). The rest belong to the parser (line continuation, `else` placement, negative literals, collection literals), or to type checking (literal types).
-- The grammar (`spec/grammar.ebnf`) uses 42 quoted punctuation terminals and 38 keywords. Its prose terminals are `name`, `Name`, `NAME`, `c_name`, `path`, `literal`, `string`, `int`, `doc_comment` and `NEWLINE`.
+- The Lexical structure chapter has 42 rules. 24 of them describe lexing (Tasks lists them), and the lexer's fixtures can test 17 of those on their own (decision 11). The rest belong to the parser (line continuation, `else` placement, negative literals, collection literals) or to type checking (literal types).
+- `spec/grammar.ebnf` quotes 42 non-word terminals (punctuation and `_`), 36 of the 38 keywords (not `true` or `false`, which it leaves to `literal`), and `"TaskScope"`, which isn't a keyword. Its prose terminals are `name`, `Name`, `NAME`, `c_name`, `path`, `literal`, `string`, `int`, `doc_comment` and `NEWLINE`.
 - `quince_diagnostics` fixes how positions count (`compiler/diagnostics/README.md`): `[line, column]`, 1-based, columns in Unicode scalar values, lines ending at LF, CR LF or a lone CR, a leading BOM not counted. It says which line endings the lexer accepts is the spec's business. The spec doesn't say.
-- The conformance runner has a `Backend` trait with `parse`, `check` and `run`, and ships `NoBackend`. `parse` fixtures run only the parser and must be valid syntax apart from their expected diagnostics (`tests/conformance/testdata/README.md`).
+- The conformance runner has a `Backend` trait with `parse`, `check` and `run`, taking `&str`, and ships `NoBackend`. Its fixture reader splits lines with `str::lines()`, which doesn't split at a lone CR, and finds header comments with `trim_start()`, which doesn't skip a BOM. The README requires `check` fixtures to be valid programs apart from their expectations, and says nothing of the kind for `parse` fixtures (`tests/conformance/testdata/README.md`).
 - `Fix::check` can't yet check that a fix's positions exist in the source. M0 left that for M1's backend.
-- The spec and `std/API.md` hold 66 code blocks with no info string. Most are Quince. A few are TOML, JSON or REPL transcripts (`>>> 3.14159.to_fixed(2)`).
+- The spec and `std/API.md` hold 66 code blocks with no info string. Most are Quince. A few are TOML, JSON or REPL transcripts (`>>> 3.14159.to_fixed(2)`). Between them they hold two interpolations, one tagged literal and no multi-line strings, so they say little about literals.
 
 ## Goals and non-goals
 
 **Goals:**
-- A lexer that turns any `&str` into a token stream whose texts concatenate to the input exactly, never panics, and reports every lexical error with an exact span and, where one is clear, a fix.
-- A token contract the parser and formatter can build on without re-scanning text, documented in `compiler/syntax/README.md`.
+- A lexer that turns any source into a token stream whose texts concatenate to the input exactly, never panics, and reports every lexical error with an exact span and, where one is clear, a fix.
+- A token contract the parser and formatter can build on without re-scanning text, documented in `compiler/syntax/README.md`, including what the parser does with the lexer's error tokens.
 - The first diagnostic codes, each with explain text and a conformance fixture, and the first wired conformance backend.
 
 **Non-goals:**
 - Deciding which line breaks end a statement. The parser decides that (decision 4).
-- Checking naming case (`lex.name.*`), keywords used as names, or C names. They need parse context, so the parser doc places them.
+- Naming case (`lex.name.*`): what counts as `snake_case`, `PascalCase` or `SCREAMING_SNAKE_CASE`, and the checks. The parser doc takes it, with the questions in "For the parser doc".
+- Keywords used as names, and C names. They need parse context.
 - Checking a tagged literal's body (`url"..."` is a valid URL, `dur"30s"` a valid duration). That needs the literal's type, so type checking does it.
 - Literal types and range checks (`let b: UInt8 = 300`). M3.
 - Incremental relexing for the language server. Lexing a whole file is fast enough until M5 shows otherwise.
@@ -45,27 +47,35 @@ Getting the token contract right now matters more than the code, which is small.
 
 ### 1. Where it lives
 
-The lexer is the `lexer` module of `quince_syntax`, with its literal handling in submodules. Literal values (decoded strings, integer values) are computed on demand by a `literal` module from token text, not stored in tokens.
+The lexer is the `lexer` module of `quince_syntax`, with its literal handling in submodules. Literal values (decoded strings, integer and float values) are computed on demand by a `literal` module from token text, not stored in tokens.
 
 *Alternative:* a separate `quince_lexer` crate. Rejected: nothing but the parser and formatter use tokens directly, they live in the same crate, and the repo plan puts the lexer there. Splitting later is cheap if a second consumer appears.
 
 ### 2. Lossless tokens
 
 `lex(source: &str) -> Lexed`, where `Lexed` holds a `Vec<Token>` and a `Vec<LexError>`.
-- A `Token` is a `SyntaxKind` and a byte length (`u32`). Start offsets are the running sum, so a token is 8 bytes. Files over 4 GiB are refused by the caller that reads them, as an I/O error, not a diagnostic.
-- Every byte of the input belongs to exactly one token, so concatenating the token texts gives back the input. Comments, spaces and line breaks are tokens too (trivia).
+- A `Token` is a `SyntaxKind` and a byte length (`u32`). Start offsets are the running sum, so a token is 8 bytes.
+- Every byte of the input belongs to exactly one token, so concatenating the token texts gives back the input. Comments, spaces and line breaks are tokens too (trivia). No token is empty.
 - The lexer never fails and never stops early. An error produces a diagnostic and a token, and lexing goes on.
 - `SyntaxKind` is one `u16` enum in `quince_syntax::kind`. The parser adds its node kinds to the same enum, as rowan-style CSTs need, but nothing here requires rowan.
+
+**The error contract.** The lexer reports each lexical problem once, and the parser must not report it again. So the README gives the parser these rules:
+- An `Error` token (decision 9: characters that start no token, a broken interpolation) is trivia to the parser.
+- A `;` is a `Semicolon` token. The parser treats it as a statement-ending line break, so `a; b` parses as two statements with only the lexer's E0002.
+- A block comment is a `BlockComment` token, which the parser treats as a comment (trivia).
+- A malformed literal keeps its literal kind (decisions 7 and 8). The parser accepts it as that literal.
+- A string literal with no closing delimiter has no `StringEnd` token. The parser accepts a string that ends without one, since the lexer already reported it.
 
 *Alternative:* tokens without trivia, plus a side table of comments. Rejected: the formatter, `fix` and error recovery all need trivia in place, and the repo plan already chose a lossless CST.
 
 ### 3. Trivia kinds
 
 - `Whitespace`: a run of spaces and tabs.
-- `Newline`: one line ending, LF or CR LF. Each line ending is its own token, so the formatter can count blank lines and the parser can find line ends without scanning text.
+- `Newline`: one line ending: LF, CR LF, or a lone CR. A lone CR is also reported as E0013 (spec question 1), but it ends a line here as it does in `LineIndex`, so the parser's line ends always agree with reported line numbers. Each line ending is its own token, so the formatter can count blank lines and the parser can find line ends without scanning text. Line breaks inside a multi-line string are never `Newline` (decision 8).
 - `Comment`: `//` up to, not including, the line ending.
 - `DocComment`: `///` up to the line ending. It's a separate kind because the grammar names `doc_comment` as a terminal. Whether the parser treats it as trivia is the parser's call.
-- A leading byte order mark is a `Bom` token, pending spec question 1.
+- `BlockComment`: `/*` to the next `*/`, with E0003.
+- `Bom`: a byte order mark at the very start (spec question 1).
 
 ### 4. Line breaks are tokens, and the parser decides what they mean
 
@@ -76,13 +86,18 @@ The rules can't be applied from tokens alone:
 - `r[lex.continue.signature]` applies only inside a `fn` signature.
 - `r[lex.else-same-line]` needs to know the `else` follows a block, to give its fix.
 
-So the lexer offers only a helper for the parser: `SyntaxKind::continues_line()`, true for the kinds that continue a line in every context (`,`, `(`, `[`, `{`, `=`, compound assignments, `=>`, `->`, `&&`, `||`, and the arithmetic and bit operators that are never anything else). The parser handles the two that depend on context, `>` and `*` (`uses *`). Comments are trivia here too: a line ends with its last token before any comment.
+So the lexer offers only a helper for the parser: `SyntaxKind::continues_line()`, true for exactly the kinds that continue a line whatever their role:
+- `,`, `(`, `[`, `{` (`r[lex.line-end]`);
+- `=`, `+=`, `-=`, `*=`, `/=`, `%=`, `=>`, `->` (`r[lex.continue.more]`);
+- the binary operators other than `>` and `*`: `+`, `-`, `/`, `%`, `&`, `|`, `^`, `<<`, `&&`, `||`, `==`, `!=`, `<`, `<=`, `..`, `..=` and `is`. `-`, `|` and `<` also have other roles (prefix minus, pattern alternation, opening type arguments), but each of those continues the line too.
+
+`>` and `*` are the two kinds that depend on context: `>` closes type arguments, and `*` is the effect set in `uses *`. The parser decides those, including the second `>` of a `>>` shift. A unit test checks the list against the binary operators in `spec/grammar.ebnf`. Comments are trivia here too: a line ends with its last token before any comment.
 
 *Alternative:* Go-style terminator insertion in the lexer. Rejected for the reasons above: it would need a lexer that tracks generics and signatures, which is a parser.
 
 ### 5. Punctuation, and `>` always alone
 
-The lexer takes the longest match among the grammar's punctuation terminals, with one exception: **`>` is always a token of its own.** The parser forms `>>` (shift) and `>=` from two `>`-led tokens with no trivia between them.
+The lexer takes the longest match among the grammar's punctuation terminals, with one exception: **`>` is always a token of its own.** The parser forms `>>` (shift) and `>=` from a `>` token and the next token when no trivia sits between them, as rust-analyzer joins tokens. So `a > = b` is an error, just as `a = = b` is.
 - `r[lex.no-shift-token]` already requires this for `>>`, so `List<List<Int>>` closes without a space.
 - Doing the same for `>=` means `let x: Option<Int>= y` doesn't lex as `Option<Int` followed by `>=`. One mechanism covers both.
 - `..=` is one token (`r[lex.grammar-rules]`), and so are `->`, `=>`, `==`, `!=`, `<=`, `<<`, `&&`, `||` and the compound assignments.
@@ -92,187 +107,243 @@ The lexer takes the longest match among the grammar's punctuation terminals, wit
 
 ### 6. Identifiers and keywords
 
-- An identifier is an ASCII letter or `_`, then ASCII letters, digits and `_` (pending spec question 1 for non-ASCII). It's one `Ident` kind, whatever its case. `Ident` offers `case_class()` returning snake, Pascal, screaming or none, which the parser uses for `name`, `Name` and `NAME`, and which naming checks use later.
+- An identifier is an ASCII letter or `_`, then ASCII letters, digits and `_` (spec question 1). It's one `Ident` kind whatever its case. Which case class an identifier belongs to is the parser doc's question.
 - The 38 keywords of `r[lex.keywords]` each have their own kind (`FnKw`, `SelfTypeKw` for `Self`, and so on). There are no contextual keywords (`r[lex.no-contextual]`), so the lexer has no context to track: `main`, `limit`, `TaskScope` and the tag names lex as identifiers everywhere.
 - `c_name` lexes as an identifier too. Whether a C name may be a keyword is a question for the parser doc.
 
-A test reads the keyword list from `spec/reference/lexical.md` through `quince_spec` (a dev-dependency) and fails if it differs from the lexer's table. A second test lexes every quoted terminal in `spec/grammar.ebnf` and checks each is one token, except `>>` and `>=`, which must be two. So the spec and the lexer can't drift apart silently.
+A test reads the keyword list from `spec/reference/lexical.md` through `quince_spec` and fails if it differs from the lexer's table. A second test lexes every quoted terminal in `spec/grammar.ebnf` and checks each is one token, except `>>` and `>=`, which must be two `>`-led tokens, and `TaskScope`, which must be an `Ident`. So the spec and the lexer can't drift apart silently.
 
 ### 7. Numbers
 
 - `Int` covers `42`, `1_000_000`, `0xFF`, `0b1010` and `0o17`. `Float` covers `3.14`, `1e-9` and `2.5e10`. The exact forms are spec question 4.
-- A `.` belongs to a float only when a digit follows it. So `1..10` is `1`, `..`, `10`, and `3.14159.to_fixed(2)` is a float then `.to_fixed`.
+- A `.` belongs to a float only when a digit follows it. So `1..10` is `1`, `..`, `10`, and `3.14159.to_fixed(2)` is a float then `.to_fixed`. An `e` after digits starts an exponent.
 - **After a `.` token with no trivia between, only digits are lexed.** So `pair.0.1` is `pair` `.` `0` `.` `1`, not `pair` `.` `0.1`, and the grammar's `"." int` works for nested tuples. This is the only place the lexer looks back, and only one token.
 - A minus sign is always its own token. `r[lex.lit.int.neg]` joins it to the literal in prefix position, which the parser knows and the lexer doesn't.
-- A malformed number (`0b102`, `1__0`, `1_`, `0x`, `1e`, `007`) keeps its `Int` or `Float` kind and gets a diagnostic, so the parser sees a literal and reports nothing more.
-- A number followed directly by a letter (`1u8`, `10px`) is one malformed `Int`. The message says literal types come from context (`let b: UInt8 = 1`), and the fix removes the suffix (`needs-review`).
-- The lexer doesn't compute values. `literal::int_value` returns a `u128`, or `None` when it doesn't fit, for the type checker.
+- A malformed number (`0b102`, `1__0`, `1_`, `0x`, `1e`, `007`) keeps its `Int` or `Float` kind and gets an E0008, so the parser sees a literal and reports nothing more.
+- Letters glued to a number (`1u8`, `10px`, `1.5f32`) stay part of it, as a malformed literal of the kind its digits give. The message says literal types come from context (`let b: UInt8 = 1`), and the fix removes the suffix (`needs-review`).
+- The lexer doesn't compute values. `literal::int_value` returns a `u128`, or `None` when it doesn't fit, and `literal::float_value` an `f64`, for the type checker.
 
-### 8. String literals
+### 8. String and char literals
 
 Every `"`-delimited literal has one shape:
 
 ```
-StringStart  ( StringText | StringIndent | Interp... )*  StringEnd
+StringStart  ( StringText | StringIndent | StringNewline | Interp... )*  [ StringEnd ]
 ```
 
 - `StringStart` is the opening delimiter with its prefix: `"`, `"""`, `r"`, `r"""`, `b"`, or a tag such as `re"`. The parser reads the form from it.
 - `StringText` is literal text, escapes included. Escapes are validated here and decoded later by `literal::string_value`.
-- In a multi-line form, each content line's stripped indentation (the closing line's indentation, `r[lex.lit.string.multiline]`) is a `StringIndent` token. The formatter can re-indent a multi-line string by rewriting those tokens without changing its value.
+- In the multi-line forms (`"""` and `r"""`), each line break inside the string is a `StringNewline` token. That keeps the parser's line-end logic out of strings, while the formatter still sees the string's lines.
+- Each line's stripped indentation is a `StringIndent` token: the closing line's indentation on each content line (`r[lex.lit.string.multiline]`), the closing line's own indentation before `"""`, and all of a whitespace-only line that is shorter. The formatter re-indents a multi-line string by rewriting those tokens, which leaves its value unchanged.
 - **Interpolation is tokenized**, in the forms that interpolate (`"` and `"""`): `InterpStart` (`{`), then the path as ordinary `Ident`, `SelfKw`, `Dot` and `Int` tokens, then `InterpEnd` (`}`). Since `r[lex.lit.string.interp-path]` allows only a name or field path, the lexer never has to lex an expression or a nested string, so this is one extra lexer state, not recursion. Names in strings are then real tokens in the CST, and rename, find-references and `query` treat them like any other name.
 - `}` alone is text (`r[lex.lit.string.lone-brace]`).
 - Raw, bytes and tagged forms produce only `StringText` between start and end, with no escapes (raw and tagged) or a reduced set (bytes, `r[lex.lit.bytes]`).
-- A known tag is one of `url`, `re`, `dur`, `ts`. An identifier glued to `"` that isn't a tag (`foo"x"`, `br"x"`) is an unknown-tag error listing the tags. A keyword is never a tag, so `test"adds"` is `test` and a string.
+- A known tag is one of `url`, `re`, `dur`, `ts`. An identifier glued to `"` that isn't a tag (`foo"x"`, `br"x"`, `f"x"`) is an E0010 listing the tags. A keyword is never a tag, so `test"adds"` is `test` and a string.
 - `Char` is one token, `'a'`, with the string escapes plus `\'` (`r[lex.lit.char.escapes]`).
 
 *Alternative:* each string as one token, with interpolation found later by re-scanning its text. Simpler for the lexer, but every consumer of names (resolution, rename, the language server) would need a special case for names inside strings. Rejected.
 
-**Recovery.** A one-line string with no closing quote ends at its line end (`r[lex.lit.string.one-line]`), so one missing quote can't swallow the file. A broken interpolation (`{a + b}`, `{`, `{ name }`) becomes an `Error` token up to the next `}`, `"` or line end, and the string goes on. A multi-line string with no closing `"""` line runs to the end of the file. That one does swallow the file, and Risks covers it.
+**Recovery.**
+- A one-line string with no closing quote ends before its line ending (`r[lex.lit.string.one-line]`), with no `StringEnd`, so one missing quote can't swallow the file.
+- A broken interpolation (`{a + b}`, `{}`, `{ name }`, a `{` never closed) becomes an `Error` token up to and including the next `}`, or up to but excluding the next `"` or line ending, and the string goes on. So `"{"` reports one E0007, and its closing quote still ends the string.
+- A char literal with no closing `'` ends before its line ending.
+- A multi-line string with no closing `"""` line runs to the end of the file. That one does swallow the file, and Risks covers it.
 
 ### 9. Diagnostics
 
-The lexer reports `LexError { range, code, message, fixes }` in byte offsets. `quince_syntax` converts them to `Diagnostic` values through a `LineIndex`, which goes in `quince_diagnostics`, because that crate owns how positions count. The conformance runner reuses the same `LineIndex` for `Fix::check`.
+The lexer reports `LexError { range, code, message, fixes }` in byte offsets. `quince_syntax` converts them to `Diagnostic` values through a `LineIndex`, which goes in `quince_diagnostics`, because that crate owns how positions count. The conformance runner uses the same `LineIndex` to number fixture lines and to run `Fix::check`.
 
-Codes are numbered in order from E0001, with no ranges per stage. Ranges encode which stage reports a problem, which can change, and they run out.
+Codes are numbered in the order they are registered, from E0001, skipping the reserved E0412, with no ranges per stage. Ranges encode which stage reports a problem, which can change, and they run out. Codes are permanent (`r[diag.code-stable]`), so a code whose rule waits on a spec question is registered only once the question is approved, and the numbers below are provisional until then.
 
-| Code | Problem | Fix |
-| --- | --- | --- |
-| E0001 | A character that starts no token (`$`, `#`, a backtick, non-ASCII outside a literal or comment) | For a Unicode space such as U+00A0, replace it with a space (`safe`) |
-| E0002 | A `;` (statements end at line breaks) | At a line end, delete it (`safe`) |
-| E0003 | A block comment `/* */` (`r[lex.comment.line]`) | When it covers whole lines, rewrite it as `//` lines (`safe`) |
-| E0004 | A one-line string, raw, bytes or tagged literal with no closing `"` | Insert `"` at the line end (`needs-review`) |
-| E0005 | A multi-line string with no closing `"""` line | None |
-| E0006 | An invalid escape: unknown (`\q`), `\'` in a string, `\}`, a bad `\u{...}`, a `\x` outside bytes | For `\'` and `\}`, delete the backslash (`safe`) |
-| E0007 | An interpolation that isn't a name or field path | For spaces inside the braces, delete them (`safe`). The message suggests `\{` for a literal brace, or a `let` for an expression |
-| E0008 | A malformed number (decision 7) | Removing a suffix (`needs-review`) |
-| E0009 | An invalid char literal: empty, more than one scalar value, or unclosed | For more than one character, use `"` (`needs-review`) |
-| E0010 | An unknown literal tag | None. The message lists the tags |
-| E0011 | A non-ASCII character in a bytes literal | Replace it with the `\x` escapes of its UTF-8 bytes (`safe`) |
-| E0012 | A multi-line string layout error (spec question 3) | None |
-| E0013 | A carriage return not followed by a line feed (spec question 1) | Replace it with a line feed (`safe`) |
-| E0014 | A file that isn't valid UTF-8 (spec question 1) | None |
+| Code | Problem | Fix | Waits on |
+| --- | --- | --- | --- |
+| E0001 | A character that starts no token (`$`, `#`, a backtick, non-ASCII outside a literal or comment) | For a Unicode space such as U+00A0, replace it with a space (`safe`) | Q1 for non-ASCII |
+| E0002 | A `;` (statements end at line breaks) | At a line end, delete it (`safe`) | |
+| E0003 | A block comment `/* */` (`r[lex.comment.line]`) | When it covers whole lines, rewrite it as `//` lines (`safe`) | |
+| E0004 | A one-line string, raw, bytes or tagged literal with no closing `"` | Insert `"` at the line end (`needs-review`) | |
+| E0005 | A multi-line string with no closing `"""` line | None | |
+| E0006 | An invalid escape: unknown (`\q`), `\'` in a string, `\}`, a bad `\u{...}`, a bad `\x` or one outside bytes | For `\'` and `\}`, delete the backslash (`safe`) | Q7 for `\u` and `\x` details |
+| E0007 | An interpolation that isn't a name or field path | For spaces inside the braces, delete them (`safe`) | Q2 |
+| E0008 | A malformed number (decision 7) | Remove a suffix (`needs-review`) | Q4 |
+| E0009 | An invalid char literal: empty, more than one scalar value, or unclosed | For more than one character, use `"` (`needs-review`) | |
+| E0010 | An unknown literal tag | None. The message lists the tags | |
+| E0011 | A non-ASCII character in a bytes literal | Replace it with the `\x` escapes of its UTF-8 bytes (`safe`) | |
+| E0012 | A multi-line string layout error | None | Q3 |
+| E0013 | A carriage return not followed by a line feed | Outside a literal, replace it with a line feed (`safe`). None inside one, where a line feed would end the string | Q1 |
+| E0014 | A file that isn't valid UTF-8 | None | Q1 |
+| E0015 | A control or bidirectional-format character in a literal or comment | In a string, replace it with its `\u{...}` escape (`safe`) | Q8 |
 
-Consecutive invalid characters make one `Error` token and one E0001, so a pasted line of emoji is one diagnostic, not thirty. A malformed literal keeps its literal kind, as decision 7 says for numbers, so the parser and later stages report nothing more about it (`r[diag.all-errors]`).
+Messages are written for the habits agents bring from other languages, since that costs nothing now:
+- E0001 on `#` suggests `//`, and on a backtick says Quince strings use `"` and interpolate with `{name}`.
+- E0001 on `r#"` says raw text that holds quotes uses `r"""`.
+- E0007 on `{}` says the braces need a name, and that a literal brace is written `\{`. On an expression, it suggests binding it with `let` first.
+- E0010 on `f"` says every `"` string interpolates already.
 
-E0014 is reported by `quince_syntax::decode_source(&[u8])`, which every caller that reads a file uses before lexing, so the error has one home.
+`"Total: ${amount}"` gets no warning. It is valid text followed by an interpolation, and prices are a real use of it.
+
+Consecutive invalid characters make one `Error` token and one E0001, so a pasted line of emoji is one diagnostic, not thirty. A malformed literal keeps its literal kind (decision 2), so nothing reports it again (`r[diag.all-errors]`).
+
+**E0014 and file size.** `quince_syntax::decode_source(&[u8]) -> Decoded` is the one place source bytes become text, and every caller that reads a file uses it before lexing.
+- It reports one E0014 for each maximal run of invalid bytes, spanning that run, and goes on.
+- It returns text in which each invalid run is one U+FFFD. Lexing and parsing go on over that text, so the rest of the file is still checked, and positions count each run as one column.
+- Since that text no longer matches the file, `fmt` and `fix` must refuse to rewrite a file that had an E0014. The formatter doc enforces this.
+- It refuses a file over 4 GiB, the most a `u32` offset can address, as an I/O error, not a diagnostic.
 
 ### 10. Wiring the conformance runner
 
-The runner calls `quince_syntax` in-process, through a `SyntaxBackend` that implements `Backend`. This settles the M0 open question for `parse`:
-- `quince_syntax` has no LLVM and builds in seconds, so xtask can depend on it.
-- A subprocess would also test the CLI's JSON output, but that output's format is M5's decision. `run` fixtures, which need a built program, can still go through a subprocess when M6 or M7 decide.
+`SyntaxBackend` lives in `quince_conformance` and calls `quince_syntax` in-process. This settles the M0 open question for `parse`:
+- `quince_syntax` has no LLVM and builds in seconds, so xtask can depend on it without slowing `cargo xtask spec-rules`, which was M0's concern.
+- A subprocess would also test the CLI's JSON output, but that output's format is M5's decision.
+- This doesn't decide `check`. Wiring it in-process would compile the type and effect checkers into xtask. M2, which first wires `check`, decides between that and a subprocess, and may split the runner out of xtask's spec steps. `run` waits for M6.
 
 Until the parser lands, `SyntaxBackend::parse` returns the lexer's diagnostics only. `check` and `run` stay unwired, so nobody writes a `check` fixture that passes only because nothing checks it.
 
-Lexer fixtures go in `tests/conformance/testdata/lex/` in `parse` mode. They are written as valid programs apart from their expected diagnostics, as the fixture README already requires, so they keep passing when the parser arrives instead of failing on syntax the lexer couldn't see.
+Lexer fixtures go in `tests/conformance/testdata/lex/` in `parse` mode. They must be valid syntax apart from their expected diagnostics, so they keep passing when the parser arrives instead of failing on syntax the lexer couldn't see. The fixture README doesn't say this for `parse` fixtures yet, so layer 1 adds it. The error contract (decision 2) is what makes it possible for fixtures that contain an `Error` token or a `;`.
 
-The runner changes in two ways:
-- It reads fixtures as bytes and passes them to the backend, so E0014 can have a fixture. Headers and expectations are read from the lossy UTF-8 text. `Backend::parse` and `check` take `&[u8]`.
+The runner changes:
+- It reads fixtures as bytes, and every `Backend` method takes `&[u8]`, so E0014 can have a fixture.
+- It reads headers and expectations from `decode_source`'s text, strips a leading BOM before reading the header, and numbers lines with `LineIndex` instead of `str::lines()`. So the BOM and lone-CR fixtures agree with the diagnostics.
 - It runs the position half of `Fix::check`, with the source text, on every fix a backend reports.
 
 ### 11. Testing
 
 - **Unit tests** in `quince_syntax` compare token dumps (`kind "text"` per line) with hand-written expected text, and check decoded values through `literal`. No snapshot crate.
-- **Spec sync tests** (decision 6): keywords against the spec, punctuation against the grammar.
-- **Corpus:** every unlabeled code block in the spec chapters and `std/API.md` lexes with no errors. Blocks that aren't Quince are skipped by a list in the test, keyed by file and first line, until spec question 5 is settled.
-- **Invariants on every input:** no panic; the token texts concatenate to the input; no token is empty; every error range lies inside the input on character boundaries. These run over the corpus and over seeded mutations of it (inserted, deleted and swapped characters from a small dependency-free PRNG), bounded so `cargo test` stays under a second for this crate. A `cargo-fuzz` target needs nightly and a dependency, so it waits for the parser doc, which owns the fuzzing exit criterion.
-- **Conformance fixtures:** at least one per lexer rule in Tasks, and one per diagnostic code, as `cargo xtask diagnostics` requires.
+- **Spec sync tests** (decisions 4 and 6): keywords against the spec, punctuation and `continues_line()` against the grammar.
+- **Corpus:** every code block labelled `quince` in the spec chapters and `std/API.md` lexes with no errors (spec question 5).
+- **Invariants on every input:** no panic; the token texts concatenate to the input; no token is empty; every error range lies inside the input on character boundaries. These run over seeded mutations (inserted, deleted and swapped characters, from a small dependency-free PRNG) of the corpus, the unit-test inputs and the `lex/` fixtures. The last two exercise the string and interpolation states, which the corpus barely reaches. They are bounded so `cargo test` stays under a second for this crate. A `cargo-fuzz` target needs nightly and a dependency, so it waits for the parser doc, which owns the fuzzing exit criterion.
+- **Conformance fixtures:** one per diagnostic code, as `cargo xtask diagnostics` requires, and one per rule in Tasks.
 
-A fixture cites a rule only when it would fail if the lexer broke that rule. In `parse` mode, a fixture for an accepted form (`0b1010`, a multi-line string) checks that the form is accepted, not its value. Values are unit-tested until `run` fixtures exist in M6, which then cite the same rules.
+**Coverage honesty.** A fixture cites a rule only when a lexer that broke the rule would fail it. With no parser yet, a `parse` fixture fails only on an unexpected or missing diagnostic. So:
+- Rules with a lexical error (E0002 for `r[lex.braces]`, E0003 for `r[lex.comment.line]`) are cited by their negative fixtures.
+- Accepted forms (`0b1010`, a multi-line string) are cited by fixtures a lexer that rejected the form would fail. They check acceptance, not values. Values are unit-tested until `run` fixtures exist in M6, which then cite the same rules.
+- Rules a broken lexer would still pass, because it would report nothing, are tested by unit tests now and cited by the parser's fixtures. They are `lex.keywords`, `lex.no-contextual`, `lex.no-shift-token`, `lex.grammar-rules`, `lex.ident-classes`, `lex.indentation` and `lex.comment.doc`. A lexer that made `>>` one token would fail a parser fixture, not a lexer one.
 
 ### 12. Delivery as a stack
 
 Each layer builds and passes `cargo xtask ci` on its own:
 
-1. `m1/lexer-tokens`: the approved spec wording and the bump to v0.6; `SyntaxKind`, `Token`, `lex`; trivia, identifiers, keywords, punctuation and numbers; `decode_source`; `LineIndex`; `SyntaxBackend` and the runner changes; E0001 to E0003, E0008, E0013 and E0014; `compiler/syntax/README.md`.
-2. `m1/lexer-literals`: strings, interpolation, multi-line, raw, bytes, tagged and char literals, `literal` decoding; E0004 to E0007 and E0009 to E0012.
-3. `m1/lexer-corpus`: the corpus and mutation tests.
+1. `m1/lexer-harness`: `LineIndex`, `Backend` on bytes, the runner's BOM and line numbering, fix-position checks, and the `parse`-fixture rule in the fixture README. All of it is tested with the existing fake backend, so this layer adds no codes and cites no rules.
+2. `m1/lexer-tokens`: spec questions 1, 4 and 6, and a minor version bump; `SyntaxKind`, `Token`, `lex`, trivia, identifiers, keywords, punctuation, numbers, `decode_source`; `SyntaxBackend`; E0001 to E0003, E0008, E0013 and E0014; `compiler/syntax/README.md`; `AGENTS.md`'s map.
+3. `m1/lexer-strings`: spec questions 2 and 7, and a bump; one-line strings, escapes and interpolation; E0004, E0006 and E0007.
+4. `m1/lexer-literals`: spec questions 3 and 8, and a bump; multi-line, raw, bytes, tagged and char literals; E0005, E0009 to E0012 and E0015.
+5. `m1/lexer-corpus`: spec question 5 (labels, no bump); the corpus and mutation tests.
 
-The spec edits all go in layer 1, so the spec changes version once. The rules they add for strings are covered when layer 2 lands.
+Each layer should come in at around 500 to 900 changed lines. Layer 2 is the largest, and if it runs past 1000, numbers move into a layer of their own.
+
+**Literals before their layer.** Layers 2 and 3 must stand alone, so they lex the literal forms they don't handle yet by a fallback rule. Everything from a `"` to the next `"` on the same line is `StringStart`, `StringText` and `StringEnd`, with no validation. Everything from a `'` to the next `'` on the line is a `Char`. A prefix is a separate `Ident`. Until layer 4, `"""` lexes as an empty string followed by another string, so a multi-line string lexes wrongly. Nothing depends on that: no fixture uses those forms, and no command lexes user code until the parser lands.
 
 ## Spec questions (need David's approval)
 
-Each proposed rule would go in `spec/reference/lexical.md` with the tag shown. Layer 1 needs questions 1, 4 and 6. Layer 2 needs 2, 3 and 7. Question 5 doesn't block the lexer.
+Each proposed rule would go in `spec/reference/lexical.md` with the tag shown. Every ID has 2 to 4 segments, and its second segment is a construct listed under `lex` in `spec/chapters.txt`. Question 1 adds one construct, `source`. Question 5 doesn't block the lexer.
 
-**1. Source text.** The chapter doesn't say what a source file is made of. Proposed, as a new section "Source text" at the top of the chapter:
+**1. Source text (layer 2).** The chapter doesn't say what a source file is made of. Proposed, as a new section "Source text" at the top of the chapter, with a `source` construct ("Source text: encoding, line endings, whitespace"):
 - `r[lex.source.utf8]` A source file is UTF-8 text. A file that isn't valid UTF-8 is a compile error.
-- `r[lex.source.bom]` A byte order mark at the start of a file is ignored, and `quince` `fmt` removes it.
-- `r[lex.source.line-end]` A line ends at a line feed, or at a carriage return followed by a line feed, and `quince` `fmt` writes line feeds. A carriage return anywhere else is a compile error.
-- `r[lex.source.whitespace]` Spaces and tabs are the only whitespace between tokens.
-- `r[lex.source.ascii]` Outside string literals, char literals and comments, source text is ASCII, so identifiers are ASCII letters, digits and underscores.
+- `r[lex.source.bom]` A byte order mark at the start of a file is ignored.
+- `r[lex.source.line-end]` A line ends at a line feed, or at a carriage return followed by a line feed. A carriage return anywhere else is a compile error.
+- `r[lex.source.encoding-not-format]` The byte order mark and the choice of line ending aren't formatting: `quince` `fmt` keeps them, and `quince` `check` doesn't report them.
+- `r[lex.source.whitespace]` Within a line, spaces and tabs are the only whitespace.
+- `r[lex.source.ascii]` Outside literals and comments, source text is ASCII, so identifiers are ASCII letters, digits and underscores.
 
-*Why:* agents and editors on Windows produce CR LF, so rejecting it would fail on correct code, while a lone CR is almost always damage. ASCII-only identifiers follow from the naming rules (`snake_case` has no case for `é`) and keep look-alike characters out of names.
+*Why:* git on Windows checks files out with CR LF, and some editors add a BOM. `r[tool.fmt.check]` makes unformatted code fail `check`, so if `fmt` normalized these, correct code would fail on those machines for something git and the editor control. A lone CR is almost always damage, so it is an error. ASCII-only identifiers follow from the naming rules (`snake_case` has no case for `é`) and keep look-alike characters out of names. They're also the reversible direction: allowing more later breaks nothing.
 
-**2. Interpolation paths.** `r[lex.lit.string.interp-path]` allows "a name or a field path", but the spec's own example (Items, `"{self.name} <{self.email}>"`) starts a path with `self`, which is a keyword, not a name. Proposed rewording:
-- `r[lex.lit.string.interp-path]` stays as is in meaning, and a new `r[lex.lit.string.interp-root]` says: "A path starts with a name, `self` or a constant name, and has no spaces: `{self.email}`, `{MAX_RETRIES}`."
+*Alternative:* `fmt` writes LF and drops the BOM, and `check` reports both. That gives one canonical byte form, but fails the Windows case above.
 
-**3. Multi-line strings.** `r[lex.lit.string.multiline]` leaves open what may follow the opening `"""`, where the closing one may sit, and what happens to a line indented less than the closing line. Proposed, following Swift:
-- `r[lex.lit.string.multiline.open]` Only a line break may follow the opening `"""`.
-- `r[lex.lit.string.multiline.close]` The closing `"""` is the first thing on its line after its indentation, and code may follow it on that line (`""")`).
-- `r[lex.lit.string.multiline.indent]` Every line between must start with exactly the closing line's indentation, the same spaces and tabs, except a line that holds only whitespace, which becomes empty. Otherwise it is a compile error.
-- `r[lex.lit.string.multiline.value]` The value doesn't include the line break before the closing line, and every line break in it is a line feed, whatever the file uses.
+**2. Interpolation paths (layer 3).** `r[lex.lit.string.interp-path]` allows "a name or a field path", but the spec's own example (Items, `"{self.name} <{self.email}>"`) starts a path with `self`, which is a keyword, not a name. Allowing `self` and constants widens the rule's meaning, so the old ID is retired and replaced:
+- Retire `lex.lit.string.interp-path`, and add `r[lex.lit.string.interp-root]`: "Inside braces only a path is allowed, never another expression: a name, `self` or a constant name, followed by any number of field names or tuple positions, with no spaces: `{name}`, `{user.name}`, `{self.email}`, `{id.0}`, `{MAX_RETRIES}`."
+- A path can't start with a type (`{Config.MAX}`, `{Self.X}`). Bind the value first.
 
-**4. Number forms.** The examples don't settle the edge cases. Proposed:
-- `r[lex.lit.int.underscore]` An underscore may appear only between two digits, so `1_000` is valid and `_1`, `1_`, `1__0` and `0x_FF` are not.
+**3. Multi-line strings (layer 4).** `r[lex.lit.string.multiline]` leaves open what may follow the opening `"""`, where the closing one may sit, and what happens to a line indented less than the closing line. Proposed, following Swift:
+- `r[lex.lit.multiline-open]` After the opening `"""`, only spaces and tabs may come before the line break.
+- `r[lex.lit.multiline-close]` The closing `"""` is the first thing on its line after its indentation, and code may follow it on that line (`""")`). Elsewhere, `"`, `""` and `"""` are text.
+- `r[lex.lit.multiline-indent]` Every line between must start with exactly the closing line's indentation, the same spaces and tabs, except a line that holds only whitespace, which becomes empty. Otherwise it is a compile error.
+- `r[lex.lit.multiline-value]` The value doesn't include the line break before the closing line, and every line break in it is a line feed, whatever the file uses.
+- `r[lex.lit.multiline-forms]` Only `"""` and `r"""` are multi-line. A `"""` string takes the same escapes as a `"` string. `b"""` and tagged multi-line literals don't exist.
+
+**4. Number forms (layer 2).** The examples don't settle the edge cases. Proposed:
+- `r[lex.lit.int.underscore]` In any numeric literal, including a float's fraction and exponent, an underscore may appear only between two digits. So `1_000` and `1_000.5` are valid, and `_1`, `1_`, `1__0`, `0x_FF` and `1_.5` are not.
 - `r[lex.lit.int.prefix]` The base prefixes are lowercase (`0x`, `0b`, `0o`). Hex digits may be either case, and `quince` `fmt` writes them uppercase.
-- `r[lex.lit.int.leading-zero]` A decimal literal other than `0` doesn't start with `0`, so `007` is an error rather than an octal number as in C.
-- `r[lex.lit.float.shape]` A float has digits on both sides of its point (`1.0`, not `1.` or `.5`), and its exponent is `e`, an optional sign and digits.
+- `r[lex.lit.int.leading-zero]` A decimal literal, or a float's integer part, doesn't start with `0` unless it is `0`. So `007` and `00.5` are errors, rather than octal as in C, and `0.5` is fine.
+- `r[lex.lit.float.shape]` A float has digits on both sides of its point (`1.0`, not `1.` or `.5`), and its exponent is a lowercase `e`, an optional sign and digits. `1E9` is an error whose fix lowercases the `E`.
 - `r[lex.lit.no-suffix]` A numeric literal has no type suffix: its type comes from context.
 
-**5. Code block labels (wording only, no version bump).** The spec and `std/API.md` don't label their code blocks, so the M1 exit criterion "every code block parses" needs a skip list for the TOML, JSON and REPL blocks. Proposed: label every block (`quince`, `toml`, `json`, `text`), so the corpus test reads only `quince` blocks and an unlabeled block is an error. This could wait for the parser doc.
+**5. Code block labels (layer 5, wording only, no bump).** The spec and `std/API.md` don't label their code blocks, so "every code block parses" can't tell Quince from TOML, JSON and REPL transcripts. A skip list keyed by file and first line would break on every edit. Proposed: label every block (`quince`, `toml`, `json`, `text`), and add a `spec-rules` check that fails on an unlabelled block.
 
-**6. Doc comments.** `r[lex.comment.doc]` doesn't say whether `////` is a doc comment. Proposed: `r[lex.comment.doc.exact]` "A doc comment starts with exactly three slashes: `////` starts an ordinary comment", as in Rust.
+**6. Doc comments (layer 2).** `r[lex.comment.doc]` doesn't say whether `////` is a doc comment. Proposed: `r[lex.comment.doc-exact]` "A doc comment starts with exactly three slashes: `////` starts an ordinary comment", as in Rust.
 
-**7. Unicode escapes.** Proposed: `r[lex.lit.string.unicode-escape]` "`\u{...}` holds one to six hex digits naming a Unicode scalar value, so surrogates (`\u{D800}`) and values above `\u{10FFFF}` are errors."
+**7. Escapes (layer 3).** Proposed:
+- `r[lex.lit.string.unicode-escape]` "`\u{...}` holds one to six hex digits naming a Unicode scalar value, so `\u{}`, surrogates (`\u{D800}`) and values above `\u{10FFFF}` are errors."
+- `r[lex.lit.bytes.hex-escape]` "`\x` takes exactly two hex digits, and appears only in bytes literals."
+
+**8. Control and bidirectional characters (layer 4).** The spec doesn't say which characters may appear raw inside literals and comments. The Trojan Source attack (CVE-2021-42574) hides code in bidirectional-format characters, and rustc denies them by default. Proposed:
+- `r[lex.source.control]` "A literal or comment can't contain a control character other than tab (U+0000 to U+001F, and U+007F), or a bidirectional-format character (U+202A to U+202E, U+2066 to U+2069). In a string, write it as an escape."
+
+*Why:* these keep code from reading differently than it runs, as the ASCII rule does for names.
 
 ## Risks and trade-offs
 
 - [A multi-line string with no closing line swallows the rest of the file, so the parser reports nothing after it] → E0005 points at the opening `"""`, and fixing it restores everything. A heuristic close (the first line that looks like code) would guess wrong in strings that hold code, which is a common use. Accepted.
-- [`parse` fixtures pass against a lexer-only backend even when they aren't valid syntax] → The fixture README already requires valid syntax, review checks it, and the parser layer reruns every fixture.
-- [Acceptance-only fixtures mark a rule covered before its value is tested] → Decision 11: values are unit-tested now, and `run` fixtures cite the same rules from M6. The coverage report can't show the difference. Accepted until a test kind marks partial coverage.
-- [Tokenized interpolation makes the lexer stateful] → One state, entered at `{` in an interpolating string and left at `}`, `"` or a line end. The invariant tests run through it.
-- [The token contract turns out wrong for the parser] → The parser doc comes next and can amend this one before layer 2 merges. `SyntaxKind` is internal to `quince_syntax`, so only that crate changes.
-- [Fourteen codes is a lot for a lexer] → Each names one problem an agent can fix without reading the explain text. Codes are cheap and never reused, but merging two later would retire one. Review the table before layer 1.
+- [`parse` fixtures pass against a lexer-only backend even when they aren't valid syntax] → Layer 1 puts the rule in the fixture README, review checks it, and the parser layer reruns every fixture.
+- [Acceptance-only fixtures mark a rule covered before its value is tested] → Decision 11 limits what a lexer fixture may cite. Values are unit-tested now, and `run` fixtures cite the same rules from M6. The coverage report can't show the difference. Accepted until a test kind marks partial coverage.
+- [Tokenized interpolation makes the lexer stateful] → One state, entered at `{` in an interpolating string and left at `}`, `"` or a line end. The invariant tests run through it, seeded from fixtures that use it.
+- [The token contract turns out wrong for the parser] → Token boundaries also shape fixtures and, later, CST tests, so the cost grows with every layer. The parser doc comes next and can amend this one before layer 3 merges. `SyntaxKind` is internal to `quince_syntax`, so only that crate and the `lex/` fixtures change.
+- [Fifteen codes is a lot for a lexer] → Each names one problem an agent can fix without reading the explain text. Codes are permanent, so merging two later would retire one. Review the table before layer 2.
+- [Four spec bumps in one milestone] → Each bump records a real change in meaning, and the project's rule keeps each spec change in the PR with its code. A version number costs nothing.
 
 ## Rollback
 
-Revert the stack's PRs. Nothing outside `quince_syntax`, `quince_diagnostics`, the runner and `spec/reference/lexical.md` changes, and no later work depends on it yet.
+Revert the stack's PRs. Nothing outside `quince_syntax`, `quince_diagnostics`, the runner, `AGENTS.md` and `spec/` changes, and no later work depends on it yet.
 
 ## For the parser doc
 
 Found while writing this. None of them block the lexer.
-- `true` and `false` are keywords, and the grammar's `literal` doesn't say it includes them, but a pattern `true =>` needs it to.
-- `r[tool.fmt.check]` says unformatted code compiles, so a call broken over lines without its trailing comma (`f(\n  a,\n  b\n)`) must parse. The line break before `)` can't end a statement there.
-- A C function whose name is a keyword (POSIX `select`) can't be declared: `r[ffi.cbind.keyword-param]` covers parameters only, and `r[lex.no-contextual]` rules out reading `select` as a name inside `foreign`.
-- A single uppercase letter (`T`, `N`) is both `Name` and `NAME`. Where the grammar accepts either (`primary`, `alt`), the parser has to pick one, or leave it to name resolution.
-- `r[lex.lit.int.neg]` says the minus is "directly before" the literal. Whether `- 1` counts decides whether the parser checks adjacency.
-- The coverage ratchet M0 left for M1: decide once the parser adds real coverage.
+- **Naming classes.** `r[lex.name.case]` names the styles but doesn't define them, and `r[lex.name.enforced]` makes the answer a compile error. Open cases:
+  - `T` and `URL` fit both Pascal and screaming case;
+  - it's unclear whether `_unused`, `x2`, `utf8_len`, `HTTPServer` and `a__b` are valid.
+
+  Where the grammar accepts both `Name` and `NAME` (`primary`, `alt`), the parser has to pick one, or leave it to name resolution.
+- **Booleans.** `true` and `false` are keywords, and the grammar's `literal` doesn't say it includes them, but a pattern `true =>` needs it to.
+- **Line breaks before a closing bracket.** `r[tool.fmt.check]` says unformatted code compiles, so a call broken over lines without its trailing comma (`f(\n  a,\n  b\n)`) must parse. The line break before `)` can't end a statement there.
+- **C names that are keywords.** A C function whose name is a keyword (POSIX `select`) can't be declared: `r[ffi.cbind.keyword-param]` covers parameters only, and `r[lex.no-contextual]` rules out reading `select` as a name inside `foreign`.
+- **Negative literals.** `r[lex.lit.int.neg]` says the minus is "directly before" the literal. Whether `- 1` counts decides whether the parser checks adjacency.
+- **Rules this doc hands over** (decision 11): fixtures for `lex.keywords`, `lex.no-contextual`, `lex.no-shift-token`, `lex.grammar-rules`, `lex.ident-classes`, `lex.indentation` and `lex.comment.doc`.
+- **Coverage ratchet.** M0 left this for M1. Decide it once the parser adds real coverage.
 
 ## Tasks
 
-Rule IDs in brackets are what each task's fixtures cite. Rules added by the spec questions get their IDs once approved.
+Rule IDs in brackets are what each task's fixtures cite. Rules added by spec questions are cited only once approved.
 
-**Layer 1: `m1/lexer-tokens`**
-- [ ] Spec: the approved wording from questions 1, 4 and 6, and the bump to Draft v0.6.
-- [ ] `SyntaxKind`, `Token`, `Lexed`, `lex`, trivia and the lossless invariant. [`lex.indentation`, `lex.braces`]
+**Layer 1: `m1/lexer-harness`**
+- [ ] `LineIndex` in `quince_diagnostics`, with the position rules' unit tests.
+- [ ] `Backend` takes `&[u8]`; the runner reads fixture bytes, strips a BOM before the header, and numbers lines with `LineIndex`.
+- [ ] Fix-position checks in the runner.
+- [ ] Fixture README: `parse` fixtures are valid syntax apart from their expectations.
+
+**Layer 2: `m1/lexer-tokens`**
+- [ ] Spec: the approved wording from questions 1, 4 and 6, the `source` construct, and a minor version bump.
+- [ ] `SyntaxKind`, `Token`, `Lexed`, `lex`, trivia and the lossless invariant; unit tests for keywords, `continues_line()` and the grammar sync.
 - [ ] `decode_source`, BOM and line endings; E0013, E0014. [`lex.source.*`]
-- [ ] Identifiers, `case_class`, keywords, the keyword sync test. [`lex.keywords`, `lex.no-contextual`, `lex.ident-classes`]
-- [ ] Punctuation, `>` alone, the grammar sync test; E0001, E0002. [`lex.grammar-rules`, `lex.no-shift-token`]
-- [ ] Comments and doc comments; E0003. [`lex.comment.line`, `lex.comment.doc`]
-- [ ] Numbers, the tuple-index rule, `literal::int_value`; E0008. [`lex.lit.int.forms`, `lex.lit.float.forms`]
-- [ ] `LineIndex` in `quince_diagnostics`, and `LexError` to `Diagnostic`.
-- [ ] `SyntaxBackend`; the runner reads bytes and checks fix positions.
-- [ ] `compiler/syntax/README.md`: the token contract (decisions 2 to 8). Update `AGENTS.md`'s map.
+- [ ] Punctuation, `>` alone, `;`, unknown characters; E0001, E0002. [`lex.braces`]
+- [ ] Comments, doc comments and block comments; E0003. [`lex.comment.line`, `lex.comment.doc-exact`]
+- [ ] Numbers, the tuple-index rule, `literal::int_value` and `float_value`; E0008. [`lex.lit.int.forms`, `lex.lit.float.forms`, `lex.lit.int.underscore`, `lex.lit.int.prefix`, `lex.lit.int.leading-zero`, `lex.lit.float.shape`, `lex.lit.no-suffix`]
+- [ ] The fallback rule for literals not handled yet (decision 12).
+- [ ] `SyntaxBackend`.
+- [ ] `compiler/syntax/README.md`: the token contract and the error contract (decisions 2 to 8). Update `AGENTS.md`'s map.
 
-**Layer 2: `m1/lexer-literals`**
+**Layer 3: `m1/lexer-strings`**
+- [ ] Spec: questions 2 and 7, retiring `lex.lit.string.interp-path`, and a bump.
 - [ ] String shape and escapes, `literal::string_value`; E0004, E0006. [`lex.lit.string.escapes`, `lex.lit.string.one-line`, `lex.lit.string.unicode-escape`]
-- [ ] Interpolation tokens; E0007. [`lex.lit.string.interp`, `lex.lit.string.interp-path`, `lex.lit.string.interp-root`, `lex.lit.string.lone-brace`]
-- [ ] Multi-line and raw multi-line strings, `StringIndent`; E0005, E0012. [`lex.lit.string.multiline`, `lex.lit.string.multiline.*`, `lex.lit.string.raw-multiline`]
+- [ ] Interpolation tokens; E0007. [`lex.lit.string.interp`, `lex.lit.string.interp-root`, `lex.lit.string.lone-brace`]
+
+**Layer 4: `m1/lexer-literals`**
+- [ ] Spec: questions 3 and 8, and a bump.
+- [ ] Multi-line and raw multi-line strings, `StringNewline`, `StringIndent`; E0005, E0012. [`lex.lit.string.multiline`, `lex.lit.multiline-*`, `lex.lit.string.raw-multiline`]
 - [ ] Raw strings. [`lex.lit.raw-string`]
-- [ ] Bytes; E0011. [`lex.lit.bytes`]
+- [ ] Bytes; E0011. [`lex.lit.bytes`, `lex.lit.bytes.hex-escape`]
 - [ ] Tagged literals; E0010. [`lex.lit.tagged`, `lex.lit.tagged.raw`]
 - [ ] Char literals; E0009. [`lex.lit.char`, `lex.lit.char.escapes`]
+- [ ] Control and bidirectional characters; E0015. [`lex.source.control`]
 
-**Layer 3: `m1/lexer-corpus`**
-- [ ] Corpus test over the spec and `std/API.md`, with the skip list or, if question 5 is approved, labels.
+**Layer 5: `m1/lexer-corpus`**
+- [ ] Spec: label every code block (question 5), and the `spec-rules` check for unlabelled blocks.
+- [ ] Corpus test over the spec and `std/API.md`.
 - [ ] Mutation tests of the invariants.
