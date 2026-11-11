@@ -1569,7 +1569,7 @@ pub struct Metadata { pub size: Int, pub is_dir: Bool, pub modified: Timestamp }
 
 ### Standard library index
 
-Every standard library name this spec uses that isn't in the prelude. Each needs an import ([Packages and modules](../spec/reference/packages.md)), and its full signature is in the [Quince](https://claude.ai/artifact/MRcpqw3BqGotK6yE1psFvC) [standard library API](https://claude.ai/artifact/MRcpqw3BqGotK6yE1psFvC) doc.
+Every standard library name the spec uses that isn't in the prelude. Each needs an import ([Packages and modules](../spec/reference/packages.md)), and its full signature is in this file.
 
 | Name | Package | Used in |
 | --- | --- | --- |

@@ -325,22 +325,14 @@ fn tag_line(line: &str) -> Option<&str> {
 
 /// Tag-shaped text on one prose line: `r[` at the start of the line or after whitespace, or
 /// glued to other text around a valid ID.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Candidate {
-    pub id: String,
-    /// Byte offset of the `r`.
-    pub start: usize,
+struct Candidate {
+    id: String,
     /// Byte offset just past the `]`, or the end of the line when unterminated.
-    pub end: usize,
-    pub terminated: bool,
+    end: usize,
+    terminated: bool,
     /// Preceded by something other than whitespace, as in `(r[x.y]`. Only found when the text
     /// inside is a valid ID, so code-like prose such as `arr[i]` isn't flagged.
-    pub glued: bool,
-}
-
-/// The tag candidates on one prose line, outside inline code spans, in order.
-pub fn candidates(line: &str) -> Vec<Candidate> {
-    find_tags(line, true)
+    glued: bool,
 }
 
 /// Finds every tag in one file and reports misplaced or malformed ones, without the uniqueness
@@ -568,14 +560,12 @@ fn find_tags(line: &str, skip_inline_code: bool) -> Vec<Candidate> {
         let id_start = i + 2;
         let tag = match line[id_start..].find(']') {
             Some(offset) => Candidate {
-                start: i,
                 end: id_start + offset + 1,
                 id: line[id_start..id_start + offset].to_string(),
                 terminated: true,
                 glued,
             },
             None => Candidate {
-                start: i,
                 end: line.len(),
                 id: line[id_start..].to_string(),
                 terminated: false,
@@ -1120,16 +1110,16 @@ mod tests {
 
     #[test]
     fn candidates_skip_inline_code() {
-        let found: Vec<_> = candidates("r[a.b] `r[c.d]` x(r[e.f] arr[i] r[g")
+        let found: Vec<_> = find_tags("r[a.b] `r[c.d]` x(r[e.f] arr[i] r[g", true)
             .into_iter()
-            .map(|c| (c.id, c.start, c.terminated, c.glued))
+            .map(|c| (c.id, c.terminated, c.glued))
             .collect();
         assert_eq!(
             found,
             [
-                ("a.b".to_string(), 0, true, false),
-                ("e.f".to_string(), 18, true, true),
-                ("g".to_string(), 32, false, false),
+                ("a.b".to_string(), true, false),
+                ("e.f".to_string(), true, true),
+                ("g".to_string(), false, false),
             ]
         );
     }

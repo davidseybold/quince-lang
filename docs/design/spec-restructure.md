@@ -612,5 +612,5 @@ One `gh stack`, a PR per layer (decision 11). Tick each box as it lands on its b
   - [x] every chapter in the own-line form; tables converted; text pointing into tables reworded; `rewordings.tsv` and `tables.tsv` rows (`rewordings.tsv` also takes `L<line>` units, for the one untagged cell that pointed into a table)
   - [x] the tag rule in `compiler/spec/README.md` and `AGENTS.md`
 - [ ] 13. `cleanup`, as two PRs: `cleanup` and `cleanup-legacy`
-  - [ ] `spec-compare`, its inline tag parser, its `ci` step and the baseline deleted (`cleanup`)
+  - [x] `spec-compare`, its inline tag parser, its `ci` step and the baseline deleted (`cleanup`)
   - [ ] the `legacy` chapter support in `quince_spec` and its README deleted; status "done" (`cleanup-legacy`)
