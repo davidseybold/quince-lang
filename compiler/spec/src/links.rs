@@ -280,12 +280,12 @@ pub struct PositionalReference {
 /// Every positional reference in the prose of `text`: `section` or `sections` and a number, `§`
 /// and a number,
 /// `appendix`, `(see ` and a capital letter, and a parenthesized `below` or `above`. Case is
-/// ignored. Code blocks, inline code, headings, link reference definitions and link
-/// destinations aren't prose, so they are skipped.
+/// ignored. Headings are checked too. Code blocks, inline code, link reference definitions
+/// and link destinations aren't prose, so they are skipped.
 pub fn positional_references(text: &str) -> Vec<PositionalReference> {
     let mut out = Vec::new();
     for (line_no, line) in prose_lines(text) {
-        if line.trim_start().starts_with('#') || reference_definition(line).is_some() {
+        if reference_definition(line).is_some() {
             continue;
         }
         out.extend(reference_matches(&prose_of(line)).into_iter().map(|text| {
@@ -504,6 +504,7 @@ Nothing (belowground), (aboveboard) or Subsection 1 here; this appendix.
             .map(|r| (r.line, r.text))
             .collect();
         let expected = [
+            (1, "Appendix"),
             (2, "section 5"),
             (2, "sections 2"),
             (2, "§3"),

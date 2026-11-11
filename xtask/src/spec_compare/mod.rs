@@ -5,6 +5,7 @@
 //! restructure is done.
 
 pub mod segment;
+mod targets;
 
 use crate::spec_rules::{load, read};
 use quince_spec::manifest::LEGACY_PREFIX;
@@ -21,6 +22,11 @@ pub const ID_MAP: &str = "docs/design/spec-restructure/id-map.tsv";
 pub const REMOVED: &str = "docs/design/spec-restructure/removed.tsv";
 /// Where the spec's library material went, relative to the repo root.
 pub const STD_API: &str = "std/API.md";
+/// Where the baseline's design principles and open questions went, relative to the repo root.
+pub const DESIGN_PRINCIPLES: &str = "docs/design-principles.md";
+/// Where the baseline's Pipeline list went, relative to the repo root, and the heading of its
+/// section there.
+pub const REPO_PLAN: (&str, &str) = ("docs/repo-plan.md", "## Pipeline");
 /// Positional references rewritten as links, relative to the repo root.
 pub const REFS: &str = "docs/design/spec-restructure/refs.tsv";
 /// Tagged sentences whose wording changed, relative to the repo root.
@@ -59,7 +65,8 @@ pub enum Role {
     /// The chapter file being split.
     Legacy,
     /// A file that may take units from the baseline, and whose other text isn't compared,
-    /// such as `spec/README.md`, which took the version header.
+    /// such as `spec/README.md`, which took the version header, and the docs that take the
+    /// baseline's design principles and Pipeline list.
     Landing,
 }
 
@@ -118,6 +125,9 @@ pub struct Rewrite {
     pub unit: UnitRef,
     pub old: String,
     pub new: String,
+    /// Where each link in `new` must lead once the restructure is done, as paths from the repo
+    /// root, space-separated; empty for a rewording.
+    pub target: String,
 }
 
 /// The baseline unit a rewrite applies to.
@@ -218,12 +228,13 @@ impl Tables {
         for (line, columns) in rows(refs) {
             let at = format!("{REFS}:{line}");
             match columns.as_slice() {
-                [origin @ ("spec" | "std"), unit, old, new, _] if filled(&columns) => {
+                [origin @ ("spec" | "std"), unit, old, new, target] if filled(&columns) => {
                     let rewrite = |unit| Rewrite {
                         at: at.clone(),
                         unit,
                         old: old.to_string(),
                         new: new.to_string(),
+                        target: target.to_string(),
                     };
                     match (*origin, UnitRef::parse(unit)) {
                         ("spec", Some(unit)) => self.rewrites.push(rewrite(unit)),
@@ -253,6 +264,7 @@ impl Tables {
                         unit: UnitRef::Rule(id.to_string()),
                         old: old.to_string(),
                         new: new.to_string(),
+                        target: String::new(),
                     })
                 }
                 _ => errors.push(format!(
@@ -340,6 +352,8 @@ pub struct Outcome {
     pub added: usize,
     /// Rewrites from `refs.tsv` and `rewordings.tsv` applied to the baseline.
     pub rewritten: usize,
+    /// Links checked against their final target in `refs.tsv`.
+    pub final_targets: usize,
 }
 
 pub fn check(root: &Path) -> Result<(), String> {
@@ -370,6 +384,17 @@ pub fn check(root: &Path) -> Result<(), String> {
             Err(e) => Err(format!("can't read {path}: {e}")),
         }
     };
+    sources.push(Source {
+        path: DESIGN_PRINCIPLES.to_string(),
+        units: segment(&optional(DESIGN_PRINCIPLES)?),
+        role: Role::Landing,
+    });
+    let (plan_path, plan_heading) = REPO_PLAN;
+    sources.push(Source {
+        path: plan_path.to_string(),
+        units: section(&segment(&optional(plan_path)?), plan_heading),
+        role: Role::Landing,
+    });
     let (mut tables, mut table_errors) = Tables::parse(&optional(ID_MAP)?, &optional(REMOVED)?);
     table_errors.extend(tables.parse_rewrites(
         &optional(REFS)?,
@@ -412,13 +437,15 @@ pub fn check(root: &Path) -> Result<(), String> {
     eprintln!(
         "spec-compare against {BASELINE_SPEC}: rule tags {tags_before} before, {} removed, \
          {tags_after} after; productions {productions_before} before, {productions_after} after; \
-         units {} matched, {} moved, {} to std/API.md, {} added; {} rewrites",
+         units {} matched, {} moved, {} to std/API.md, {} added; {} rewrites; {} links at their \
+         final target",
         tables.removed_ids.len(),
         outcome.matched,
         outcome.moved,
         outcome.to_std,
         outcome.added,
-        outcome.rewritten
+        outcome.rewritten,
+        outcome.final_targets
     );
     if outcome.problems.is_empty() {
         Ok(())
@@ -428,6 +455,23 @@ pub fn check(root: &Path) -> Result<(), String> {
             outcome.problems.len()
         ))
     }
+}
+
+/// The units of the section under `heading`, up to the next heading of the same or a higher
+/// level, without the heading itself. Empty when there is no such heading.
+fn section(units: &[Unit], heading: &str) -> Vec<Unit> {
+    let level = |text: &str| text.chars().take_while(|&c| c == '#').count();
+    let Some(start) = units
+        .iter()
+        .position(|u| u.kind == Kind::Heading && u.text == heading)
+    else {
+        return Vec::new();
+    };
+    units[start + 1..]
+        .iter()
+        .take_while(|u| u.kind != Kind::Heading || level(&u.text) > level(heading))
+        .cloned()
+        .collect()
 }
 
 /// Applies the tables to the baseline's units: removes the text `removed.tsv` lists, takes out
@@ -615,6 +659,7 @@ pub fn compare(before: &[Unit], after: &[Source], tables: &Tables, std_text: &st
         .map(without_link_targets)
         .collect();
     let before = before.as_slice();
+    targets::check(before, after, tables, std_text, &mut outcome);
     let after: Vec<Source> = after
         .iter()
         .map(|source| Source {
@@ -1326,12 +1371,14 @@ file = { expr }
                     unit: UnitRef::Rule("val.a".into()),
                     old: "x".into(),
                     new: "[x](a.md)".into(),
+                    target: "spec/a.md".into(),
                 },
                 Rewrite {
                     at: "docs/design/spec-restructure/rewordings.tsv:1".into(),
                     unit: UnitRef::Rule("val.b".into()),
                     old: "old".into(),
                     new: "new".into(),
+                    target: String::new(),
                 },
             ]
         );
@@ -1567,7 +1614,8 @@ file = { expr }
     #[test]
     fn std_rows_are_undone_before_checking_moved_text() {
         let (spec, tables_moved, std) = library_move();
-        let rewritten = std.replace("Maps are too.", "Maps are [too](../spec/x.md#y).");
+        // Retargeted since: the link keeps its final file and gains a fragment.
+        let rewritten = std.replace("Maps are too.", "Maps are [too](../spec/a.md#y).");
         let mut tables_moved = tables_moved;
         let errors =
             tables_moved.parse_rewrites("std\tL4\ttoo\t[too](../spec/a.md)\tspec/a.md\n", "", "");
@@ -1603,6 +1651,86 @@ file = { expr }
                 "docs/design/spec-restructure/refs.tsv:1: line 3 of std/API.md doesn't hold `[Lists]()`"
             ]
         );
+    }
+
+    #[test]
+    fn links_lead_to_their_final_targets() {
+        // The Values section becomes a chapter, and two of its references are links.
+        let values_at = BASELINE.find("## 1. Values").unwrap();
+        let grammar_at = BASELINE.find("## Appendix").unwrap();
+        let chapter = |immutable: &str, too: &str| {
+            BASELINE[values_at..grammar_at]
+                .replace("## 1. Values", "# Values")
+                .replace("are immutable.", &format!("are [immutable]({immutable})."))
+                .replace("are too.", &format!("are [too]({too})."))
+        };
+        let rest = format!("{}{}", &BASELINE[..values_at], &BASELINE[grammar_at..]);
+        let refs = "spec\tval.a\timmutable\t[immutable](#values)\tspec/reference/values.md\n\
+                    spec\tL15\ttoo\t[too](#kinds)\tspec/reference/types.md#kinds\n\
+                    spec\tL7\tIntro.\tIntro.\t-\n";
+        let tables = rewrite_tables(
+            refs,
+            "",
+            "moved\tL5\t## 1. Values\tspec/reference/values.md\t# Values\n",
+        );
+        let run = |immutable: &str, too: &str| {
+            let chapter = chapter(immutable, too);
+            let after = [
+                legacy(&rest),
+                source("spec/reference/values.md", Role::Chapter, &chapter),
+            ];
+            let outcome = compare(&segment(BASELINE), &after, &tables, "");
+            (outcome.problems, outcome.final_targets)
+        };
+        // A final target without a fragment names the file, so a link may name any of its
+        // headings; one with a fragment names the heading too.
+        assert_eq!(run("#values", "types.md#kinds"), (vec![], 2));
+        assert_eq!(run("values.md#intro", "types.md#kinds"), (vec![], 2));
+        assert_eq!(
+            run("types.md", "types.md#other"),
+            (
+                vec![
+                    "docs/design/spec-restructure/refs.tsv:1: the link `types.md` at spec/reference/values.md:3 leads to spec/reference/types.md, but its final target is spec/reference/values.md".to_string(),
+                    "docs/design/spec-restructure/refs.tsv:2: the link `types.md#other` at spec/reference/values.md:11 leads to spec/reference/types.md#other, but its final target is spec/reference/types.md#kinds".to_string(),
+                ],
+                2
+            )
+        );
+        // A link into the legacy file is interim, and so is any link in it.
+        assert_eq!(run("#values", "../quince-spec.md#kinds"), (vec![], 1));
+        let in_legacy = BASELINE
+            .replace("are immutable.", "are [immutable](reference/x.md).")
+            .replace("are too.", "are [too](reference/x.md).");
+        let unmoved = rewrite_tables(refs, "", "");
+        let outcome = compare(&segment(BASELINE), &[legacy(&in_legacy)], &unmoved, "");
+        assert_eq!((outcome.problems, outcome.final_targets), (vec![], 0));
+
+        let miscounted = rewrite_tables(
+            "spec\tval.a\timmutable\t[immutable](#values)\tspec/a.md spec/b.md\n",
+            "",
+            "",
+        );
+        let spec = BASELINE.replace("are immutable.", "are [immutable](reference/x.md).");
+        let outcome = compare(&segment(BASELINE), &[legacy(&spec)], &miscounted, "");
+        assert_eq!(
+            outcome.problems,
+            [
+                "docs/design/spec-restructure/refs.tsv:1: the new phrase has 1 link(s) but 2 final target(s)"
+            ]
+        );
+    }
+
+    #[test]
+    fn sections_end_at_the_next_heading_of_their_level() {
+        let units = segment(
+            "# Plan\n\nIntro.\n\n## Pipeline\n\n1. Parse.\n\n### Notes\n\nA note.\n\n## Next\n\nLater.\n",
+        );
+        let texts: Vec<_> = section(&units, "## Pipeline")
+            .into_iter()
+            .map(|u| u.text)
+            .collect();
+        assert_eq!(texts, ["1. Parse.", "### Notes", "A note."]);
+        assert_eq!(section(&units, "## Missing"), Vec::new());
     }
 
     #[test]
