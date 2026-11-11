@@ -74,11 +74,11 @@ All of that assumes one file. The formats are documented in `compiler/spec/READM
 - `spec/` is the language spec and nothing else, like the Rust Reference and the Go spec: the language in Part I, the tools the language guarantees in Part II, and no library API.
 - An agent finds everything about a construct in one chapter, and can tell from a rule ID which chapter holds it.
 - Every M0 check keeps working across many files, and `cargo xtask ci` stays green on every layer.
-- The restructure is provably meaning-preserving. Each surviving rule's text is unchanged, apart from its ID, its positional references and the listed rewordings, and every removal is listed.
+- The restructure is provably meaning-preserving. Each surviving rule's text is unchanged, apart from its ID, its positional references and the listed rewordings, and every removal is listed. Decision 13 adds its tag format, table conversions and their rewordings, under the same proof.
 - M1's lexer fixtures cite final IDs.
 
 **Non-goals:**
-- Any change to what Quince means, including rewording for terseness. Existing sentences move as they are. Go's terseness is the target for new text.
+- Any change to what Quince means, including rewording for terseness. Existing sentences move as they are, apart from decision 13's listed rewordings. Go's terseness is the target for new text.
 - Deduplicating the Prelude's signatures against `std-api.md`'s entries. Once both are in `std/API.md`, that's doc editing for M9.
 - Rule IDs for the standard library. It moves to `std/`, where std's own tests and doc examples check it (M9).
 - Rendering the spec as a website.
@@ -100,7 +100,7 @@ std/
   API.md               was spec/std-api.md, plus the Prelude's library material (decision 2)
 docs/design/spec-restructure/
   baseline/            the spec and std-api.md at 81aa5f0 (decision 8)
-  id-map.tsv  refs.tsv  headings.tsv  removed.tsv  rewordings.tsv
+  id-map.tsv  refs.tsv  headings.tsv  removed.tsv  rewordings.tsv  tables.tsv (decision 13)
 ```
 
 - **Format.** Plain Markdown, readable on GitHub and with `cat`. Chapters link to each other with relative links.
@@ -304,7 +304,7 @@ lex        reference/lexical.md           Lexical structure
   - the Introduction's link to the signature-listing note.
 - **No connective prose.** None is written to smooth a split. If a split reads badly, the rule stays where it reads well.
 
-**Text the split makes false.** Each of these is either removed (`removed.tsv`) or reworded (`rewordings.tsv`). The three rewordings are the only tagged sentences whose wording changes beyond their positional references, and David approved them (2026-11-10):
+**Text the split makes false.** Each of these is either removed (`removed.tsv`) or reworded (`rewordings.tsv`). These three rewordings are the only ones the moves need, and David approved them (2026-11-10); decision 13 adds the tag format's own:
 
 | Where | Text | Action |
 | --- | --- | --- |
@@ -368,6 +368,7 @@ The segmenter that extracts the text a tag covers is new code (`rules::parse` on
 - **Whitespace.** Each unit is trimmed at both ends, and the space before a tag at a split point is dropped. Inner whitespace is compared exactly.
 - **List markers.** `-` and `*` count as the same. The spec alternates them to keep neighbouring lists apart, and a split can make two lists neighbours.
 - **Info strings.** The `ebnf` info string is ignored.
+- **Tag format, labels and converted tables.** From layer 12, as decision 13 describes.
 
 **It fails unless:**
 - every surviving rule has the same text before and after, under its mapped ID, and sits in a manifest file;
@@ -378,11 +379,12 @@ The segmenter that extracts the text a tag covers is new code (`rules::parse` on
 - the untagged units are the same multiset before and after, apart from:
   - headings;
   - repeated table header rows and code fences;
+  - the header rows of tables `tables.tsv` converts (decision 13);
   - `README.md`;
   - the Introduction's link;
   - the units in `removed.tsv` (removed outright, or `to-std`).
 
-**Each table arrives with its layer.** `spec-compare` reads `id-map.tsv` and `removed.tsv` from layer 5, `refs.tsv` and `rewordings.tsv` from layer 7, and `headings.tsv` from layer 8. Until then, IDs, text and headings must match exactly.
+**Each table arrives with its layer.** `spec-compare` reads `id-map.tsv` and `removed.tsv` from layer 5, `refs.tsv` and `rewordings.tsv` from layer 7, `headings.tsv` from layer 8, and `tables.tsv` from layer 12. Until then, IDs, text and headings must match exactly.
 
 **Output.**
 - each unmatched unit, with its location;
@@ -450,10 +452,16 @@ On a new worktree off `main`, once the OpenSpec removal (#10) is merged. Each la
     - the Pipeline goes into `docs/repo-plan.md`;
     - `quince-spec.md` and the `legacy` entry are deleted;
     - the final-target link check runs.
-11. **`cleanup`:**
+11. **`cleanup-docs`:**
     - `docs/repo-plan.md`: layout and pipeline;
-    - `docs/milestones.md`: chapter names instead of section numbers, the stale v0.4 mentions, and M9's notes from decision 12;
-    - `spec-compare` and the baseline are deleted;
+    - `docs/milestones.md`: chapter names instead of section numbers, the stale v0.4 mentions, and M9's notes from decision 12.
+12. **`tag-format`** (decision 13), one PR below the cleanup so `spec-compare` checks it:
+    - `spec-rules`, `--strip` and `spec-compare` read the own-line form, and `tables.tsv` is added;
+    - every chapter moves to the own-line form, with its tables, rewordings and `tables.tsv` rows;
+    - the placement check is turned on, and `compiler/spec/README.md` states the new rule.
+13. **`cleanup`:**
+    - `spec-compare`, its inline tag parser and the baseline are deleted;
+    - the `legacy` chapter support is deleted;
     - this doc's status becomes "done".
 
 **Layer sizes.**
@@ -461,6 +469,7 @@ On a new worktree off `main`, once the OpenSpec removal (#10) is merged. Each la
 - A move counts twice in a diff, as a deletion and an addition, so layers 5, 8 and 9 come to 1,100 to 1,300 changed lines each. A chapter is the smallest move that leaves both files readable.
 - Each PR says this. Its review is the green `spec-compare`, the table rows it adds, its flagged units, and a read of the new chapters.
 - Layer 6 touches about 640 tag lines.
+- Layer 12 rewrites about 860 tag lines into 2 to 3 lines each, about 3,000 changed lines. David chose one PR for it (2026-11-10): the tooling and the reformat only make sense together, and most of the diff is mechanical. Its review is the green `spec-compare`, the `rewordings.tsv` and `tables.tsv` rows, and a read of each chapter.
 
 **`spec/` is frozen on `main` while the stack is open.** Any other spec edit waits, or goes into the stack in the layer that owns that text.
 
@@ -471,6 +480,67 @@ On a new worktree off `main`, once the OpenSpec removal (#10) is merged. Each la
   - every std function declares its cost in a form the compiler reads, which `r[contract.cost-warn]` needs;
   - `quince query signature` and `quince query members` cover every prelude and std item.
 - **As each M9 package lands,** its doc comments take over its section of `std/API.md`, and that section is deleted.
+
+### 13. Rule tag format (David, 2026-11-10)
+
+Today a tag is written inline and covers the text from it to the next tag, or to the end of its paragraph, list item or table cell. Of the 860 tags, about 370 sit mid-block, after another rule's sentence; 42 paragraphs and 146 list items hold more than one rule; and 14 tables hold 143 tags in their cells. A reader meets IDs in the middle of prose, and an agent has to apply the covering rule to find where a rule ends.
+
+This supersedes M0's tag syntax (`docs/design/m0-repo-harness.md`, decision 3): tags are no longer written inline, and its "the spec's wording is never changed to make tagging easier" no longer holds for this layer's listed rewordings. It also extends this doc's goals and decisions 6 and 8, which list the rewordings and normalizations as they stood before it.
+
+**The format follows the Rust Reference.**
+- A tag is a line holding only `r[id]`, at column 0. A blank line, a heading or the start of the file comes before it, and the block it covers comes directly after it: a paragraph, or a top-level `-` or `*` list item. Nothing else may follow a tag line.
+- A tag covers exactly that block: the paragraph, or the item's own text and its lazy continuation lines. A tagged item has no indented content after a blank line, so a rule never extends into nested blocks.
+- Every other block is untagged: examples, code, tables, rationale and lead-in text. An untagged item directly after a tagged one, in the same list, is not covered by the tag; `compiler/spec/README.md` says so.
+- No tag sits inside a paragraph, a table, a nested list item, a blockquote or a code block.
+
+```markdown
+r[expr.op.plus-numeric]
+`+` is numeric only.
+
+r[expr.op.plus-suggest]
+Strings join with interpolation (`"{first}{last}"`) and lists with `.concat()`, and the compiler suggests both.
+
+r[effect.net]
+- `Net`: Outbound network connections
+```
+
+**Restructuring.** David approved rewording and restructuring where the format needs it (2026-11-10). No rule changes meaning, and no ID is added or removed: the tag count stays 860.
+- **Paragraphs and list items** holding several rules split into consecutive paragraphs or sibling items, one per rule. Their words don't change, so a rule that leans on the one before it ("It takes any `Int` expression") still sits right after it. About 30 do.
+- **Splits mid-sentence.** Two rules start mid-sentence, and their sentences are reworded so each rule starts one (David, 2026-11-10): `diag.explain` ("…stable across editions; Error codes…" becomes two sentences) and `effect.fix-pub-review` ("…breaking change (…), and `quince` `fix` marks…" ends after the link, and the next rule starts a sentence).
+- **Labels.** A paragraph or item with a leading bold label (`**Local mutation.**`) keeps the label on its first rule. Its other rules become sibling blocks, and one that only made sense under the label is reworded to name its subject. A label over many rules may become a heading instead: a `new` row in `headings.tsv`, a `removed` row in `removed.tsv` for the baseline's label unit, and a slug no other heading in the file already has (github-slugger would give the later one `-1`, and links would follow it silently).
+- **The reference-types item** (`types.md`, "**Reference types.**") is the one tagged structure nested in a list item: a tagged table and two indented paragraphs holding several rules each. The item keeps its label and `type.ref.identity`; the table converts like any other (below), and the two paragraphs become top-level paragraphs, one per rule.
+- **Tables.** No tagged table survives. Each of the 14 becomes a list, in its place, under its `tables.tsv` row (below):
+  - each row's first rule becomes one item, built from the row's untagged cells and the first rule's text by the table's pattern, such as `{1} ({2}): {3}` for Attributes. A pattern may add the column headers' words, where a cell means nothing without them (`O0`, `On`, `Yes`);
+  - each later rule in a row becomes an item of its own, reworded where it leaned on its row to name its subject: `lex.lit.float.context`, "Takes Float32 from context the same way", becomes "A float literal takes Float32 from context the same way";
+  - an untagged row becomes an untagged item through the same pattern;
+  - `\|` escapes become `|`, since a list item needs no escape.
+- **Text the conversion makes false.** A scan of the converted tables' surrounding text for "row", "column", "table", "above" and "below" finds text that pointed into a table, such as `expr.op.parens-required`'s "Where a row says an expression must be parenthesized". Each is reworded, as decision 6 did for text the split made false.
+- **Every reworded rule** is a row in `rewordings.tsv`, and every pattern a row in `tables.tsv`; the PR lists both, so David reviews each. Expect about 40 rewordings: the two splits, about 27 later rules in table rows, the labels' siblings, and the scan's hits.
+
+**Checks.**
+- **`spec-rules`** reads only the own-line form, and fails, naming the file and line, on:
+  - `r[` anywhere but a tag line, outside code blocks and inline code spans;
+  - a tag line that is indented, or isn't preceded by a blank line, a heading or the file start;
+  - a tag line not followed by a paragraph or a top-level `-` or `*` item: a numbered item (which can't interrupt a paragraph unless it starts at 1), a table, a heading, a code block, a blank line or another tag line. A "paragraph" here excludes lines that start a blockquote (`>`), an HTML block (`<`) or a thematic break (`***`, `- - -`), which `segment` would otherwise class as paragraphs or items;
+  - a tagged paragraph with a setext underline (`---` or `===`) after any of its lines, which would turn the whole paragraph, tag included, into a heading;
+  - a tagged item with indented content after a blank line.
+- **`--strip`** drops tag lines.
+- **The inline parser moves into `xtask/src/spec_compare`** for this one layer, since only the baseline still uses the inline form, and `quince_spec` keeps only the own-line parser. Layer 13 deletes it with `spec-compare`. The "no tags in `std/API.md`" check detects both forms.
+- **`spec-compare`** reads the baseline in the inline form and the chapters in the own-line form, where a tag's unit is the block after it: a paragraph, or an item. Planted-failure tests cover a tag before each, and a tag line followed by nothing it can cover.
+- **Labels, on both sides.** The leading bold run or runs of any tagged unit (`**Label.**`, or `**Quince** **memory never escapes to C.**`) are split into their own untagged unit, in the baseline and in the chapters alike. Ten baseline items already put the tag before the label, so a normalization applied to one side only would fail them.
+- **Converted tables.** `tables.tsv` has one row per converted table: the file, the baseline line of its header row, and its pattern. For each baseline row, `spec-compare` rebuilds the item text exactly and requires that item, with the first rule's ID or none, in the chapter.
+  - **The rebuild reads the normalized baseline units**, not the raw line: the row's untagged leftover split back into its cells, and its first rule's unit, each with `refs.tsv` and `rewordings.tsv` applied, link targets removed and `\|` unescaped. So a cell whose "(section 6)" `refs.tsv` rewrote rebuilds with its link.
+  - **Placeholders.** `{n}` is column n's text: an untagged cell, or the first rule's text in its column. A cell is empty when it is blank in the baseline, or holds only later rules. A bracketed piece such as `[ ({2})]` drops out when every placeholder in it is empty, and an empty placeholder outside brackets fails the check, so no row rebuilds with a dangling colon. A pattern can't hold a literal `[` or `]`; no table needs one.
+  - **Cell shape.** A cell is wholly untagged, starts with the first rule, or holds only later rules, as every cell of the 14 tables does. The rebuild fails on a cell with untagged text before its first tag rather than guess, and a planted-failure test covers it. Each later rule in the row must match its item exactly, after `rewordings.tsv` and with `\|` unescaped. The header row drops out. A unit's kind may change from table row to item only this way, so `compare` still fails every other kind change.
+- **Final targets.** A `refs.tsv` row whose unit sat in a converted table is checked in the item `tables.tsv` rebuilt it into, and the final-target check fails on a row it can't resolve, instead of skipping it.
+- **`compiler/spec/README.md` and `AGENTS.md`** state the new tag rule, in place of "written directly before the sentences it covers".
+
+**Rendering.** GitHub shows a tag line joined to its paragraph ("r[x] Text…"), or as its own line above a bullet item, since a bullet list may interrupt a paragraph. Rendering tags as anchors, as mdbook-spec does, is out of scope.
+
+*Alternative: tags at the start of their block, with tags at the start of table cells.* Rejected by David: it keeps IDs in tables and differs from the Rust form agents already know.
+*Alternative: one tag per table, dropping its row IDs.* Rejected: it merges 143 rules, so a fixture can't cite one row.
+*Alternative: indented tags on nested items.* Rejected: Rust never tags a nested item, and a rule that needs its parent item doesn't read on its own.
+*Alternative: containment ("the item holds every cell, in order") for converted rows.* Rejected: it can't hold for a row with several rules, and lets words added between cells through unchecked.
 
 ## Risks
 
@@ -483,6 +553,8 @@ On a new worktree off `main`, once the OpenSpec removal (#10) is merged. Each la
 - **A later cross-chapter move breaks fixtures.** `moved-rules.txt` says which ID to cite.
 - **Agents read stale pointers mid-stack.** Layer 2 points them all at `spec/README.md`.
 - **The move PRs are large.** See decision 11.
+- **A reworded rule changes meaning.** Decision 13 allows rewording only where the format needs it. Each one is a `rewordings.tsv` row, which `spec-compare` pins, and is listed in its PR for David.
+- **A converted table changes meaning.** A pattern may add header words to its rows, the riskiest edit layer 12 makes. `spec-compare` rebuilds every row from its pattern exactly, so the only unchecked words are the patterns, one `tables.tsv` row per table, which the PR lists for David.
 
 ## Rollback
 
@@ -533,7 +605,12 @@ One `gh stack`, a PR per layer (decision 11). Tick each box as it lands on its b
   - [x] final-target check in `spec-compare`: each link a `refs.tsv` row wrote leads to its final target once its unit sits in a chapter file or `std/API.md`, skipping links into the legacy file, so it runs from this layer on and covers every link once the legacy file is gone; leftover check extended to headings (first PR, `move-tooling-tables`)
   - [x] `spec-compare` takes `docs/design-principles.md` and the repo plan's Pipeline section as landing files (first PR, `move-tooling-tables`)
   - [x] chapters 18 to 20; `docs/design-principles.md`; Pipeline to `docs/repo-plan.md`; `quince-spec.md` and `legacy` deleted; every baseline heading has a row; diagnostics example test path; README lists Part II and notes the split (second PR, `move-tooling`)
-- [ ] 11. `cleanup`, as three PRs: `cleanup-docs`, `cleanup` and `cleanup-legacy`
-  - [x] `docs/repo-plan.md` layout; `docs/milestones.md`: chapter names instead of section numbers, the stale v0.4 mentions, M9's notes from decision 12 (first PR, `cleanup-docs`)
-  - [ ] `spec-compare`, its `ci` step and the baseline deleted (second PR, `cleanup`)
-  - [ ] the `legacy` chapter support in `quince_spec` and its README deleted; status "done" (third PR, `cleanup-legacy`)
+- [x] 11. `cleanup-docs`: `docs/repo-plan.md` layout; `docs/milestones.md`: chapter names instead of section numbers, the stale v0.4 mentions, M9's notes from decision 12
+- [ ] 12. `tag-format`, one PR (decision 13)
+  - [ ] `spec-rules` and `--strip` read the own-line form; placement check, with tests
+  - [ ] inline parser moved into `spec_compare`; `spec-compare` reads the own-line form; labels split on both sides; `tables.tsv` with exact row rebuilds; final targets through converted tables; planted-failure tests
+  - [ ] every chapter in the own-line form; tables converted; text pointing into tables reworded; `rewordings.tsv` and `tables.tsv` rows
+  - [ ] the tag rule in `compiler/spec/README.md` and `AGENTS.md`
+- [ ] 13. `cleanup`, as two PRs: `cleanup` and `cleanup-legacy`
+  - [ ] `spec-compare`, its inline tag parser, its `ci` step and the baseline deleted (`cleanup`)
+  - [ ] the `legacy` chapter support in `quince_spec` and its README deleted; status "done" (`cleanup-legacy`)
