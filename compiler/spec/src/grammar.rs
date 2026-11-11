@@ -4,7 +4,6 @@
 //! them, `// terminals: ...`, lists the names the spec defines in prose instead of as
 //! productions. A blank line separates the header from the grammar.
 
-use crate::blocks::code_blocks;
 use crate::{ChapterFile, FileError, SPEC_DIR};
 use std::collections::{HashMap, HashSet};
 
@@ -61,25 +60,34 @@ pub fn extract(files: &[ChapterFile]) -> Result<Extracted, FileError> {
     for file in files {
         let path = paths.len();
         paths.push(file.path.clone());
-        for block in code_blocks(&file.text) {
-            if block.label != GRAMMAR_INFO {
-                continue;
+        // The 1-based line of the open fence, and whether its block is grammar.
+        let mut open: Option<(usize, bool)> = None;
+        for (index, line) in file.text.lines().enumerate() {
+            let line_no = index + 1;
+            let fence = line.trim_start().strip_prefix("```");
+            match (open, fence) {
+                (None, Some(info)) => {
+                    let grammar = info.trim() == GRAMMAR_INFO;
+                    if grammar && !origins.is_empty() {
+                        text_lines.push("");
+                        origins.push((path, line_no));
+                    }
+                    open = Some((line_no, grammar));
+                }
+                (Some(_), Some(_)) => open = None,
+                (Some((_, true)), None) => {
+                    text_lines.push(line);
+                    origins.push((path, line_no));
+                }
+                _ => {}
             }
-            if !block.closed {
-                return Err(FileError {
-                    path: file.path.clone(),
-                    line: block.line,
-                    message: format!("this `{GRAMMAR_INFO}` code block is never closed"),
-                });
-            }
-            if !origins.is_empty() {
-                text_lines.push("");
-                origins.push((path, block.line));
-            }
-            for (index, line) in block.lines.iter().enumerate() {
-                text_lines.push(line);
-                origins.push((path, block.line + 1 + index));
-            }
+        }
+        if let Some((line, true)) = open {
+            return Err(FileError {
+                path: file.path.clone(),
+                line,
+                message: format!("this `{GRAMMAR_INFO}` code block is never closed"),
+            });
         }
     }
     if origins.is_empty() {

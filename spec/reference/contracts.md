@@ -14,7 +14,7 @@ Because contracts usually run in production, quince check warns about any contra
 contract     = "requires" expr | "ensures" [ "(" name ")" ] expr
 ```
 
-```quince
+```
 pub fn withdraw(account: Account, amount: Money) -> Result<Account, WithdrawError>
   requires amount > Money.ZERO
   ensures(r) match r {

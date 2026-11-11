@@ -91,7 +91,6 @@ name = "quince_syntax"
 version = "0.0.0"
 dependencies = [
  "quince_diagnostics",
- "quince_spec",
 ]
 
 [[package]]

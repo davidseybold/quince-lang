@@ -14,7 +14,7 @@ concurrent   = "concurrent" [ "(" arg { "," arg } ")" ]
 spawn        = "spawn" expr
 ```
 
-```quince
+```
 fn load_dashboard(user: UserId) -> Result<Dashboard, LoadError>
   uses Net
 {
@@ -66,7 +66,7 @@ r[conc.not-effect]
 
 To run one task per item of a list, put `for` after `concurrent`:
 
-```quince
+```
 fn fetch_all(urls: List<Url>) -> Result<List<Page>, FetchError>
   uses Net
 {
@@ -105,7 +105,7 @@ background   = "background" "(" name ":" "TaskScope" [ "," arg ] ")" block
 
 Work that must outlive the current function is spawned into a longer-lived scope passed in as a `TaskScope` value:
 
-```quince
+```
 fn main() -> Result<Unit, AppError> uses * {
   with Log = log.json(log.Level.Info) {
     let served = background (bg: TaskScope, on_error: FailurePolicy.LogAndContinue) {
@@ -272,7 +272,7 @@ select       = "select" "{" { pattern "=" expr "=>" ( block | expr ) "," } "}"
 r[conc.select.wait]
 `select` waits on several channel operations at once and runs the arm of the first one that is ready:
 
-```quince
+```
 fn worker(jobs: Channel<Job>, control: Channel<Command>) uses State, Net {
   while true {
     select {
@@ -319,7 +319,7 @@ r[conc.select.no-default]
 
 ## Failure, timeout and channel types
 
-```quince
+```
 pub struct TimedOut { pub after: Duration }
 pub struct ChannelClosed
 pub struct ScopeFailed { pub spawn_site: String, pub message: String }

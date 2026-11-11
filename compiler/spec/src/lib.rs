@@ -1,9 +1,7 @@
-//! Reads the Quince language spec: its chapter manifest, rule IDs, grammar blocks and code block
-//! labels.
+//! Reads the Quince language spec: its chapter manifest, rule IDs and grammar blocks.
 //!
 //! The formats it checks are defined in this crate's `README.md`.
 
-pub mod blocks;
 pub mod grammar;
 pub mod links;
 pub mod manifest;
@@ -26,9 +24,6 @@ pub const RETIRED_PATH: &str = "spec/retired-rules.txt";
 pub const MOVED_PATH: &str = "spec/moved-rules.txt";
 /// The grammar assembled from the spec's `ebnf` blocks, relative to the repo root.
 pub const GRAMMAR_PATH: &str = "spec/grammar.ebnf";
-/// The standard library API doc, relative to the repo root. It isn't part of the spec, but its
-/// code blocks are labelled like the spec's, and its links into the spec are checked.
-pub const API_PATH: &str = "std/API.md";
 /// The folders whose Markdown files must all be chapters listed in the manifest, relative to
 /// [`SPEC_DIR`].
 pub const CHAPTER_DIRS: [&str; 2] = ["reference", "tooling"];

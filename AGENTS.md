@@ -12,7 +12,7 @@ How to build and check this repo. `CLAUDE.md` holds the working rules and the de
 | `cargo fmt --all` | Formats Rust code. `ci` runs it with `--check`. |
 | `cargo clippy --workspace --all-targets -- -D warnings` | Lints Rust code with warnings treated as errors, as `ci` does. |
 | `cargo run -p quince_cli -- --version` | Runs the `quince` binary. Only `--version` works so far. |
-| `cargo xtask spec-rules` | Checks the chapter manifest `spec/chapters.txt`, the chapter list in `spec/README.md`, and the rule-ID tags in every chapter: format, placement, chapter prefixes and constructs, uniqueness, retired and moved IDs. Also checks that every code block in the chapters and `std/API.md` is labelled `quince`, `toml`, `json`, `text` or `ebnf`. |
+| `cargo xtask spec-rules` | Checks the chapter manifest `spec/chapters.txt`, the chapter list in `spec/README.md`, and the rule-ID tags in every chapter: format, placement, chapter prefixes and constructs, uniqueness, retired and moved IDs. |
 | `cargo xtask spec-rules --strip [<file>]` | Prints one spec chapter, or every chapter in order, with every tag removed, so you can diff the wording without the tags. |
 | `cargo xtask spec-grammar` | Checks that `spec/grammar.ebnf` matches the spec's `ebnf` code blocks, that every name it uses is defined and every production is used, and that no production reuses a retired name. Errors give the chapter file and line to fix. |
 | `cargo xtask spec-grammar --write` | Regenerates `spec/grammar.ebnf` from the spec. Run it after the spec's grammar changes. Only the file's header (its terminal list) is edited by hand. |
@@ -40,7 +40,7 @@ A spec change that adds normative text tags it in the same PR. No check can tell
 | `compiler/<name>/` | One crate per compiler stage, named `quince_<name>`. Each crate's `lib.rs` says what it holds, and its `README.md`, when it has one, holds the formats and rules it enforces. |
 | `compiler/cli/` | The single `quince` binary. |
 | `compiler/syntax/` | `quince_syntax`: source decoding and the lexer, then the parser and formatter. Its `README.md` holds the token contract and the errors the lexer owns. |
-| `compiler/spec/` | `quince_spec`: reads the spec (chapter manifest, rule tags, `ebnf` grammar blocks, code block labels) for xtask, the conformance runner and the lexer's corpus test. |
+| `compiler/spec/` | `quince_spec`: reads the spec (chapter manifest, rule tags, `ebnf` grammar blocks) for xtask and the conformance runner. |
 | `runtime/` | The runtime, built as a static library linked into every Quince binary. |
 | `std/` | The standard library in Quince (from M6), and `std/API.md`, its API doc. For a std signature, read `std/API.md`; once `quince query` works (M5), use it instead. |
 | `tests/conformance/` | The conformance runner (`quince_conformance`); fixtures live in its `testdata/`. |

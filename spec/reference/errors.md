@@ -12,7 +12,7 @@ r[err.result-option]
 
 - Error types are usually enums, so callers can match on every failure mode:
 
-```quince
+```
 pub enum ParseError {
   Empty,
   InvalidChar(at: Int, found: Char),

@@ -14,7 +14,7 @@ An unknown table or key is a compile error that names its line, so a misspelled 
 r[dep.manifest.fmt]
 `quince fmt` also formats `quince.toml`: tables in the order of the example below, several `[cmd.*]` tables and the keys within a table as written.
 
-```toml
+```
 [project]
 name = "users"              # required: the library's import name, lowercase snake_case
 edition = "2027"            # required: the only edition in v1

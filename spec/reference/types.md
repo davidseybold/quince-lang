@@ -92,7 +92,7 @@ r[type.map.no-index]
 
 ## Type arguments and construction
 
-```quince
+```
 let order = json.decode<Order>(body)?
 let jobs = Channel<Job>.new(16)
 let user = User(id: UserId(1), email:, name: "Ada", created_at: now)
@@ -121,7 +121,7 @@ Mutable state shared between functions lives only in a reference type (listed un
 r[type.mut.local]
 **Local mutation.** On a `var` binding, collections and struct fields can be changed in place:
 
-```quince
+```
 fn word_counts(text: String) -> Map<String, Int> {
   var counts: Map<String, Int> = {:}
   for word in text.split_whitespace() {
@@ -157,7 +157,7 @@ r[type.mut.var-self.rebind]
 
 **Shared state.** State that must outlive a call or be seen by several functions lives in a `Ref<T>`:
 
-```quince
+```
 fn record_hit(stats: Ref<Stats>, path: String) -> Stats uses State {
   stats.modify(fn(s) { Stats(..s, hits: s.hits + 1) })
 }

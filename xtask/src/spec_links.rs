@@ -5,12 +5,12 @@
 
 use crate::spec_rules::report_located;
 use quince_spec::links::{self, Link};
-use quince_spec::{API_PATH, FileError, SPEC_DIR};
+use quince_spec::{FileError, SPEC_DIR};
 use std::collections::{BTreeSet, HashMap};
 use std::path::Path;
 
 /// Files outside `spec/` whose links into `spec/` are checked, relative to the repo root.
-const LINKING_IN: [&str; 1] = [API_PATH];
+const LINKING_IN: [&str; 1] = ["std/API.md"];
 
 pub fn check(root: &Path) -> Result<(), String> {
     let mut sources = Vec::new();

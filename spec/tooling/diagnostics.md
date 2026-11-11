@@ -5,7 +5,7 @@
 r[diag.json]
 With `--format json`, every diagnostic has a stable code, an exact span, a plain-language message, and zero or more fixes expressed as text edits:
 
-```json
+```
 {
   "code": "E0412",
   "severity": "error",

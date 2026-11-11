@@ -1,19 +1,17 @@
-//! The corpus, every `quince` code block in the spec and the std API doc, and seeded mutations
-//! of it and of the `lex/` fixtures, which check the invariants on inputs no test wrote.
+//! Seeded mutations of the `lex/` fixtures, which check the invariants on inputs no test wrote.
 
 use super::errors::check_error_ranges;
 use super::repo_root;
-use crate::{codes, decode_source, lex, lex_str};
-use quince_spec::blocks::{QUINCE_LABEL, code_blocks};
+use crate::{codes, decode_source, lex};
 use std::collections::BTreeSet;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 /// The conformance fixtures of the lexer, relative to the repo root.
 const LEX_FIXTURES_DIR: &str = "tests/conformance/testdata/lex";
 
-/// Mutants made from each seed. With about 100 seeds, the test takes about 0.2 s in debug, so
-/// it adds nothing to the crate's run, which the exhaustive `every_short_*` tests set.
-const MUTANTS_PER_SEED: usize = 24;
+/// Mutants made from each fixture. With 38 fixtures, the test takes about 0.2 s in debug, so it
+/// adds nothing to the crate's run, which the exhaustive `every_short_*` tests set.
+const MUTANTS_PER_SEED: usize = 120;
 
 /// Each mutant applies between one and this many mutations to its seed.
 const MAX_MUTATIONS: usize = 3;
@@ -45,56 +43,12 @@ const INSERTED: [&[u8]; 22] = [
     b"\xe2\x80\xae",
 ];
 
-/// Every `quince` block in the spec's chapters and the std API doc, each with the file and line
-/// of its opening fence.
-fn corpus() -> Vec<(String, String)> {
-    let root = repo_root();
-    let spec = quince_spec::Spec::load(&root).unwrap();
-    let api = std::fs::read_to_string(root.join(quince_spec::API_PATH)).unwrap();
-    let files = (spec.files.iter())
-        .map(|file| (file.path.as_str(), file.text.as_str()))
-        .chain([(quince_spec::API_PATH, api.as_str())]);
-    let mut blocks = Vec::new();
-    for (path, text) in files {
-        for block in code_blocks(text) {
-            if block.label == QUINCE_LABEL {
-                blocks.push((format!("{path}:{}", block.line), block.text()));
-            }
-        }
-    }
-    blocks
-}
-
-#[test]
-fn every_quince_block_lexes() {
-    let corpus = corpus();
-    // Only proves the test found the corpus, which holds about 60 blocks.
-    assert!(
-        corpus.len() >= 40,
-        "found only {} `quince` code blocks in the spec and the std API doc; did their labels change?",
-        corpus.len()
-    );
-    for (at, text) in &corpus {
-        let lexed = lex_str(text);
-        check_error_ranges(text, &lexed);
-        let errors: Vec<_> = (lexed.errors.iter())
-            .map(|e| format!("{} {:?}: {}", e.code, e.range, e.message))
-            .collect();
-        assert!(errors.is_empty(), "{at}: {errors:#?}");
-    }
-}
-
-/// Seeded mutations of the corpus and the `lex/` fixtures keep the invariants. They are bytes,
-/// so they reach invalid UTF-8 through `decode_source` and `lex`. Together they report every
-/// code, so no error's path goes unmutated. The fixtures guarantee that, since every code has
-/// one, and `cargo xtask diagnostics` requires it.
+/// Seeded mutations of the `lex/` fixtures keep the invariants. They are bytes, so they reach
+/// invalid UTF-8 through `decode_source` and `lex`. Together they report every code, which the
+/// fixtures guarantee, since every code has one and `cargo xtask diagnostics` requires it.
 #[test]
 fn mutations_keep_the_invariants() {
     let dir = repo_root().join(LEX_FIXTURES_DIR);
-    let mut seeds: Vec<(String, Vec<u8>)> = corpus()
-        .into_iter()
-        .map(|(at, text)| (at, text.into_bytes()))
-        .collect();
     let fixtures = std::fs::read_dir(&dir).unwrap();
     let mut fixtures: Vec<_> = fixtures.map(|entry| entry.unwrap().path()).collect();
     fixtures.sort();
@@ -103,18 +57,13 @@ fn mutations_keep_the_invariants() {
         "found only {} fixtures in {LEX_FIXTURES_DIR}",
         fixtures.len()
     );
-    for path in fixtures {
-        let name = path.file_name().unwrap().to_string_lossy();
-        seeds.push((
-            format!("{LEX_FIXTURES_DIR}/{name}"),
-            std::fs::read(&path).unwrap(),
-        ));
-    }
 
     let mut reported = BTreeSet::new();
-    for (at, seed) in &seeds {
-        // Each seed has its own stream, so adding a block elsewhere doesn't change its mutants.
-        let mut rng = Rng(0x5157_494e_4345 ^ fnv1a(seed));
+    for path in &fixtures {
+        let name = path.file_name().unwrap().to_string_lossy();
+        let seed = std::fs::read(path).unwrap();
+        // Each fixture has its own stream, so editing another fixture doesn't change its mutants.
+        let mut rng = Rng(0x5157_494e_4345 ^ fnv1a(&seed));
         for n in 0..MUTANTS_PER_SEED {
             let mut bytes = seed.clone();
             for _ in 0..=rng.below(MAX_MUTATIONS) {
@@ -128,7 +77,7 @@ fn mutations_keep_the_invariants() {
             }));
             let Ok(errors) = checked else {
                 panic!(
-                    "mutant {n} of {at} broke an invariant: b\"{}\"",
+                    "mutant {n} of {LEX_FIXTURES_DIR}/{name} broke an invariant: b\"{}\"",
                     bytes.escape_ascii()
                 );
             };

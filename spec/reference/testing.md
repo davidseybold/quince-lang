@@ -2,7 +2,7 @@
 
 ## Executable examples in doc comments
 
-```quince
+```
 /// Splits a full name into first and last.
 ///   >>> split_name("Ada Lovelace")
 ///   Some(("Ada", "Lovelace"))
@@ -103,7 +103,7 @@ r[test.itest.flags]
 
 ## Property tests
 
-```quince
+```
 test "parse inverts display" forall (n: Int) {
   assert(Int.parse(n.display()) == Ok(n))
 }

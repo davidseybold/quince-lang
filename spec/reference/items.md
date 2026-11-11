@@ -12,7 +12,7 @@ param        = [ "var" ] "self" | [ "var" ] ( name | "_" ) ":" type [ "=" expr ]
 
 ## Constants
 
-```quince
+```
 const MAX_RETRIES: Int = 3
 const EMAIL_PATTERN: Regex = re"^[^@]+@[^@]+$"
 const DEFAULT_CONFIG: Config = Config.parse(DEFAULT_CONFIG_TEXT).expect("built-in config is valid")
@@ -54,7 +54,7 @@ r[item.const.assoc.no-interface]
 
 ## Structs
 
-```quince
+```
 pub struct User {
   id: UserId,
   email: Email,
@@ -105,7 +105,7 @@ r[item.struct.literal-visibility]
 
 ## Enums (algebraic data types)
 
-```quince
+```
 pub enum Shape {
   Circle(radius: Float),
   Rect(width: Float, height: Float),
@@ -169,7 +169,7 @@ r[item.method.impl-no-pub]
 
 ## Interfaces
 
-```quince
+```
 pub interface Display {
   fn display(self) -> String
 }
@@ -236,7 +236,7 @@ r[item.iface.type-params]
 r[item.iface.assoc-types]
 - Interfaces may declare associated types, which each implementation fixes:
 
-```quince
+```
 pub interface Iterator<uses E> {
   type Item
   fn next(var self) -> Option<Self.Item> uses E
@@ -250,7 +250,7 @@ r[item.generic.excluded]
 
 ## Arguments
 
-```quince
+```
 counts.update(word, default: 0, fn(n) { n + 1 })
 http.serve(8080, handler: fn(req) { handle(req, bg:) })
 ```

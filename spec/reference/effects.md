@@ -57,7 +57,7 @@ A handler's type must be able to cross task boundaries ([Types](types.md)), sinc
 
 `pg`, `PgConn` and `PgError`, here and in [Interop with C](interop.md), stand for a hypothetical third-party Postgres package. They are not part of std.
 
-```quince
+```
 pub effect Db uses Net, State {
   fn query(sql: String) -> Result<Rows, DbError>
   fn execute(sql: String) -> Result<Int, DbError>
@@ -112,7 +112,7 @@ r[effect.no-index]
 
 ## Declaring and inferring
 
-```quince
+```
 pub fn sync_users(api: ApiClient, store: UserStore) -> Result<Int, SyncError>
   uses Net, Db, Log
 { ... }
@@ -144,7 +144,7 @@ r[effect.pure-param]
 r[effect.effvar.decl]
 A function that takes a closure and calls it declares an effect variable among its generic parameters with `uses`, and puts that variable in its own `uses` clause. The function then has exactly the effects of the closure it was given:
 
-```quince
+```
 impl<T> List<T> {
   fn map<U, uses E>(self, f: fn(T) -> U uses E) -> List<U> uses E
 }
@@ -196,7 +196,7 @@ handler      = type_path "=" expr
 
 Tests can replace an effect's implementation for a block:
 
-```quince
+```
 test "expired sessions are removed" {
   with Clock = testing.fixed_clock(ts"2026-01-01T00:00:00Z") {
     assert(purge_sessions(store).len() == 3)
@@ -209,7 +209,7 @@ A handler is an ordinary value whose type implements an effect's operations (see
 r[effect.with.install]
 `with` installs handlers for the code inside it, in tests and in production. This is how a program configures its database, logger and other services:
 
-```quince
+```
 fn main() -> Result<Unit, AppError> uses * {
   let cfg = load_config("app.toml")?
   with Db = PgDb.connect(cfg.db, max: 20)?,
@@ -242,7 +242,7 @@ A built-in effect's operations are called through its name, like a package effec
 r[effect.builtin-ops-no-import]
 Calling a built-in effect's operations never needs an import.
 
-```quince
+```
 effect Fs {
   fn read(path: String) -> Result<Bytes, FsError>
   fn read_text(path: String) -> Result<String, FsError>
