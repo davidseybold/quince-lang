@@ -9,7 +9,7 @@ use std::ops::Range;
 
 impl Lexer<'_> {
     /// A char literal, at its `'`: one `Char` token, up to and including its closing `'`, or up
-    /// to its line ending when it has none. It holds one character or one escape
+    /// to its line ending when it has none. It holds one Unicode scalar value, written as itself or as one escape
     /// (`r[lex.lit.char]`, `r[lex.lit.char.escapes]`), and anything else is an E0009.
     pub(super) fn char_literal(&mut self) {
         let text = self.text;
@@ -56,7 +56,7 @@ impl Lexer<'_> {
                     open..open + 1,
                     codes::INVALID_CHAR,
                     "this char literal has no closing `'` on its line: a char literal is one \
-                     character between single quotes, as in `'a'`"
+                     Unicode scalar value between single quotes, as in `'a'`"
                         .to_string(),
                 );
                 self.errors.insert(first_error, error);
@@ -65,7 +65,7 @@ impl Lexer<'_> {
             let error = LexError::new(
                 open..end,
                 codes::INVALID_CHAR,
-                "`''` is empty: a char literal holds exactly one character".to_string(),
+                "`''` is empty: a char literal holds exactly one Unicode scalar value".to_string(),
             );
             self.errors.insert(first_error, error);
         } else if chars > 1 {
@@ -84,7 +84,8 @@ fn too_many_error(text: &str, range: Range<usize>, body: &str, valid: bool) -> L
     let error = LexError::new(
         range.clone(),
         codes::INVALID_CHAR,
-        "a char literal holds exactly one character: text goes in a `\"` string".to_string(),
+        "a char literal holds exactly one Unicode scalar value: text goes in a `\"` string"
+            .to_string(),
     );
     let before = text[..range.start].chars().next_back();
     let joins = before.is_some_and(|c| c.is_ascii_alphanumeric() || c == '_' || c == '"');
