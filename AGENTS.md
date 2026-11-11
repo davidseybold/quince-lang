@@ -17,13 +17,12 @@ How to build and check this repo. `CLAUDE.md` holds the working rules and the de
 | `cargo xtask spec-grammar` | Checks that `spec/grammar.ebnf` matches the spec's `ebnf` code blocks, that every name it uses is defined and every production is used, and that no production reuses a retired name. Errors give the chapter file and line to fix. |
 | `cargo xtask spec-grammar --write` | Regenerates `spec/grammar.ebnf` from the spec. Run it after the spec's grammar changes. Only the file's header (its terminal list) is edited by hand. |
 | `cargo xtask spec-links` | Checks that every relative link in `spec/`, and every link from `std/API.md` into `spec/`, names a file that exists, and that each `#fragment` names a heading there (GitHub's anchor rules). Also fails on a positional reference such as "section 5" or "(below)" in the spec's prose. |
-| `cargo xtask spec-compare` | Temporary, while the spec is split into chapters: checks that every rule keeps its text and no other text is lost or added, against the pinned baseline in `docs/design/spec-restructure/baseline/` (decision 8 of `docs/design/spec-restructure.md`). Also checks that each link `refs.tsv` wrote leads to its final target, once its text sits in a chapter. |
 | `cargo xtask diagnostics` | Checks that every registered diagnostic code has explain text, and every code that isn't retired has a conformance test. To add a code, see `compiler/diagnostics/src/registry.rs`. |
 | `cargo xtask conformance` | Runs the `.qnc` fixtures in `tests/conformance/testdata/` and writes spec coverage by rule ID to `target/conformance/coverage.json`. The fixture format is in that folder's README. |
 
 The toolchain is pinned in `rust-toolchain.toml`, and rustup installs it the first time you run `cargo` in the repo.
 
-`ci` runs `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `spec-rules`, `spec-grammar`, `spec-links`, `spec-compare`, `diagnostics` and `conformance`, and exits non-zero if any step failed.
+`ci` runs `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `spec-rules`, `spec-grammar`, `spec-links`, `diagnostics` and `conformance`, and exits non-zero if any step failed.
 
 GitHub Actions runs `cargo xtask ci` with a read-only token on every pull request, whatever its base branch (so each layer of a stack is checked), and on every push to `main`. `.gitattributes` turns off line-ending conversion, so the byte comparisons in the spec checks agree on every platform and fixtures can hold CRLF on purpose.
 
