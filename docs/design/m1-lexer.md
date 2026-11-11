@@ -191,6 +191,7 @@ Consecutive invalid characters make one `Error` token and one E0001, so a pasted
 - The lexer takes the replaced ranges (`lex(&Decoded)`, or `lex_str(&str)` for text that was never bytes). A replacement character in one of those ranges becomes an `Error` token with no diagnostic, since E0014 already reported it. A U+FFFD that was really in the file still gets E0001.
 - Each replacement counts as one column. That is a position rule, so layer 3 adds it to `compiler/diagnostics/README.md`.
 - Since that text no longer matches the file, no tool may write it back. `Decoded::is_lossy()` says so, and every writer checks it: `fmt` (the formatter doc), `fix` (M5) and the language server (M5).
+- For the same reason, `lex` gives no error in a lossy text a fix (decided by David, 2026-11-11). An edit to that text could write a U+FFFD over the file's bytes, as a fix that rewrites a whole literal or comment would. One rule for the whole file, rather than a check in each fix, covers every lexer fix, including ones added later. The parser and later stages must follow it too (see [For the parser doc](#for-the-parser-doc)). The cost is that a file with one bad byte has no fixes until its encoding is repaired, which E0014 asks for.
 - It refuses a file over 4 GiB, the most a `u32` offset can address, as an I/O error, not a diagnostic.
 
 ### 10. Wiring the conformance runner
@@ -237,7 +238,8 @@ Each layer builds and passes `cargo xtask ci` on its own:
 6b. `m1/lexer-literals`: raw, bytes and tagged literals; E0010 and E0011; the fallback for prefixed strings is removed.
 6b1. `m1/lexer-plain-errors`: messages describe Quince only (decision 9); no new codes or rules.
 6b2. `m1/lexer-chars`: char literals; E0009; the rest of the fallback rule is removed.
-6c. `m1/lexer-control`: spec question 8, and a bump; control and bidirectional characters; E0015.
+6c1. `m1/lexer-lossy-fixes`: no fixes in a lossy text (decision 9).
+6c2. `m1/lexer-control`: spec question 8, and a bump; control and bidirectional characters; E0015.
 7. `m1/lexer-corpus`: spec question 5 (labels, no bump); the corpus and mutation tests.
 
 Each layer should come in at around 500 to 900 changed lines. Layer 2 was first planned to hold layers 2 to 4, but it would have run to about 1,600 lines, so it is split into the token stream, its errors, and numbers. Layer 6 was planned as one layer with six codes, but layer 5 alone, with three, came to about 1,200 lines, so it is split into 6a to 6c (decided by David, 2026-11-11). Layer 6b, with three codes and four forms, was estimated at about 1,150 lines, so char literals moved to 6b2 (decided by David, 2026-11-11). The codes keep the numbers the table gives, so E0008 is registered after E0013 and E0014.
@@ -290,7 +292,7 @@ All eight are approved: question 1 in its strict form, the other seven as propos
 - `r[lex.lit.string.unicode-escape]` "`\u{...}` holds one to six hex digits naming a Unicode scalar value, so `\u{}`, surrogates (`\u{D800}`) and values above `\u{10FFFF}` are errors."
 - `r[lex.lit.bytes.hex-escape]` "`\x` takes exactly two hex digits, and appears only in bytes literals."
 
-**8. Control and bidirectional characters (layer 6c).** The spec doesn't say which characters may appear raw inside literals and comments. The Trojan Source attack (CVE-2021-42574) hides code in bidirectional-format characters, and rustc denies them by default. Approved:
+**8. Control and bidirectional characters (layer 6c2).** The spec doesn't say which characters may appear raw inside literals and comments. The Trojan Source attack (CVE-2021-42574) hides code in bidirectional-format characters, and rustc denies them by default. Approved:
 - `r[lex.source.control]` "Apart from tabs and line endings, a literal or comment can't contain a control character (U+0000 to U+001F, and U+007F) or a bidirectional-format character (U+202A to U+202E, U+2066 to U+2069). A `"` or `"""` string writes one as an escape. Raw and tagged literals and comments can't hold them."
 - A carriage return not followed by a line feed falls under `r[lex.source.line-end]` (E0013), not this rule, so one character never gets both codes.
 
@@ -324,6 +326,7 @@ Found while writing this. None of them block the lexer.
 - **C names that are keywords.** A C function whose name is a keyword (POSIX `select`) can't be declared: `r[ffi.cbind.keyword-param]` covers parameters only, and `r[lex.no-contextual]` rules out reading `select` as a name inside `foreign`.
 - **`;` ends a statement outright** (decided by David, 2026-11-11). A `;` isn't a line break, so the leading-dot continuation (`r[lex.continue.more]`) doesn't join across it: `a;` followed by a line `.b()` is two statements. E0002's fix, which deletes the `;`, would join them, so there it is `needs-review`.
 - **Negative literals.** `r[lex.lit.int.neg]` says the minus is "directly before" the literal. Whether `- 1` counts decides whether the parser checks adjacency.
+- **No fixes in a lossy text** (decision 9). `lex` clears the lexer's fixes, but the parser, and every later stage that adds fixes, must give none in a lossy text either. When a driver assembles a file's diagnostics, the rule moves there, so that it holds for every stage at once.
 - **Rules this doc hands over** (decision 11): fixtures for `lex.keywords`, `lex.no-contextual`, `lex.no-shift-token`, `lex.grammar-rules`, `lex.ident-classes`, `lex.indentation`, `lex.comment.doc` and `lex.comment.doc-exact`. The formatter doc takes `lex.source.canonical`.
 - **Coverage ratchet.** M0 left this for M1. Decide it once the parser adds real coverage.
 - **Adjacent literals** (layer 6b). A quote in a string that isn't escaped can leave two literals side by side with no lexical error: `"press "b" now"` is a string and then a bytes literal, and `"the "r" key"` a string and then a raw string. With an unknown tag, as in `"say "hi" now"`, the lexer reports E0010. The parser reports two adjacent literals as it reports any two expressions with nothing between them, with no hint for this shape (decision 9). Likewise `r"a\"b"` is a raw string, `r"a\"`, then an unclosed bytes literal.
@@ -388,7 +391,10 @@ Rule IDs in brackets are what each task's fixtures cite. Rules added by spec que
 - [x] Char literals, `literal::char_value`; E0009. [`lex.lit.char`, `lex.lit.char.escapes`]
 - [x] Remove the rest of the fallback rule and the README's "Literals not lexed yet".
 
-**Layer 6c: `m1/lexer-control`**
+**Layer 6c1: `m1/lexer-lossy-fixes`**
+- [x] No fixes in a lossy text (decision 9).
+
+**Layer 6c2: `m1/lexer-control`**
 - [ ] Spec: question 8, and a bump.
 - [ ] Control and bidirectional characters; E0015. [`lex.source.control`]
 

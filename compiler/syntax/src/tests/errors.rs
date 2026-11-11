@@ -171,6 +171,25 @@ fn replaced_bytes_are_errors_without_a_diagnostic() {
     );
 }
 
+/// A lossy text gets no fixes, even far from its replacements, and even one, as E0009's does,
+/// that would rewrite a replacement.
+#[test]
+fn lossy_text_has_no_fixes() {
+    assert_eq!(
+        errors("a;\n'xb'"),
+        [
+            r#"E0002 1..2 => "a\n'xb'""#,
+            r#"E0009 3..7 => "a;\n\"xb\"""#
+        ]
+    );
+    let decoded = decode_source(b"a;\n'\xFFb'").unwrap();
+    let lexed = lex(&decoded);
+    let errors: Vec<_> = (lexed.errors.iter())
+        .map(|e| describe(&decoded.text, e))
+        .collect();
+    assert_eq!(errors, ["E0014 4..7", "E0002 1..2", "E0009 3..9"]);
+}
+
 #[test]
 fn diagnostics_have_positions_and_fixes() {
     let text = "let a = 1;\r\nb\u{A0}";
