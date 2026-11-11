@@ -4,3 +4,44 @@
 # dropped	baseline line	baseline heading
 # A baseline heading without a row must still be in quince-spec.md, unchanged.
 new	spec/quince-spec.md	### Prelude names
+moved	L5	## 1. Overview and design principles	spec/reference/introduction.md	# Introduction
+moved	L5	## 1. Overview and design principles	spec/quince-spec.md	## 1. Overview and design principles
+moved	L26	### Deliberately excluded	spec/reference/introduction.md	## Deliberately excluded
+moved	L42	## 2. Lexical structure and syntax	spec/reference/lexical.md	# Lexical structure
+moved	L42	## 2. Lexical structure and syntax	spec/quince-spec.md	## 2. Lexical structure and syntax
+moved	L50	### Keywords	spec/reference/lexical.md	## Keywords
+moved	L50	### Keywords	spec/quince-spec.md	### Keywords
+moved	L66	### Constants	spec/reference/items.md	## Constants
+moved	L80	### Literals	spec/reference/lexical.md	## Literals
+moved	L93	### Naming	spec/reference/lexical.md	## Naming
+moved	L98	### Arguments	spec/reference/items.md	## Arguments
+moved	L111	### Type arguments and construction	spec/reference/types.md	## Type arguments and construction
+moved	L111	### Type arguments and construction	spec/quince-spec.md	### Type arguments and construction
+moved	L199	### Comments	spec/reference/lexical.md	## Comments
+moved	L204	### Attributes	spec/reference/items.md	## Attributes
+moved	L225	## 3. Type system	spec/reference/types.md	# Types
+moved	L225	## 3. Type system	spec/quince-spec.md	## 3. Type system
+moved	L229	### Built-in types	spec/reference/types.md	## Built-in types
+moved	L251	### Structs	spec/reference/items.md	## Structs
+moved	L267	### Enums (algebraic data types)	spec/reference/items.md	## Enums (algebraic data types)
+moved	L281	### Newtypes	spec/reference/items.md	## Newtypes
+moved	L287	### Mutation	spec/reference/types.md	## Mutation
+moved	L287	### Mutation	spec/quince-spec.md	### Mutation
+moved	L336	### Generics	spec/reference/items.md	## Generics
+moved	L336	### Generics	spec/quince-spec.md	### Generics
+moved	L355	### Interfaces	spec/reference/items.md	## Interfaces
+moved	L355	### Interfaces	spec/quince-spec.md	### Interfaces
+moved	L449	### Methods	spec/reference/items.md	## Methods
+moved	L449	### Methods	spec/quince-spec.md	### Methods
+moved	L455	### Inference rules	spec/reference/types.md	## Inference rules
+moved	L732	## 7. Modules, packages, and versioning	spec/reference/packages.md	# Packages and modules
+moved	L732	## 7. Modules, packages, and versioning	spec/quince-spec.md	## 7. Modules, packages, and versioning
+moved	L736	### Modules and imports	spec/reference/packages.md	## Modules and imports
+moved	L736	### Modules and imports	spec/quince-spec.md	### Modules and imports
+moved	L756	### Packages	spec/reference/packages.md	## Packages
+moved	L756	### Packages	spec/quince-spec.md	### Packages
+moved	L833	### Editions	spec/reference/packages.md	## Editions
+moved	L1748	### Map and Set	spec/reference/types.md	## Map and Set
+new	spec/reference/introduction.md	## Grammar notation
+new	spec/reference/lexical.md	## Tokens and identifiers
+new	spec/reference/items.md	# Items
