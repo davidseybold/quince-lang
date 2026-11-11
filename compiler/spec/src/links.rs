@@ -267,6 +267,116 @@ pub fn resolve(from: &str, dest_path: &str) -> Option<String> {
     Some(parts.join("/"))
 }
 
+/// Text left in prose that locates other text by position, such as "section 5" or "(below)",
+/// which a link should replace.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PositionalReference {
+    /// 1-based line.
+    pub line: usize,
+    /// The text that matched, such as `section 5` or `(see Mutation below)`.
+    pub text: String,
+}
+
+/// Every positional reference in the prose of `text`: `section` or `sections` and a number, `§`
+/// and a number,
+/// `appendix`, `(see ` and a capital letter, and a parenthesized `below` or `above`. Case is
+/// ignored. Code blocks, inline code, headings, link reference definitions and link
+/// destinations aren't prose, so they are skipped.
+pub fn positional_references(text: &str) -> Vec<PositionalReference> {
+    let mut out = Vec::new();
+    for (line_no, line) in prose_lines(text) {
+        if line.trim_start().starts_with('#') || reference_definition(line).is_some() {
+            continue;
+        }
+        out.extend(reference_matches(&prose_of(line)).into_iter().map(|text| {
+            PositionalReference {
+                line: line_no,
+                text,
+            }
+        }));
+    }
+    out
+}
+
+/// `line` with its inline code spans and link destinations blanked out.
+fn prose_of(line: &str) -> String {
+    let code = inline_code_mask(line);
+    let mut blank = code.clone();
+    let mut i = 0;
+    while let Some(offset) = line[i..].find("](") {
+        let at = i + offset;
+        i = at + 2;
+        if code[at] {
+            continue;
+        }
+        if let Some((_, end)) = destination(&line[at + 2..]) {
+            blank[at + 1..at + 2 + end].fill(true);
+            i = at + 2 + end;
+        }
+    }
+    line.char_indices()
+        .map(|(at, c)| if blank[at] { ' ' } else { c })
+        .collect()
+}
+
+/// The positional references in one line of prose, in order.
+fn reference_matches(prose: &str) -> Vec<String> {
+    // Every pattern is ASCII, and ASCII lowercasing never moves a byte offset, so a match in
+    // `lower` is the same range of `prose`, whatever else the line holds.
+    let lower = prose.to_ascii_lowercase();
+    let digits = |at: usize| lower[at..].bytes().take_while(u8::is_ascii_digit).count();
+    let mut found: Vec<(usize, usize)> = Vec::new();
+    for (at, word) in lower.match_indices("section") {
+        let mut end = at + word.len();
+        end += usize::from(lower[end..].starts_with('s'));
+        if lower[end..].starts_with(' ') && digits(end + 1) > 0 {
+            found.push((at, end + 1 + digits(end + 1)));
+        }
+    }
+    for (at, sign) in lower.match_indices('§') {
+        let after = at + sign.len();
+        let space = usize::from(lower[after..].starts_with(' '));
+        let count = digits(after + space);
+        if count > 0 {
+            found.push((at, after + space + count));
+        }
+    }
+    for (at, word) in lower.match_indices("appendix") {
+        found.push((at, at + word.len()));
+    }
+    for (at, word) in lower.match_indices("(see ") {
+        if prose[at + word.len()..].starts_with(|c: char| c.is_ascii_uppercase()) {
+            let end = prose[at..]
+                .find(')')
+                .map_or(prose.len(), |close| at + close + 1);
+            found.push((at, end));
+        }
+    }
+    for (at, _) in prose.match_indices('(') {
+        let Some(close) = prose[at..].find(')') else {
+            continue;
+        };
+        let inner = &lower[at + 1..at + close];
+        let is_word = |word: &str| {
+            inner.match_indices(word).any(|(i, _)| {
+                let before = inner[..i].chars().next_back();
+                let after = inner[i + word.len()..].chars().next();
+                !before.is_some_and(char::is_alphanumeric)
+                    && !after.is_some_and(char::is_alphanumeric)
+            })
+        };
+        if is_word("below") || is_word("above") {
+            found.push((at, at + close + 1));
+        }
+    }
+    found.sort();
+    found.dedup_by(|later, earlier| later.0 < earlier.1);
+    found
+        .into_iter()
+        .map(|(start, end)| prose[start..end].to_string())
+        .collect()
+}
+
 /// The lines outside fenced code blocks, with their 1-based numbers.
 fn prose_lines(text: &str) -> impl Iterator<Item = (usize, &str)> {
     let mut in_code_block = false;
@@ -373,6 +483,42 @@ mod tests {
         let found = headings(text);
         assert_eq!(found.len(), 1, "{found:?}");
         assert_eq!((found[0].anchor.as_str(), found[0].line), ("", 7));
+    }
+
+    #[test]
+    fn finds_positional_references() {
+        let text = "\
+# Appendix: Grammar
+Its type is pure (section 5), as in sections 2 and §3 or § 11.
+See [Appendix: Prelude](a.md) and [Effects](appendix.md#section-5), `section 9`.
+A count below the bit width (see Ranges) and (see the list) and (listed below) (above).
+Nothing (belowground), (aboveboard) or Subsection 1 here; this appendix.
+İstanbul's Section 7 (See Effects).
+```
+(section 3)
+```
+[ref]: section-1.md
+";
+        let found: Vec<_> = positional_references(text)
+            .into_iter()
+            .map(|r| (r.line, r.text))
+            .collect();
+        let expected = [
+            (2, "section 5"),
+            (2, "sections 2"),
+            (2, "§3"),
+            (2, "§ 11"),
+            (3, "Appendix"),
+            (4, "(see Ranges)"),
+            (4, "(listed below)"),
+            (4, "(above)"),
+            (5, "section 1"),
+            (5, "appendix"),
+            (6, "Section 7"),
+            (6, "(See Effects)"),
+        ]
+        .map(|(line, text)| (line, text.to_string()));
+        assert_eq!(found, expected);
     }
 
     #[test]

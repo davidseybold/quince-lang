@@ -15,7 +15,7 @@ pub const ROOT_PRODUCTION: &str = "file";
 
 /// The header `regenerate` uses when the file doesn't exist yet.
 pub const DEFAULT_HEADER: &str = "\
-// The Quince grammar, copied verbatim from the two grammar appendices of spec/quince-spec.md.
+// The Quince grammar, copied verbatim from the `ebnf` blocks of the spec's chapters (spec/chapters.txt).
 // Don't edit below this header by hand: change the spec, then run `cargo xtask spec-grammar --write`.
 // `cargo xtask spec-grammar` fails when this file and the spec disagree.
 //

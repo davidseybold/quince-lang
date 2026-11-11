@@ -17,10 +17,10 @@ Every entry is written for an agent that reads one entry and then writes a call.
 | Field | Says | Why an agent needs it |
 | --- | --- | --- |
 | What | One sentence | Picks the right function without reading the others |
-| Cost | O(1), O(log n), O(n), O(n log n) | Spec §6 has `quince` `check` warn when a contract calls a std function slower than constant time, so every function needs a stated cost |
+| Cost | O(1), O(log n), O(n), O(n log n) | The spec's [Contracts](../spec/quince-spec.md#requires-and-ensures) chapter has `quince` `check` warn when a contract calls a std function slower than constant time, so every function needs a stated cost |
 | Fails | The error type and the variants it can return, or "never" | Write the `match` without guessing |
 | Panics | The exact condition, or "never" | Know which calls are bugs on bad input |
-| Waits | "Cancellation point" when the call can block | Reason about timeouts and cancellation (spec §9) |
+| Waits | "Cancellation point" when the call can block | Reason about timeouts and cancellation ([Concurrency](../spec/quince-spec.md#9-concurrency)) |
 | Example | A `>>>` doc example | Becomes a doc test once std is implemented, so the doc can't drift |
 
 A sample entry:
@@ -30,7 +30,7 @@ fn update(var self, key: K, default: V, f: fn(V) -> V uses E) uses E
 ```
 
 - What: replaces the value at `key` with `f(value)`, starting from `default` when the key is missing.
-- Cost: O(1) average; in place when the map is unique, otherwise one copy (spec §3, Mutation).
+- Cost: O(1) average; in place when the map is unique, otherwise one copy ([Mutation](../spec/quince-spec.md#mutation)).
 - Fails: never. Panics: never. Waits: no.
 - Example: on an empty `Map<String, Int>` named `m`, `>>> m.update("a", default: 0, fn(n) { n + 1 })` leaves `m` as `{"a": 1}`.
 
@@ -40,16 +40,16 @@ To keep the doc scannable, entries are grouped into one table per type or packag
 
 These apply to every package, so an agent can guess a name correctly before looking it up.
 
-- `T.new(...)` builds a value and can't fail. A constructor that checks its inputs has another name and returns `Result`, as the spec's `User.create(email) -> Result<User, UserError>` does (spec §3). `T.parse(text)` reads text and returns `Result<T, InvalidFormat>`. `T.from(x)` always goes through a `From` impl and can't fail; a conversion that can fail is `T.try_from(x) -> Option<T>` (spec §3).
+- `T.new(...)` builds a value and can't fail. A constructor that checks its inputs has another name and returns `Result`, as the spec's `User.create(email) -> Result<User, UserError>` does ([Items](../spec/quince-spec.md#methods)). `T.parse(text)` reads text and returns `Result<T, InvalidFormat>`. `T.from(x)` always goes through a `From` impl and can't fail; a conversion that can fail is `T.try_from(x) -> Option<T>` ([Types](../spec/quince-spec.md#built-in-types)).
 - `get` is a lookup that returns `Option`, with one exception: `Router.get(pattern, handler)` adds a route, because every router uses that name for the HTTP method.
 - Lookups that may find nothing return `Option` and are called `get`, `first`, `last` or `find`. Only `xs[i]` panics on a missing index.
 - Predicates start with `is_` or `has_`, or are `contains`.
-- Conversions are `to_x()`: widening ones return the value, narrowing ones return `Option` (spec §3).
+- Conversions are `to_x()`: widening ones return the value, narrowing ones return `Option` ([Types](../spec/quince-spec.md#built-in-types)).
 - The same operation has the same name on every type: `len`, `is_empty`, `contains`, `get`, `insert`, `remove`, `map`, `filter`, `fold`, `sorted`.
-- A package's main error enum is named after it (`FsError`, `HttpError`). A second entry point with different failures gets its own enum (`ServeError` for `serve`, `ParseTimeError` for time parsing), so each `match` lists only what can happen. An error type for Net or Fs work carries `PermissionDenied` (spec §5).
-- Every function that takes a closure declares an effect variable for it and passes it through, so pure and effectful closures both fit. The exception is `modify` and `update` on the reference types (`Ref`, `Atomic`, `ConcurrentMap`), which take pure closures on purpose (spec §9).
+- A package's main error enum is named after it (`FsError`, `HttpError`). A second entry point with different failures gets its own enum (`ServeError` for `serve`, `ParseTimeError` for time parsing), so each `match` lists only what can happen. An error type for Net or Fs work carries `PermissionDenied` ([Program execution](../spec/quince-spec.md#capabilities-at-runtime)).
+- Every function that takes a closure declares an effect variable for it and passes it through, so pure and effectful closures both fit. The exception is `modify` and `update` on the reference types (`Ref`, `Atomic`, `ConcurrentMap`), which take pure closures on purpose ([Concurrency](../spec/quince-spec.md#shared-state)).
 - A scoped helper that lends something to a closure is named for what it does (`pool.checkout`, `ffi.with_resource`, `time.with_timeout`). No std name, method or parameter is a keyword: `with`, `test` and the rest are reserved, so `Pool.checkout`, `replace(by:)`, `pred:` and `Headers.set` are used instead.
-- A function is always called through its package: `http.get(url)`, `json.decode(text)`, `time.with_timeout(...)`, `testing.fixed_clock(...)`. Only types, interfaces, effects and constants are imported by name, as in `import std.http.{self, Request, Response}` (spec §7). The prelude's `assert`, `todo`, `unreachable` and `dbg` are the only functions called bare.
+- A function is always called through its package: `http.get(url)`, `json.decode(text)`, `time.with_timeout(...)`, `testing.fixed_clock(...)`. Only types, interfaces, effects and constants are imported by name, as in `import std.http.{self, Request, Response}` ([Packages and modules](../spec/quince-spec.md#modules-and-imports)). The prelude's `assert`, `todo`, `unreachable` and `dbg` are the only functions called bare.
 
 ## Package map
 
@@ -91,7 +91,7 @@ A name is in the prelude only if the language's syntax or the compiler needs it 
 
 ### Integers
 
-Every integer type (`Int8` to `Int64`, `UInt8` to `UInt64`, and `Int`, which is `Int64`) has the methods below, with `Self` meaning that type. Operators panic on overflow (spec §4); these methods are how code asks for another behavior.
+Every integer type (`Int8` to `Int64`, `UInt8` to `UInt64`, and `Int`, which is `Int64`) has the methods below, with `Self` meaning that type. Operators panic on overflow ([Errors and failure](../spec/quince-spec.md#panics-bugs)); these methods are how code asks for another behavior.
 
 | Signature | What | Cost | Notes |
 | --- | --- | --- | --- |
@@ -107,14 +107,14 @@ Every integer type (`Int8` to `Int64`, `UInt8` to `UInt64`, and `Int`, which is 
 | `fn min(self, other: Self) -> Self` | The smaller; also `max` | O(1) |  |
 | `fn clamp(self, low: Self, high: Self) -> Self` | `self` limited to `low..=high` | O(1) | `requires low <= high` |
 | `fn signum(self) -> Self` | -1, 0 or 1 | O(1) |  |
-| `fn to_int8(self) -> Option<Int8>` and the other `to_` integer conversions | Widening conversions return the value, narrowing ones `Option` (spec §3) | O(1) |  |
+| `fn to_int8(self) -> Option<Int8>` and the other `to_` integer conversions | Widening conversions return the value, narrowing ones `Option` ([Types](../spec/quince-spec.md#built-in-types)) | O(1) |  |
 | `fn to_float(self) -> Float` | Nearest `Float`; exact up to 2^53 | O(1) | Also `to_float32` |
 | `fn to_string(self, radix: Int = 10) -> String` | Digits in the given base, lowercase letters above 9 | O(digits) | Panics: radix outside 2 to 36. With the default radix it equals `display()` |
 | `fn to_char(self) -> Option<Char>` | The Unicode scalar with this code | O(1) | `None` for surrogates and values above 0x10FFFF |
 
 ### Float
 
-`Float` (`Float64`) and `Float32` share these methods. Arithmetic follows IEEE 754; `Eq`, `Ord` and `Hash` use the total order from spec §3.
+`Float` (`Float64`) and `Float32` share these methods. Arithmetic follows IEEE 754; `Eq`, `Ord` and `Hash` use the total order from [Types](../spec/quince-spec.md#built-in-types).
 
 | Signature | What | Cost | Notes |
 | --- | --- | --- | --- |
@@ -126,7 +126,7 @@ Every integer type (`Int8` to `Int64`, `UInt8` to `UInt64`, and `Int`, which is 
 | `fn sqrt(self) -> Float` | Also `cbrt`, `exp`, `ln`, `log2`, `log10`, `pow(exponent: Float)` | O(1) | NaN for invalid input, as IEEE says |
 | `fn sin(self) -> Float` | Also `cos`, `tan`, `asin`, `acos`, `atan`, `atan2(x: Float)` | O(1) | Radians |
 | `fn is_close(self, other: Float, tolerance: Float = 1e-9) -> Bool` | Relative comparison, for tests and contracts | O(1) |  |
-| `fn to_int(self) -> Option<Int>` | Truncates toward zero | O(1) | `None` for NaN, infinities and out-of-range values (spec §3) |
+| `fn to_int(self) -> Option<Int>` | Truncates toward zero | O(1) | `None` for NaN, infinities and out-of-range values ([Types](../spec/quince-spec.md#built-in-types)) |
 | `fn to_string(self) -> String` | Shortest text that reads back to the same value | O(1) | Equals `display()` |
 | `fn to_fixed(self, decimals: Int) -> String` | Exactly `decimals` digits after the point, rounded half to even | O(1) | `requires decimals >= 0 && decimals <= 20` |
 
@@ -176,7 +176,7 @@ A `String` is UTF-8. There is no `len()`, because "length" could mean bytes or c
 | `fn bytes(self) -> Bytes` | The UTF-8 bytes | O(1) | Shares storage |
 | `fn compare_ignore_case(self, other: String) -> Ordering` | Unicode case-folded comparison. Plain `String` `Ord` (`<`, `sort`) compares Unicode scalar values, which is the same as UTF-8 byte order, so `"B" < "a"`; use this for folded order. Also `fn case_fold(self) -> String`, the full Unicode case folding this comparison uses, O(n), for keys such as `names.sort_by_key(fn(s) { s.case_fold() })` | O(n + m) |  |
 
-Parsing goes through the target type, never through `String`: `Int.parse(s)`, `Float.parse(s)`, `Url.parse(s)`. Strings are immutable (spec §3), so there is no push; build text in a List\<String> and join it with `parts.join(", ")` on `List<String>`.
+Parsing goes through the target type, never through `String`: `Int.parse(s)`, `Float.parse(s)`, `Url.parse(s)`. Strings are immutable ([Types](../spec/quince-spec.md#built-in-types)), so there is no push; build text in a List\<String> and join it with `parts.join(", ")` on `List<String>`.
 
 ### Bytes
 
@@ -195,14 +195,14 @@ Hex and base64 live in `std.encoding`.
 
 ### List
 
-`List<T>` is a growable array with value semantics. Every method that takes a closure is generic over an effect variable and passes it through, as in the first row; the rest of the table leaves the `<uses E>` and trailing `uses E` out to stay readable. There is one way to sort or reverse: the methods return a new list, and because a unique list is updated in place (spec §3), `xs = xs.sorted()` costs no copy.
+`List<T>` is a growable array with value semantics. Every method that takes a closure is generic over an effect variable and passes it through, as in the first row; the rest of the table leaves the `<uses E>` and trailing `uses E` out to stay readable. There is one way to sort or reverse: the methods return a new list, and because a unique list is updated in place ([Mutation](../spec/quince-spec.md#mutation)), `xs = xs.sorted()` costs no copy.
 
 | Signature | What | Cost | Notes |
 | --- | --- | --- | --- |
 | `fn map<U, uses E>(self, f: fn(T) -> U uses E) -> List<U> uses E` | Applies `f` to each item, in order | O(n) |  |
 | `List.filled(value: T, count: Int) -> List<T>` | `count` copies of `value` | O(count) | `requires count >= 0` |
 | `fn len(self) -> Int` | Also `is_empty` | O(1) |  |
-| `fn get(self, index: Int) -> Option<T>` | `xs[i]` panics instead (spec §4) | O(1) |  |
+| `fn get(self, index: Int) -> Option<T>` | `xs[i]` panics instead ([Expressions](../spec/quince-spec.md#list)) | O(1) |  |
 | `fn first(self) -> Option<T>` | Also `last` | O(1) |  |
 | `fn set(var self, index: Int, value: T)` | Replaces one item | O(1) when unique | `requires 0 <= index && index < self.len()` |
 | `fn push(var self, item: T)` | Appends | O(1) amortized when unique |  |
@@ -235,11 +235,11 @@ Hex and base64 live in `std.encoding`.
 | `fn join(self, separator: String) -> String` on `List<String>` |  | O(total) |  |
 | `fn to_set(self) -> Set<T>` where `T: Hash` |  | O(n) |  |
 | `fn to_map<K, V>(self) -> Map<K, V>` on `List<(K, V)>` | Later pairs win | O(n) |  |
-| `fn iter(self) -> Iter<T>` | Lazy view, for chains (see Iter) | O(1) |  |
+| `fn iter(self) -> Iter<T>` | Lazy view, for chains (see [Iter](#iter)) | O(1) |  |
 
 ### Map
 
-`Map<K, V>` needs `K: Hash`. It iterates in insertion order (decision 4), and replacing a key's value keeps its place. There is no `m[k]` (spec §4).
+`Map<K, V>` needs `K: Hash`. It iterates in insertion order (decision 4), and replacing a key's value keeps its place. There is no `m[k]` ([Types](../spec/quince-spec.md#panics-bugs)).
 
 | Signature | What | Cost | Notes |
 | --- | --- | --- | --- |
@@ -274,11 +274,11 @@ Hex and base64 live in `std.encoding`.
 
 ### Option
 
-There is no `unwrap()` (spec §4). `expect` states why the value must be there; `unwrap_or` supplies a fallback and can't panic. Every method here is O(1) apart from the closure it calls.
+There is no `unwrap()` ([Option and Result](#option-and-result)). `expect` states why the value must be there; `unwrap_or` supplies a fallback and can't panic. Every method here is O(1) apart from the closure it calls.
 
 | Signature | What | Notes |
 | --- | --- | --- |
-| `fn is_some(self) -> Bool` | Also `is_none`. For one case with a binding, prefer `if x is Some(v)` (spec §4) |  |
+| `fn is_some(self) -> Bool` | Also `is_none`. For one case with a binding, prefer `if x is Some(v)` ([Pattern tests with `is`](../spec/quince-spec.md#pattern-tests-with-is)) |  |
 | `fn expect(self, reason: String) -> T` | The value | Panics: `None`, with `reason` in the message |
 | `fn unwrap_or(self, default: T) -> T` | The value, or `default` |  |
 | `fn unwrap_or_else<uses E>(self, f: fn() -> T uses E) -> T uses E` | The value, or `f()`, called only on `None` |  |
@@ -286,7 +286,7 @@ There is no `unwrap()` (spec §4). `expect` states why the value must be there; 
 | `fn and_then<U, uses E>(self, f: fn(T) -> Option<U> uses E) -> Option<U> uses E` |  |  |
 | `fn filter<uses E>(self, keep: fn(T) -> Bool uses E) -> Option<T> uses E` |  |  |
 | `fn or(self, other: Option<T>) -> Option<T>` | `self` if `Some`, else `other`; also `or_else(f)` |  |
-| `fn ok_or<Err>(self, error: Err) -> Result<T, Err>` | Turns `None` into `Err(error)` (spec §4) |  |
+| `fn ok_or<Err>(self, error: Err) -> Result<T, Err>` | Turns `None` into `Err(error)` ([Errors and failure](../spec/quince-spec.md#expected-failures-result-and-option)) |  |
 | `fn zip<U>(self, other: Option<U>) -> Option<(T, U)>` | `Some` when both are |  |
 
 ### Result
@@ -297,14 +297,14 @@ There is no `unwrap()` (spec §4). `expect` states why the value must be there; 
 | `fn expect(self, reason: String) -> T` | The value | Panics: `Err`, with `reason` and the error's debug form |
 | `fn unwrap_or(self, default: T) -> T` | Also `unwrap_or_else<uses E>(self, f: fn(Err) -> T uses E) -> T uses E` |  |
 | `fn map<U, uses E>(self, f: fn(T) -> U uses E) -> Result<U, Err> uses E` |  |  |
-| `fn map_err<F, uses E>(self, f: fn(Err) -> F uses E) -> Result<T, F> uses E` | The usual way to convert errors in a `spawn` (spec §9) |  |
+| `fn map_err<F, uses E>(self, f: fn(Err) -> F uses E) -> Result<T, F> uses E` | The usual way to convert errors in a `spawn` ([Concurrency](../spec/quince-spec.md#concurrent-blocks)) |  |
 | `fn and_then<U, uses E>(self, f: fn(T) -> Result<U, Err> uses E) -> Result<U, Err> uses E` |  |  |
 | `fn or_else<F, uses E>(self, f: fn(Err) -> Result<T, F> uses E) -> Result<T, F> uses E` | Recovers from an error |  |
 | `fn ok(self) -> Option<T>` | Also `err() -> Option<Err>` | Drops the other side on purpose |
 
 ### Ordering
 
-`enum Ordering { Less, Equal, Greater }` is what `Ord.compare` returns. It is a prelude name, and these are its only methods (spec appendix).
+`enum Ordering { Less, Equal, Greater }` is what `Ord.compare` returns. It is a prelude name, and these are its only methods ([Prelude and special interfaces](../spec/quince-spec.md#interfaces-1)).
 
 | Signature | What |
 | --- | --- |
@@ -323,9 +323,9 @@ let names = users.iter()
   .to_list()
 ```
 
-A line that starts with `.` continues the expression above (spec §2), so a long chain can break before each dot, the way Rust and TypeScript code usually does.
+A line that starts with `.` continues the expression above ([Lexical structure](../spec/quince-spec.md#2-lexical-structure-and-syntax)), so a long chain can break before each dot, the way Rust and TypeScript code usually does.
 
-Adapters are lazy and O(1) to build; nothing runs until a consumer or a `for` loop pulls items. An adapter whose closure has effects `F` returns `Iter<U, uses E, F>`, so the chain's effects add up the way spec §5 describes, and the consumer `uses` all of them. Lists already have eager `map` and `filter`; use them for one step, and an `Iter` for a chain or for input that isn't a list.
+Adapters are lazy and O(1) to build; nothing runs until a consumer or a `for` loop pulls items. An adapter whose closure has effects `F` returns `Iter<U, uses E, F>`, so the chain's effects add up the way [Effects](../spec/quince-spec.md#effect-variables) describes, and the consumer `uses` all of them. Lists already have eager `map` and `filter`; use them for one step, and an `Iter` for a chain or for input that isn't a list.
 
 | Signature | What | Cost | Notes |
 | --- | --- | --- | --- |
@@ -348,11 +348,11 @@ Adapters are lazy and O(1) to build; nothing runs until a consumer or a `for` lo
 | `fn sum(self) -> Int uses E` on `Iter<Int>`, `fn sum(self) -> Float uses E` on `Iter<Float>` |  | O(n) | Consumer. Panics: integer overflow |
 | `fn join(self, separator: String) -> String uses E` on strings |  | O(total) | Consumer |
 
-There is no `for_each`: a `for` loop does that. A range such as `0..n` is a `Range<Int>` (spec §2, Ranges), which implements `Iterator` and has `.iter()`.
+There is no `for_each`: a `for` loop does that. A range such as `0..n` is a `Range<Int>` ([Ranges](../spec/quince-spec.md#ranges)), which implements `Iterator` and has `.iter()`.
 
 ### Duration and Timestamp
 
-These are the values of the `dur` and `ts` literals. Both are pure; reading the current time is `Clock.now()`. Every method here is O(1). Arithmetic is done only with operators (spec appendix): `impl Add<Duration> for Duration`, `Sub<Duration>`, `Mul<Int>` and `Div<Int>` (which panics on 0) give a `Duration`; `impl Add<Duration> for Timestamp` and `Sub<Duration>` give a `Timestamp`, and `Sub<Timestamp>` gives a `Duration`. So `started + dur"5s"`, `timeout * 2` and `t - started` work, and there are no `plus`, `minus`, `times` or `div` methods. Overflow and out-of-range results panic. `since` stays as a method. A `Duration` displays in `dur` literal syntax, largest unit first, leaving out zero units: `30s`, `1h30m`, `1s500ms`, `250us`, with `0s` for zero and a leading `-` when negative. `Duration.parse` reads that text back.
+These are the values of the `dur` and `ts` literals. Both are pure; reading the current time is `Clock.now()`. Every method here is O(1). Arithmetic is done only with operators ([Duration, Timestamp, Url and Regex](#duration-timestamp-url-and-regex)): `impl Add<Duration> for Duration`, `Sub<Duration>`, `Mul<Int>` and `Div<Int>` (which panics on 0) give a `Duration`; `impl Add<Duration> for Timestamp` and `Sub<Duration>` give a `Timestamp`, and `Sub<Timestamp>` gives a `Duration`. So `started + dur"5s"`, `timeout * 2` and `t - started` work, and there are no `plus`, `minus`, `times` or `div` methods. Overflow and out-of-range results panic. `since` stays as a method. A `Duration` displays in `dur` literal syntax, largest unit first, leaving out zero units: `30s`, `1h30m`, `1s500ms`, `250us`, with `0s` for zero and a leading `-` when negative. `Duration.parse` reads that text back.
 
 | Signature | What | Notes |
 | --- | --- | --- |
@@ -409,24 +409,24 @@ pub interface Encode { fn encode(self) -> encoding.Data }
 pub interface Decode { fn decode(data: encoding.Data) -> Result<Self, DecodeError> }
 ```
 
-The operator interfaces `Add`, `Sub`, `Mul`, `Div`, `Rem` and `Neg` (spec §3) are prelude names too, because the compiler maps `+`, `-`, `*`, `/`, `%` and unary `-` onto them. That makes 14 prelude interfaces. Their signatures are in spec §3. `Duration` and `Timestamp` implement `Add` and `Sub` (see their section).
+The operator interfaces `Add`, `Sub`, `Mul`, `Div`, `Rem` and `Neg` ([Operators on user types](../spec/quince-spec.md#operators-on-user-types)) are prelude names too, because the compiler maps `+`, `-`, `*`, `/`, `%` and unary `-` onto them. That makes 14 prelude interfaces. Their signatures are in [Operators on user types](../spec/quince-spec.md#operators-on-user-types). `Duration` and `Timestamp` implement `Add` and `Sub` (see their section).
 
-- `Eq`, `Hash`, `Encode` and `Decode` are automatic for most types (spec §3), so an impl is written only to replace the automatic one. `Ord` and `Display` are always written by hand for your own types. Built in: every number type, `Bool`, `Char`, `String`, `Bytes`, `Duration` and `Timestamp` implement `Eq`, `Ord` and `Hash`; `List` and tuples implement them when their elements do, and order element by element (spec appendix, Interfaces).
-- `Hash` threads a `Hasher` value through, because a `var` parameter is the callee's own copy (spec §2). `Hasher` has two methods, `fn add<T: Hash>(self, value: T) -> Hasher` and `fn add_bytes(self, bytes: Bytes) -> Hasher` (`hasher.add(self.id)`), and is otherwise opaque. Hash seeds are fixed per build, and `Map` order never depends on them (decision 4).
-- `From` is what `?` uses to convert errors (spec §4). Write one impl per source error type.
+- `Eq`, `Hash`, `Encode` and `Decode` are automatic for most types ([Automatic equality and hashing](../spec/quince-spec.md#automatic-equality-and-hashing)), so an impl is written only to replace the automatic one. `Ord` and `Display` are always written by hand for your own types. Built in: every number type, `Bool`, `Char`, `String`, `Bytes`, `Duration` and `Timestamp` implement `Eq`, `Ord` and `Hash`; `List` and tuples implement them when their elements do, and order element by element ([Prelude and special interfaces](../spec/quince-spec.md#interfaces-1)).
+- `Hash` threads a `Hasher` value through, because a `var` parameter is the callee's own copy ([Items](../spec/quince-spec.md#arguments)). `Hasher` has two methods, `fn add<T: Hash>(self, value: T) -> Hasher` and `fn add_bytes(self, bytes: Bytes) -> Hasher` (`hasher.add(self.id)`), and is otherwise opaque. Hash seeds are fixed per build, and `Map` order never depends on them (decision 4).
+- `From` is what `?` uses to convert errors ([The `?` operator](../spec/quince-spec.md#the--operator)). Write one impl per source error type.
 - `Encode` and `Decode` go through the data model in `std.encoding`; formats such as `std.json` sit on top. Most code never names `Data`.
-- `Ord` needs `Eq` too, so a type that implements `Ord` writes both impls. Several bounds are joined with `+`, as in `T: Ord + Display` (spec §3, Generics).
+- `Ord` needs `Eq` too, so a type that implements `Ord` writes both impls. Several bounds are joined with `+`, as in `T: Ord + Display` ([Generics](../spec/quince-spec.md#generics)).
 
 ### Core functions
 
 | Signature | What | Notes |
 | --- | --- | --- |
-| `fn assert(condition: Bool, message: String = "")` | Panics when `condition` is false | A failed `assert(a == b)` prints both sides (spec §6), so there is no `assert_eq` |
-| `fn todo(reason: String) -> Never` | Marks unfinished code | Panics. `quince publish` refuses a library that contains `todo` or `dbg` (spec §7) |
+| `fn assert(condition: Bool, message: String = "")` | Panics when `condition` is false | A failed `assert(a == b)` prints both sides ([Testing](../spec/quince-spec.md#unit-tests)), so there is no `assert_eq` |
+| `fn todo(reason: String) -> Never` | Marks unfinished code | Panics. `quince publish` refuses a library that contains `todo` or `dbg` ([Dependencies and publishing](../spec/quince-spec.md#enforced-semantic-versioning)) |
 | `fn unreachable(reason: String) -> Never` | Marks a case the author has proved can't happen | Panics |
-| `fn dbg<T>(value: T) -> T` | Prints the debug form and source location to standard error, returns `value` | Not an effect; rejected in release builds (spec §3) |
-| `fn with_timeout<T, uses E>(limit: Duration, body: fn() -> T uses E) -> Result<T, TimedOut> uses E, Clock` | Cancels `body` after `limit` (spec §9) | Waits. Needs `Clock` because it reads a timer |
-| `fn with_resource<T, R, uses E>(resource: Resource<T>, body: fn(Resource<T>) -> R uses E) -> R uses E` | Lends an open resource to `body`, then cleans it up, even on panic or cancellation (spec §11) |  |
+| `fn dbg<T>(value: T) -> T` | Prints the debug form and source location to standard error, returns `value` | Not an effect; rejected in release builds ([Prelude and special interfaces](../spec/quince-spec.md#functions)) |
+| `fn with_timeout<T, uses E>(limit: Duration, body: fn() -> T uses E) -> Result<T, TimedOut> uses E, Clock` | Cancels `body` after `limit` ([Cancellation](../spec/quince-spec.md#cancellation)) | Waits. Needs `Clock` because it reads a timer |
+| `fn with_resource<T, R, uses E>(resource: Resource<T>, body: fn(Resource<T>) -> R uses E) -> R uses E` | Lends an open resource to `body`, then cleans it up, even on panic or cancellation ([Interop with C](../spec/quince-spec.md#memory-across-the-boundary)) |  |
 
 The first four are the prelude's only free functions, and the only functions called bare. The other two are called through their packages: `time.with_timeout` (its error `TimedOut` is imported from `std.time`) and `ffi.with_resource` (with `Resource` from `std.ffi`); they are listed here because they pair with the spec's cancellation and cleanup rules. `expect` is a method on `Option` and `Result`. `Never` is the type of an expression that doesn't return (v0.3 plan item 6).
 
@@ -436,7 +436,7 @@ The first four are the prelude's only free functions, and the only functions cal
 | --- | --- | --- | --- |
 | `InvalidFormat` | Prelude | Every prelude parse: `Int.parse`, `Float.parse`, `Duration.parse`, `Timestamp.parse`, `Url.parse`, `Regex.new`, `String.from_utf8` | `expected: String`, `found: String` |
 | `DecodeError` | Prelude | Any `Decode` failure, in every format | `path: String`, `expected: String`, `found: String`. Syntax errors use the input position as `path`, as in `line 3, column 7` |
-| `ScopeFailed` | Prelude | A `background` block failed (spec §9) | `spawn_site: String`, `message: String` |
+| `ScopeFailed` | Prelude | A `background` block failed ([Concurrency](../spec/quince-spec.md#long-lived-work-fire-and-forget)) | `spawn_site: String`, `message: String` |
 | `TimedOut` | `std.time` | `with_timeout` ran out | `after: Duration` |
 | `ChannelClosed` | `std.sync` | `send` on a closed channel | none |
 | `FsError`, `NetError`, `ProcessError` | `std.fs`, `std.net`, `std.process` | Built-in effect operations | Listed in those packages |
@@ -454,15 +454,15 @@ Every error type implements `Display` with a one-line message an agent can show 
 
 ## Built-in effect operations
 
-Each built-in effect's operations are called through the effect's name (decision 1), and a handler installed with `with` replaces exactly these operations. The spec's prelude appendix holds their exact signatures; where this section and the appendix ever differ, the appendix wins. The types they name (`FsError`, `NetError`, `ProcessError`, `ProcessOutput`, `Metadata`, `Outbound`, `Inbound`, `Listener`) live in the effect's std package. Calling an operation needs no import; naming one of these types, or matching an error's variants, imports it. Every operation is a cancellation point (spec §9).
+Each built-in effect's operations are called through the effect's name (decision 1), and a handler installed with `with` replaces exactly these operations. The spec's [built-in effect declarations](../spec/quince-spec.md#built-in-effect-operations) hold their exact signatures; where this section and the spec ever differ, the spec wins. The types they name (`FsError`, `NetError`, `ProcessError`, `ProcessOutput`, `Metadata`, `Outbound`, `Inbound`, `Listener`) live in the effect's std package. Calling an operation needs no import; naming one of these types, or matching an error's variants, imports it. Every operation is a cancellation point ([Cancellation](../spec/quince-spec.md#cancellation)).
 
-A handler's methods may use `State` and the effect they handle, besides the effects that effect is built on (spec §3). A call to the handled effect from inside the handler goes to the handler that was in effect where the `with` installed it, never back to itself. That is how `net.only` and `fs.only` pass allowed calls through and how `testing.fixed_clock` and `testing.capture_log` keep their state, and a hand-written fake can do the same. Callers still see only the effect, such as `uses Clock`.
+A handler's methods may use `State` and the effect they handle, besides the effects that effect is built on ([Effects](../spec/quince-spec.md#declaring-and-inferring)). A call to the handled effect from inside the handler goes to the handler that was in effect where the `with` installed it, never back to itself. That is how `net.only` and `fs.only` pass allowed calls through and how `testing.fixed_clock` and `testing.capture_log` keep their state, and a hand-written fake can do the same. Callers still see only the effect, such as `uses Clock`.
 
 ### Console
 
 | Operation | What | Notes |
 | --- | --- | --- |
-| `print(text: String)` | Writes a line to standard output | Also `write`, without the newline. A write to a closed standard output ends the program quietly with code 0, as Unix tools do on a broken pipe (spec appendix) |
+| `print(text: String)` | Writes a line to standard output | Also `write`, without the newline. A write to a closed standard output ends the program quietly with code 0, as Unix tools do on a broken pipe ([Program execution](../spec/quince-spec.md#built-in-effect-operations)) |
 | `eprint(text: String)` | Writes a line to standard error |  |
 | `read_line() -> Option<String>` | One line without its newline; `None` at end of input | Waits |
 | `read_all() -> Bytes` | The rest of standard input | Waits |
@@ -497,7 +497,7 @@ Paths are plain `String`s, so `Fs.read_text("app.toml")` needs no import. `std.f
 | Listen | `accept(listener: Listener) -> Result<Inbound, NetError>` | The next connection | Waits |
 | Listen | `send`, `receive` and `close` on an `Inbound` | Traffic on an accepted connection | So a server needs only `uses Listen` |
 
-Most code uses `std.http` instead and never calls these directly. `Outbound`, `Inbound` and `Listener` are reference types (spec §3): copies share one connection, they can cross a task boundary, so a server can `accept` and then hand the connection to `spawn in bg handle(conn)`, and a connection closes with `close` or when its last reference is dropped. They are not `Resource<T>` values, which only `foreign` code makes. `std.testing` builds in-memory ones for fake handlers.
+Most code uses `std.http` instead and never calls these directly. `Outbound`, `Inbound` and `Listener` are reference types ([Types](../spec/quince-spec.md#mutation)): copies share one connection, they can cross a task boundary, so a server can `accept` and then hand the connection to `spawn in bg handle(conn)`, and a connection closes with `close` or when its last reference is dropped. They are not `Resource<T>` values, which only `foreign` code makes. `std.testing` builds in-memory ones for fake handlers.
 
 ### Clock
 
@@ -509,7 +509,7 @@ Most code uses `std.http` instead and never calls these directly. `Outbound`, `I
 
 ### Random
 
-In production these draw from the operating system's secure generator, so they are safe for tokens and keys. Under `quince` `test` they are seeded (spec §6).
+In production these draw from the operating system's secure generator, so they are safe for tokens and keys. Under `quince` `test` they are seeded ([Testing](../spec/quince-spec.md#unit-tests)).
 
 | Operation | What | Notes |
 | --- | --- | --- |
@@ -533,7 +533,7 @@ In production these draw from the operating system's secure generator, so they a
 | Operation | What | Notes |
 | --- | --- | --- |
 | `run(program: String, args: List<String>, input: Bytes = b"") -> Result<ProcessOutput, ProcessError>` | Runs a program to completion and captures its output. Arguments go as a list, never through a shell | Waits. Fails: `ProcessError.NotFound(program:)`, `PermissionDenied(program:)` or `Other(message:)`. A nonzero exit is not an error: check `output.status` |
-| `exit(code: Int) -> Never` | Cancels every scope, waits for cleanup, exits (spec §5) |  |
+| `exit(code: Int) -> Never` | Cancels every scope, waits for cleanup, exits ([Program execution](../spec/quince-spec.md#capabilities-at-runtime)) |  |
 
 ```
 let out = Process.run("git", args: ["rev-parse", "HEAD"])?
@@ -545,7 +545,7 @@ let out = Process.run("git", args: ["rev-parse", "HEAD"])?
 
 ## std.sync: reference types and concurrency
 
-`Ref`, `Atomic`, `ConcurrentMap`, `Channel`, `Pool` and `ChannelClosed` are imported from `std.sync`, so a file that shares state says so in its imports: `import std.sync.{Atomic, Channel}`. They are the only types with shared identity (spec §3), apart from `TaskScope` (prelude, below) and `Resource` (`std.ffi`). Creating one is pure; reading or writing one needs `uses State`. Closures passed to `modify` and `update` must be pure, and the change is applied only after they return (spec §9).
+`Ref`, `Atomic`, `ConcurrentMap`, `Channel`, `Pool` and `ChannelClosed` are imported from `std.sync`, so a file that shares state says so in its imports: `import std.sync.{Atomic, Channel}`. They are the only types with shared identity ([Types](../spec/quince-spec.md#mutation)), apart from `TaskScope` (prelude, [TaskScope and FailurePolicy](#taskscope-and-failurepolicy-prelude)) and `Resource` (`std.ffi`). Creating one is pure; reading or writing one needs `uses State`. Closures passed to `modify` and `update` must be pure, and the change is applied only after they return ([Concurrency](../spec/quince-spec.md#shared-state)).
 
 ### Ref, Atomic and ConcurrentMap
 
@@ -579,25 +579,25 @@ A counter shared by tasks is an `Atomic<Int>`: `hits.modify(fn(n) { n + 1 })`.
 | `fn is_closed(self) -> Bool uses State` | Also `len` | O(1) |  |
 | `fn iter(self) -> Iter<T, uses State>` | Receives until closed, so `for job in jobs.iter()` drains it | O(1) | Each `next()` waits |
 
-`select` (spec §9) takes `receive()` and `send(v)` arms only.
+`select` ([Concurrency](../spec/quince-spec.md#waiting-on-several-channels)) takes `receive()` and `send(v)` arms only.
 
 ### Pool
 
 | Signature | What | Cost | Notes |
 | --- | --- | --- | --- |
-| `Pool.new<T, Err, uses E>(max: Int, healthy: fn(T) -> Bool uses E, open: fn() -> Result<T, Err> uses E) -> Pool<T, Err, uses E>  requires max >= 1` | Opens values lazily, up to `max`. Every time a value comes back from `checkout`, the pool calls `healthy` on it and closes it if that returns `false`, so a dead connection is never handed out again. `healthy` is required, so every pool states its policy; `fn(_) { true }` keeps every value | O(1) | Pure until used. Crosses tasks even when `T` can't (spec §3) |
-| `fn checkout<R, uses E2>(self, body: fn(T) -> R uses E2) -> Result<R, Err> uses E, E2, State` | Waits for a free value, lends it, returns it | O(1) plus `body` | Waits. Fails only when `open` fails. If `body` panics or is cancelled the value is closed and replaced (spec §11). Closing a value, here or when `healthy` rejects it, means the pool drops it: any `Resource` inside it closes at that point, and v1 has no close hook |
+| `Pool.new<T, Err, uses E>(max: Int, healthy: fn(T) -> Bool uses E, open: fn() -> Result<T, Err> uses E) -> Pool<T, Err, uses E>  requires max >= 1` | Opens values lazily, up to `max`. Every time a value comes back from `checkout`, the pool calls `healthy` on it and closes it if that returns `false`, so a dead connection is never handed out again. `healthy` is required, so every pool states its policy; `fn(_) { true }` keeps every value | O(1) | Pure until used. Crosses tasks even when `T` can't ([Types](../spec/quince-spec.md#mutation)) |
+| `fn checkout<R, uses E2>(self, body: fn(T) -> R uses E2) -> Result<R, Err> uses E, E2, State` | Waits for a free value, lends it, returns it | O(1) plus `body` | Waits. Fails only when `open` fails. If `body` panics or is cancelled the value is closed and replaced ([Interop with C](../spec/quince-spec.md#memory-across-the-boundary)). Closing a value, here or when `healthy` rejects it, means the pool drops it: any `Resource` inside it closes at that point, and v1 has no close hook |
 | `fn size(self) -> Int uses State` | Also `idle` | O(1) |  |
 
 `Pool` names the error type and effects of `open`, because `checkout` may open a new value: `PgDb { pool: Pool<PgConn, PgError, uses Net> }`. `checkout` returns `Err` only when opening fails.
 
 ### TaskScope and FailurePolicy (prelude)
 
-`TaskScope` has no methods: it is created by `background` and used only by `spawn in bg` (spec §9). `FailurePolicy` is `enum FailurePolicy { LogAndContinue, Restart(max: Int), FailScope }`.
+`TaskScope` has no methods: it is created by `background` and used only by `spawn in bg` ([Concurrency](../spec/quince-spec.md#long-lived-work-fire-and-forget)). `FailurePolicy` is `enum FailurePolicy { LogAndContinue, Restart(max: Int), FailScope }`.
 
 ### Resource (std.ffi)
 
-`fn keep<O: CMemory>(self, owned: O)` ties the lifetime of a value the C side still points at to the resource. `CMemory` is a `std.ffi` interface with no methods, implemented by `Callback<F>`, `CBuf<T>` and `CString`, so one method takes all three and nothing is overloaded. `keep` moves the value into the resource and returns `Unit`. It needs no effect, costs O(1), and may be called any number of times: every kept value stays alive until the resource is closed or released, and is released after the resource's own cleanup runs, in reverse order of keeping. Keeping a second value never frees the first, since C may still hold the old pointer. Panics: the resource is already closed. Like `adopt` and `ptr`, it is only available in the package that declares the foreign type (spec §11).
+`fn keep<O: CMemory>(self, owned: O)` ties the lifetime of a value the C side still points at to the resource. `CMemory` is a `std.ffi` interface with no methods, implemented by `Callback<F>`, `CBuf<T>` and `CString`, so one method takes all three and nothing is overloaded. `keep` moves the value into the resource and returns `Unit`. It needs no effect, costs O(1), and may be called any number of times: every kept value stays alive until the resource is closed or released, and is released after the resource's own cleanup runs, in reverse order of keeping. Keeping a second value never frees the first, since C may still hold the old pointer. Panics: the resource is already closed. Like `adopt` and `ptr`, it is only available in the package that declares the foreign type ([Interop with C](../spec/quince-spec.md#11-interop)).
 
 ## System packages
 
@@ -674,7 +674,7 @@ Defaults and order:
 | `fn is_absolute(self) -> Bool` |  | O(1) |  |
 | `fn to_string(self) -> String` | Equals `display()`; what `Fs` operations take | O(n) |  |
 | `pub struct Metadata { pub size: Int, pub is_dir: Bool, pub modified: Timestamp }` | From `Fs.metadata` |  | Use `is_dir`; there is no separate kind |
-| `pub enum FsError { NotFound(path: String), AlreadyExists(path: String), DirectoryNotEmpty(path: String), InvalidUtf8(path: String), PermissionDenied(path: String), Other(path: String, message: String) }` | Every Fs operation's error, as declared in the spec appendix |  | `PermissionDenied(path:)` holds the path as the program passed it, and covers manifest limits too (spec §5). A refusal from a `[cmd.<name>]` limit displays with the manifest line that set it: `permission denied: /home/me/secrets.txt (quince.toml:12)` |
+| `pub enum FsError { NotFound(path: String), AlreadyExists(path: String), DirectoryNotEmpty(path: String), InvalidUtf8(path: String), PermissionDenied(path: String), Other(path: String, message: String) }` | Every Fs operation's error, as declared in the spec's [Built-in effect operations](../spec/quince-spec.md#built-in-effect-operations) |  | `PermissionDenied(path:)` holds the path as the program passed it, and covers manifest limits too ([Program execution](../spec/quince-spec.md#capabilities-at-runtime)). A refusal from a `[cmd.<name>]` limit displays with the manifest line that set it: `permission denied: /home/me/secrets.txt (quince.toml:12)` |
 | `fn only(dir: String) -> FsOnly` | Handler that limits `Fs` to one directory tree: `with Fs = fs.only("./data") { ... }` |  | Other paths fail with `PermissionDenied` |
 | `fn read_only() -> FsReadOnly` | Handler that refuses every write |  |  |
 
@@ -698,13 +698,13 @@ The types `Process.run` returns.
 
 ### std.net
 
-The types `Net` and `Listen` operations return, and the narrowing handler. `Outbound`, `Inbound` and `Listener` are reference types: copies share one connection, they cross task boundaries, and a connection closes with `close` or when its last reference is dropped (spec §3).
+The types `Net` and `Listen` operations return, and the narrowing handler. `Outbound`, `Inbound` and `Listener` are reference types: copies share one connection, they cross task boundaries, and a connection closes with `close` or when its last reference is dropped ([Types](../spec/quince-spec.md#mutation)).
 
 | Name | What | Notes |
 | --- | --- | --- |
 | `Outbound` | A connection from `Net.connect` | Used with `Net.send`, `Net.receive`, `Net.close` |
 | `Listener`, `Inbound` | A socket from `Listen.bind`, and a connection from `Listen.accept` | Used with `Listen.send`, `Listen.receive`, `Listen.close` |
-| `pub enum NetError { Refused, TimedOut, Reset, NameNotFound(host: String), PermissionDenied(host: String), Other(message: String) }` | Every Net and Listen error, as declared in the spec appendix | `PermissionDenied(host:)` holds the host without the port, and covers manifest limits (spec §5). A refusal from a `[cmd.<name>]` limit displays with the manifest line that set it: `permission denied: api.example.com (quince.toml:14)` |
+| `pub enum NetError { Refused, TimedOut, Reset, NameNotFound(host: String), PermissionDenied(host: String), Other(message: String) }` | Every Net and Listen error, as declared in the spec's [Built-in effect operations](../spec/quince-spec.md#built-in-effect-operations) | `PermissionDenied(host:)` holds the host without the port, and covers manifest limits ([Program execution](../spec/quince-spec.md#capabilities-at-runtime)). A refusal from a `[cmd.<name>]` limit displays with the manifest line that set it: `permission denied: api.example.com (quince.toml:14)` |
 | `fn only(host: String, also: List<String> = []) -> NetOnly` | Handler that limits `Net` to the listed hosts: `with Net = net.only("api.example.com") { ... }` | Other hosts fail with `NetError.PermissionDenied` |
 
 ### std.http
@@ -740,7 +740,7 @@ let created = resp.json<Order>()?
 | `pub struct Response { pub status: Status, pub headers: Headers, pub body: Bytes }` |  |  |
 | `fn is_success(self) -> Bool` | Status 200 to 299 |  |
 | `Response.with_text(status: Status, body: String) -> Response` | Also `Response.with_json<T: Encode>(status: Status, value: T) -> Response` (sets `Content-Type`), `Response.empty(status: Status) -> Response` and `Response.redirect(to: Url) -> Response` (302). They are named `with_` so they never clash with the `text()` and `json<T>()` methods | Pure |
-| `pub struct Status(pub Int)` | Constants: `OK`, `CREATED`, `ACCEPTED`, `NO_CONTENT`, `MOVED_PERMANENTLY`, `FOUND`, `SEE_OTHER`, `NOT_MODIFIED`, `TEMPORARY_REDIRECT`, `PERMANENT_REDIRECT`, `BAD_REQUEST`, `UNAUTHORIZED`, `PAYMENT_REQUIRED`, `FORBIDDEN`, `NOT_FOUND`, `METHOD_NOT_ALLOWED`, `CONFLICT`, `GONE`, `PAYLOAD_TOO_LARGE`, `UNSUPPORTED_MEDIA_TYPE`, `UNPROCESSABLE_CONTENT`, `TOO_MANY_REQUESTS`, `INTERNAL_SERVER_ERROR`, `NOT_IMPLEMENTED`, `BAD_GATEWAY`, `SERVICE_UNAVAILABLE`, `GATEWAY_TIMEOUT`. Any other code is `Status(n)`. Implements `Display` as code and reason, as in `404 Not Found` | Associated constants (spec §3) |
+| `pub struct Status(pub Int)` | Constants: `OK`, `CREATED`, `ACCEPTED`, `NO_CONTENT`, `MOVED_PERMANENTLY`, `FOUND`, `SEE_OTHER`, `NOT_MODIFIED`, `TEMPORARY_REDIRECT`, `PERMANENT_REDIRECT`, `BAD_REQUEST`, `UNAUTHORIZED`, `PAYMENT_REQUIRED`, `FORBIDDEN`, `NOT_FOUND`, `METHOD_NOT_ALLOWED`, `CONFLICT`, `GONE`, `PAYLOAD_TOO_LARGE`, `UNSUPPORTED_MEDIA_TYPE`, `UNPROCESSABLE_CONTENT`, `TOO_MANY_REQUESTS`, `INTERNAL_SERVER_ERROR`, `NOT_IMPLEMENTED`, `BAD_GATEWAY`, `SERVICE_UNAVAILABLE`, `GATEWAY_TIMEOUT`. Any other code is `Status(n)`. Implements `Display` as code and reason, as in `404 Not Found` | Associated constants ([Items](../spec/quince-spec.md#constants)) |
 | `enum Method { Get, Head, Post, Put, Patch, Delete, Options }` | Implements `Display` as its upper-case name: `"GET"`, `"HEAD"`, `"POST"`, `"PUT"`, `"PATCH"`, `"DELETE"`, `"OPTIONS"` |  |
 | `Headers` | Case-insensitive, ordered: `get(name) -> Option<String>`, `get_all(name) -> List<String>`, `set(name, value:) -> Headers` |  |
 | `enum HttpError { Net(error: NetError), Timeout, TooManyRedirects, BodyTooLarge, InvalidUtf8, Decode(error: DecodeError) }` | Client and body errors. Implements `Display` |  |
@@ -751,7 +751,7 @@ let created = resp.json<Order>()?
 | --- | --- | --- |
 | `fn serve<uses E>(port: Int, handler: fn(Request) -> Response uses E, host: String = "0.0.0.0", max_body: Int = 10_000_000) -> Result<Unit, ServeError> uses Listen, E` | Serves until cancelled; each request runs in its own task inside `serve`'s scope | Waits. A handler panic answers 500 and is reported on standard error, and the server keeps running (open item 14) |
 | `enum ServeError { Bind(error: NetError) }` | `serve` only fails at startup. Implements `Display`, so `"{error}"` works |  |
-| `Router.new() -> Router` | An empty router. Its effect argument is left out, which means no effects, as for `Iterator` (spec §5). Its methods live in `impl<uses E> Router<uses E>`, and each route added widens `E` by the effects of its handler. Effect arguments are sets, so `Router.new().get(.., uses Db).post(.., uses Log)` has the type `Router<uses Db, Log>`, the same type as `Router<uses Log, Db>`. A `Router` is an immutable value, so `serve`'s handler can capture it when its closures capture only values that can cross tasks (spec §3). | Pure |
+| `Router.new() -> Router` | An empty router. Its effect argument is left out, which means no effects, as for `Iterator` ([Effects](../spec/quince-spec.md#effect-variables)). Its methods live in `impl<uses E> Router<uses E>`, and each route added widens `E` by the effects of its handler. Effect arguments are sets, so `Router.new().get(.., uses Db).post(.., uses Log)` has the type `Router<uses Db, Log>`, the same type as `Router<uses Log, Db>`. A `Router` is an immutable value, so `serve`'s handler can capture it when its closures capture only values that can cross tasks ([Types](../spec/quince-spec.md#mutation)). | Pure |
 | `fn get<uses F>(self, pattern: String, handler: fn(Request, Params) -> Response uses F) -> Router<uses E, F>` | The other methods have the same shape as `get`: `fn post<uses F>(self, pattern: String, handler: fn(Request, Params) -> Response uses F) -> Router<uses E, F>`, and likewise `put`, `patch` and `delete`. `fn route<uses F>(self, method: Method, pattern: String, handler: fn(Request, Params) -> Response uses F) -> Router<uses E, F>` takes any method. | Patterns name parameters with a colon and the rest of the path with a star: `"/users/:id"`, `"/files/*rest"`. They need no escaping, and since they hold no braces they can never interpolate a binding. Matching works on `req.url.path()` one `/`-separated segment at a time, after percent-decoding. A literal segment matches only itself, `:name` matches any one non-empty segment (so `/users/abc` reaches the handler, which decides whether `abc` is valid), and `*rest` may only come last and matches the remaining segments, possibly none. Trailing slashes are not normalized: `/users/` does not match `"/users"`. When several patterns match, a literal segment beats `:name`, which beats `*rest`, whatever order the routes were added in. Adding the same method and pattern twice panics. Pure |
 | `fn handle(self, req: Request) -> Response uses E` | Dispatches on `req.method` and `req.url.path()`; answers 404 or 405 when nothing matches |  |
 | `Params` | `get(name) -> Option<String>` |  |
@@ -770,7 +770,7 @@ fn main() -> Result<Unit, AppError> uses * {
 
 ## Data and formats
 
-Every format has the same three functions, so learning one teaches all of them. Encoding is pure and never fails, except that a NaN or infinite `Float` panics (spec §3). Decoding takes a `String` (`decode_bytes` takes `Bytes`), checks shapes and every `requires` invariant, and reports a `DecodeError` with a path such as `$.items[3].price`. Malformed text is a `DecodeError` too, with the path where parsing stopped, so one error type covers both.
+Every format has the same three functions, so learning one teaches all of them. Encoding is pure and never fails, except that a NaN or infinite `Float` panics ([Serialization](../spec/quince-spec.md#serialization)). Decoding takes a `String` (`decode_bytes` takes `Bytes`), checks shapes and every `requires` invariant, and reports a `DecodeError` with a path such as `$.items[3].price`. Malformed text is a `DecodeError` too, with the path where parsing stopped, so one error type covers both.
 
 | Package | `encode<T: Encode>(value: T) -> String` | `decode<T: Decode>(text: String) -> Result<T, DecodeError>` | Also |
 | --- | --- | --- | --- |
@@ -803,7 +803,7 @@ The data model every format shares, and the byte encodings.
 
 | Signature | What | Cost | Notes |
 | --- | --- | --- | --- |
-| `enum Data { Null, Bool(value: Bool), Int(value: Int), Float(value: Float), String(value: String), Bytes(value: Bytes), List(items: List<Data>), Record(fields: List<(String, Data)>), Variant(name: String, fields: List<(String, Data)>) }` | What `Encode` produces and `Decode` reads |  | Wire names, tags and `Option` rules (spec §3) are already applied |
+| `enum Data { Null, Bool(value: Bool), Int(value: Int), Float(value: Float), String(value: String), Bytes(value: Bytes), List(items: List<Data>), Record(fields: List<(String, Data)>), Variant(name: String, fields: List<(String, Data)>) }` | What `Encode` produces and `Decode` reads |  | Wire names, tags and `Option` rules ([Serialization](../spec/quince-spec.md#serialization)) are already applied |
 | `pub interface Encoder { fn write(self, data: Data) -> String }` | What a format implements to encode |  |  |
 | `pub interface Decoder { fn read(self, text: String) -> Result<Data, DecodeError> }` | What a format implements to decode |  |  |
 | `fn base64_encode(data: Bytes, url_safe: Bool = false) -> String` | Standard alphabet with padding, or URL-safe without | O(n) |  |
@@ -931,7 +931,7 @@ Calls look like `Log.info("order placed", fields: {"order_id": id.to_string()})`
 
 ### std.ffi
 
-Types for `foreign` blocks (spec §11). The fixed-width C types are aliases (`CInt` is `Int32`), so they may appear in `pub` signatures like any number type. The target-width types, `CString`, `Ptr`, `ConstPtr`, `CBuf`, `Callback` and raw foreign declarations can't appear in a `pub` signature: the package that declares the `foreign` block wraps them.
+Types for `foreign` blocks ([Interop with C](../spec/quince-spec.md#c-types)). The fixed-width C types are aliases (`CInt` is `Int32`), so they may appear in `pub` signatures like any number type. The target-width types, `CString`, `Ptr`, `ConstPtr`, `CBuf`, `Callback` and raw foreign declarations can't appear in a `pub` signature: the package that declares the `foreign` block wraps them.
 
 | Name | What |
 | --- | --- |
@@ -941,26 +941,26 @@ Types for `foreign` blocks (spec §11). The fixed-width C types are aliases (`CI
 | `Ptr<T>` | A C pointer: `Ptr.null()`, `fn is_null(self) -> Bool`, `fn read(self) -> T`, `fn write(self, value: T)` for C types declared in the block. Panics: `read` or `write` on a null pointer. A foreign fn returning a `Ptr<T>` whose `T` has no `@cleanup` is marked `@borrowed` or `@owned(free_fn)` |
 | `ConstPtr<T>` | A pointer C may only read; `quince` `bind` emits it for `const T*`, and only such a parameter accepts a lent pointer. `fn lend(self) -> ConstPtr<UInt8>` on `Bytes` lends the bytes in place for one call; for empty `Bytes` it passes a valid non-null pointer to zero bytes |
 | `CBuf<T>` | A reference type for C-allocated memory, the only way to pass an out-parameter. One value: `CBuf.new<T>() -> CBuf<T>`, `fn get(self) -> T`, `fn set(self, value: T)`. An array: `CBuf.alloc<T>(count: Int) -> CBuf<T>`, whose `get` and `set` reach element 0. Bytes: `CBuf.from_bytes(data: Bytes) -> CBuf<UInt8>` copies `data` in, and `fn to_bytes(self, len: Int) -> Bytes`, only on `CBuf<UInt8>`, copies the first `len` bytes out. `fn ptr(self) -> Ptr<T>` points at element 0, only as a foreign-call argument. New memory is zeroed. All pure. Can't cross tasks. Panics: `len` past the allocated count |
-| `Callback<F>` | `Callback.new(f: F) -> Callback<F>`: captures must be crossable, and each call runs as its own task. `Callback.local(f: F) -> Callback<F>`: may capture a `Ref`, valid only during the creating task's own foreign calls. `fn unregister(self)`. All pure. Runs with the handlers of the call that registered it (spec §11) |
+| `Callback<F>` | `Callback.new(f: F) -> Callback<F>`: captures must be crossable, and each call runs as its own task. `Callback.local(f: F) -> Callback<F>`: may capture a `Ref`, valid only during the creating task's own foreign calls. `fn unregister(self)`. All pure. Runs with the handlers of the call that registered it ([Interop with C](../spec/quince-spec.md#callbacks)) |
 
 A lent pointer (`bytes.lend()`), `res.ptr()` and `buf.ptr()` may be written only as an argument of a foreign call, never stored in a variable or returned. The entries in this package follow the C interop decisions accepted into the spec on 2026-11-10 (options doc: https://claude.ai/artifact/3Dvm7kZ2KDPCfvkgBZ4gUD).
 
-`std.ffi` also exports `Resource<T>` (see std.sync's Resource subsection) and `with_resource` (under Core functions, called as `ffi.with_resource`), since only code built on a `foreign` block opens resources. Every name in this package works only inside the package that declares the `foreign` block (spec §11), so a C library's raw types and pointers never leak into its callers' code.
+`std.ffi` also exports `Resource<T>` (see std.sync's Resource subsection) and `with_resource` (under Core functions, called as `ffi.with_resource`), since only code built on a `foreign` block opens resources. Every name in this package works only inside the package that declares the `foreign` block ([Interop with C](../spec/quince-spec.md#11-interop)), so a C library's raw types and pointers never leak into its callers' code.
 
 ### std.testing
 
-`quince` `test` already fakes every effect (spec §6). These handlers let a test set up the fake or read what the code did.
+`quince` `test` already fakes every effect ([Testing](../spec/quince-spec.md#unit-tests)). These handlers let a test set up the fake or read what the code did.
 
 | Signature | What | Notes |
 | --- | --- | --- |
-| `fn fixed_clock(at: Timestamp) -> FixedClock` | `Clock.now()` returns `at`; `sleep` moves the time forward without waiting, and whenever every task in the test is blocked the time jumps to the earliest pending deadline (spec §6). `Clock.monotonic()` starts at `Duration` zero and moves forward by exactly as much as the time does, under this and every other clock fake | `with Clock = testing.fixed_clock(ts"2026-01-01T00:00:00Z") { ... }` |
+| `fn fixed_clock(at: Timestamp) -> FixedClock` | `Clock.now()` returns `at`; `sleep` moves the time forward without waiting, and whenever every task in the test is blocked the time jumps to the earliest pending deadline ([Testing](../spec/quince-spec.md#unit-tests)). `Clock.monotonic()` starts at `Duration` zero and moves forward by exactly as much as the time does, under this and every other clock fake | `with Clock = testing.fixed_clock(ts"2026-01-01T00:00:00Z") { ... }` |
 | `fn seeded_random(seed: Int) -> SeededRandom` | Repeatable `Random` | The default under `quince` `test` uses the run's seed |
 | `fn memory_fs(files: Map<String, String> = {:}) -> MemoryFs` | An in-memory `Fs` holding the given text files. Its root is `/` and its current directory is `/`, so a relative key or path resolves against `/`. Keys and paths are normalized the same way (`.` segments, `..` segments and repeated slashes), so `"words.txt"`, `"./words.txt"` and `"/words.txt"` name one file | `fn read(self, path: String) -> Option<String> uses State` to check what was written |
 | `fn capture_console(input: String = "") -> CapturedConsole` | Feeds `input` to standard input and records output | `fn stdout(self) -> String uses State`, also `stderr`. Each returns every byte written, newlines included, so `Console.print("a")` then `Console.print("b")` gives `"a\nb\n"` |
 | `fn capture_log() -> CapturedLog` | A `Log` handler that records entries | `fn entries(self) -> List<LogEntry> uses State`, where `pub struct LogEntry { pub level: Level, pub message: String, pub fields: Map<String, String> }` and `Level` is `std.log.Level` |
-| `fn fake_http<uses E>(handler: fn(Request) -> Result<Response, NetError> uses E) -> FakeNet<uses E>` | A `Net` handler that answers every outbound request by calling `handler`, with no real network. The handler gets the full `Request`: the absolute `url` with scheme and host, the method, the headers and the body. It returns `Ok(response)`, or an `Err` such as `NetError.Refused` or `NetError.Reset` to simulate a failed connection, which `http.get` reports as `HttpError.Net(error:)`. | The handler runs in the calling task, under the caller's handlers, so its effect calls (such as `Clock.sleep`) are cancellation points of the caller. A `timeout` given to `http.get` or `http.request` runs on the test's `Clock`. Fake time follows spec §6: whenever every task in the test is blocked, it jumps to the earliest pending deadline, so a timeout fires without real waiting even if nothing calls `sleep`. |
+| `fn fake_http<uses E>(handler: fn(Request) -> Result<Response, NetError> uses E) -> FakeNet<uses E>` | A `Net` handler that answers every outbound request by calling `handler`, with no real network. The handler gets the full `Request`: the absolute `url` with scheme and host, the method, the headers and the body. It returns `Ok(response)`, or an `Err` such as `NetError.Refused` or `NetError.Reset` to simulate a failed connection, which `http.get` reports as `HttpError.Net(error:)`. | The handler runs in the calling task, under the caller's handlers, so its effect calls (such as `Clock.sleep`) are cancellation points of the caller. A `timeout` given to `http.get` or `http.request` runs on the test's `Clock`. Fake time follows [Testing](../spec/quince-spec.md#unit-tests): whenever every task in the test is blocked, it jumps to the earliest pending deadline, so a timeout fires without real waiting even if nothing calls `sleep`. |
 | `fn fake_env(vars: Map<String, String> = {:}, args: List<String> = []) -> FakeEnv` |  |  |
-| `pub interface Generate { fn generate(gen: Gen) -> (Self, Gen) }` | Replaces the derived generator for `forall` (spec §6) | `Gen` is threaded like `Hasher`: each call takes the current state and returns the value with the next state, which the caller passes on, as in `let (name, gen) = gen.string(max_len: 20)` then `let (age, gen) = gen.int(0..120)`. Reusing an old `gen` gives the same value again |
+| `pub interface Generate { fn generate(gen: Gen) -> (Self, Gen) }` | Replaces the derived generator for `forall` ([Testing](../spec/quince-spec.md#property-tests)) | `Gen` is threaded like `Hasher`: each call takes the current state and returns the value with the next state, which the caller passes on, as in `let (name, gen) = gen.string(max_len: 20)` then `let (age, gen) = gen.int(0..120)`. Reusing an old `gen` gives the same value again |
 | `Gen` | `fn int(self, range: Range<Int>) -> (Int, Gen)`, and likewise `float`, `bool`, `string(max_len:)`, `list<T: Generate>(max_len:)` and `choose(items)`: each takes `self` and returns the value with the next `Gen` | Values shrink automatically on failure |
 
 ```
@@ -977,11 +977,11 @@ test "a failed charge is logged" {
 }
 ```
 
-In-memory connections for hand-written `Net` and `Listen` fakes: `fn connection_pair() -> (Outbound, Inbound)` gives two ends of one in-memory connection, where bytes sent on one end are received on the other, and `fn memory_listener() -> Listener` gives a listener with no socket, for a fake's `bind` to return. A fake's `send`, `receive` and `close` pass these to the outer handler (spec §3), which under `quince` `test` moves the bytes in memory.
+In-memory connections for hand-written `Net` and `Listen` fakes: `fn connection_pair() -> (Outbound, Inbound)` gives two ends of one in-memory connection, where bytes sent on one end are received on the other, and `fn memory_listener() -> Listener` gives a listener with no socket, for a fake's `bind` to return. A fake's `send`, `receive` and `close` pass these to the outer handler ([Effects](../spec/quince-spec.md#declaring-and-inferring)), which under `quince` `test` moves the bytes in memory.
 
 ## Name index
 
-Every top-level name in the standard library, by package. Lowercase names are functions and are called through the package (`import std.json`, then `json.decode(text)`); the rest are types, interfaces, effects and constants, which may also be imported by name (spec §7). Methods are listed under their type's section.
+Every top-level name in the standard library, by package. Lowercase names are functions and are called through the package (`import std.json`, then `json.decode(text)`); the rest are types, interfaces, effects and constants, which may also be imported by name ([Packages and modules](../spec/quince-spec.md#modules-and-imports)). Methods are listed under their type's section.
 
 | Import | Names |
 | --- | --- |
@@ -1018,11 +1018,11 @@ David approved the recommendations for 1 to 3 on 2026-11-10, and the doc is writ
 
 1. **How built-in effect operations are called.** Decided: through the effect's name, the same way as package effects: `Fs.read_text(path)`, `Clock.now()`, `Console.print("hi")`, `Process.exit(1)`. The std package of the same name (`std.fs`) holds only types, the error enum and handlers, not wrapper functions. That gives one way to call any effect, `uses Fs` matches `Fs.` at the call, and `with Fs = ...` replaces exactly the operations listed. The spec uses this form throughout.
 2. **How much goes in std.** Recommended: the batteries-included map above, now 22 packages. The lean alternative ships only the prelude, the effect packages and `std.json`, and leaves HTTP, crypto, UUIDs and CLI parsing to third-party packages. Lean is less to build, but agents do best when each common job has exactly one obvious package.
-3. **Iterator adapters.** Spec §3 forbids default method bodies that call other methods, so `map`, `filter` and `take` can't be methods on every `Iterator`. Recommended: a concrete prelude type `Iter<T, uses E>` that carries the adapters as ordinary methods, reached by `xs.iter()` or `Iter.from(it)`, so chains read the way they do in Rust and TypeScript: `xs.iter().filter(...).map(...).to_list()`. The alternative is free functions in `std.iter` (`iter.map(it, f)`), which keeps the rule with no new type but breaks chaining.
-4. **Map and Set order.** Default: iteration follows insertion order, as in Python and JavaScript. Order is then the same on every run, whatever the hash seed, which deterministic tests (spec §6) need. Lookups stay O(1) on average.
-5. **Number formatting.** Interpolation takes only names (spec §2), so `{price}` can't say "two decimals". Done as prelude methods `f.to_fixed(2)` and `s.pad_start(8, fill: ' ')`, used through a binding.
-6. **Prelude gaps.** Superseded by the spec. The prelude rule (2026-11-10) keeps only what the syntax or compiler needs: `From`, `DecodeError` and `ScopeFailed` are prelude; the reference types, `ChannelClosed`, `TimedOut` and `Resource` are imported from `std.sync`, `std.time` and `std.ffi`; `Generate` is in `std.testing`; `Encoder` and `Decoder` are in `std.encoding`. The spec appendix lists the prelude.
-7. **`config.load` in spec §5.** Default: it is the program's own code, three lines over `toml.decode`, not a std function.
+3. **Iterator adapters.** The spec ([Items](../spec/quince-spec.md#interfaces)) forbids default method bodies that call other methods, so `map`, `filter` and `take` can't be methods on every `Iterator`. Recommended: a concrete prelude type `Iter<T, uses E>` that carries the adapters as ordinary methods, reached by `xs.iter()` or `Iter.from(it)`, so chains read the way they do in Rust and TypeScript: `xs.iter().filter(...).map(...).to_list()`. The alternative is free functions in `std.iter` (`iter.map(it, f)`), which keeps the rule with no new type but breaks chaining.
+4. **Map and Set order.** Default: iteration follows insertion order, as in Python and JavaScript. Order is then the same on every run, whatever the hash seed, which deterministic tests ([Testing](../spec/quince-spec.md#deterministic-testing)) need. Lookups stay O(1) on average.
+5. **Number formatting.** Interpolation takes only names ([Lexical structure](../spec/quince-spec.md#literals)), so `{price}` can't say "two decimals". Done as prelude methods `f.to_fixed(2)` and `s.pad_start(8, fill: ' ')`, used through a binding.
+6. **Prelude gaps.** Superseded by the spec. The prelude rule (2026-11-10) keeps only what the syntax or compiler needs: `From`, `DecodeError` and `ScopeFailed` are prelude; the reference types, `ChannelClosed`, `TimedOut` and `Resource` are imported from `std.sync`, `std.time` and `std.ffi`; `Generate` is in `std.testing`; `Encoder` and `Decoder` are in `std.encoding`. The spec's [table of prelude names](../spec/quince-spec.md#prelude-names) lists the prelude.
+7. **`config.load` in [Effects](../spec/quince-spec.md#5-effects-and-capabilities).** Default: it is the program's own code, three lines over `toml.decode`, not a std function.
 8. **Out of v1.** Database drivers, templating, compression, XML and YAML stay out (see the package map). Say if any of them should be in.
 
 ### Open items found while writing
@@ -1032,10 +1032,10 @@ All of these are now settled: items 9 to 11 in the spec's own rounds, and items 
 9. **Associated constants.** Settled in the spec (2026-11-10): `pub const NAME: T = ...` inside the type's `impl` block, read as `Int.MAX`, `Status.OK` or `Self.MAX` (never bare), and usable as a default argument such as `zone: Zone = Zone.UTC`. Interfaces can't declare constants in v1.
 10. **Prelude names the spec's list leaves out.** Settled by the prelude rule (2026-11-10): `Ordering`, `Iter`, `Hasher` and `Never` are prelude; `Match` and `Captures` are imported from `std.regex`.
 11. **Method chains across lines.** Settled by the grammar round (2026-11-10): a line that starts with `.` continues the expression above, as in Swift and Kotlin.
-12. **Writing to a closed standard output.** Settled by the spec appendix, which wins over the earlier default here: `Console.write` returns `Unit`, and a write to a closed standard output ends the program quietly with code 0, as Unix tools do on a broken pipe.
+12. **Writing to a closed standard output.** Settled by the spec ([Program execution](../spec/quince-spec.md#built-in-effect-operations)), which wins over the earlier default here: `Console.write` returns `Unit`, and a write to a closed standard output ends the program quietly with code 0, as Unix tools do on a broken pipe.
 13. **`Pool` type parameters.** Decided (David, 2026-11-10): `Pool<T, Err, uses E>`, carrying the error type and effects of `open`. The spec already uses this form.
 14. **HTTP handler panics.** Decided (David, 2026-11-10): a panic in one request answers 500 and prints the usual panic report on standard error, as the runtime does for any task, without the server needing `uses Console`; the server keeps running.
-15. **`Log` needs `Clock`.** Decided (David, 2026-11-10): `pub effect Log uses Console, Clock`, as spec §5 now declares.
+15. **`Log` needs `Clock`.** Decided (David, 2026-11-10): `pub effect Log uses Console, Clock`, as [Effects](../spec/quince-spec.md#5-effects-and-capabilities) now declares.
 
 ## Signatures from the spec
 
@@ -1043,11 +1043,11 @@ Until the spec restructure (2026-11-10), these signatures and rules sat in the s
 
 ### Conventions
 
-Every function in this appendix that takes a closure declares an effect variable for it, except `modify` and `update` on reference types, which take pure closures (section 9), so passing an effectful closure is always allowed and the caller takes on its effects (section 5).
+Every function in this section that takes a closure declares an effect variable for it, except `modify` and `update` on reference types, which take pure closures ([Concurrency](../spec/quince-spec.md#shared-state)), so passing an effectful closure is always allowed and the caller takes on its effects ([Effects](../spec/quince-spec.md#effect-variables)).
 
 Each such section names its package, and code that names one of those types imports it, as in `import std.sync.{Ref}`.
 
-- `expect` is a method on `Option` and `Result` (below), not a free function.
+- `expect` is a method on `Option` and `Result` ([Option and Result](#option-and-result)), not a free function.
 - `unwrap()` is not in the standard library. Use `expect("why this can't fail")`, which forces the author to state the assumption.
 
 ### Timeouts and resources (std.time, std.ffi)
@@ -1061,7 +1061,7 @@ pub fn with_resource<T, R, uses E>(resource: Resource<T>, body: fn(Resource<T>) 
   uses E
 ```
 
-They are called through their packages: `time.with_timeout` from std.time, which needs `uses Clock` (section 9), and `ffi.with_resource` from std.ffi (section 11). Neither is in the prelude.
+They are called through their packages: `time.with_timeout` from std.time, which needs `uses Clock` ([Cancellation](../spec/quince-spec.md#cancellation)), and `ffi.with_resource` from std.ffi ([Interop with C](../spec/quince-spec.md#memory-across-the-boundary)). Neither is in the prelude.
 
 ### Numbers, Bool and Char
 
@@ -1102,7 +1102,7 @@ impl Float {
   fn pow(self, exponent: Float) -> Float
   fn exp(self) -> Float
   fn ln(self) -> Float
-  fn min(self, other: Float) -> Float             // total order (section 3)
+  fn min(self, other: Float) -> Float             // total order (Types)
   fn max(self, other: Float) -> Float
   fn clamp(self, low: Float, high: Float) -> Float  requires low <= high
   fn is_nan(self) -> Bool
@@ -1142,7 +1142,7 @@ impl Char {
 
 ### Ranges
 
-`a..b` and `a..=b` build a `Range<T>` over one integer type (section 2).
+`a..b` and `a..=b` build a `Range<T>` over one integer type ([Ranges](../spec/quince-spec.md#ranges)).
 
 ```
 impl<T> Range<T> {                       // T is an integer type
@@ -1206,7 +1206,7 @@ impl String {
 ```
 impl Bytes {
   fn from_list(values: List<UInt8>) -> Bytes
-  fn lend(self) -> ConstPtr<UInt8>    // std.ffi; only as a foreign-call argument (section 11)
+  fn lend(self) -> ConstPtr<UInt8>    // std.ffi; only as a foreign-call argument (Interop with C)
   fn len(self) -> Int
   fn is_empty(self) -> Bool
   fn get(self, index: Int) -> Option<UInt8>
@@ -1292,12 +1292,12 @@ impl List<String> { fn join(self, separator: String) -> String }
 impl<K: Hash, V> List<(K, V)> { fn to_map(self) -> Map<K, V> }   // later pairs win
 ```
 
-- Sorting, reversing and filtering return a new list and have no in-place twin, so there is one way to do each: xs = xs.sorted() updates in place when xs is unique (section 3).
+- Sorting, reversing and filtering return a new list and have no in-place twin, so there is one way to do each: xs = xs.sorted() updates in place when xs is unique ([Mutation](../spec/quince-spec.md#mutation)).
 - There is no `for_each`. A `for` loop is the one way to run code for each item.
 
 ### Iter
 
-`Iter<T, uses E>` is a concrete type that implements `Iterator<uses E>` with `Item = T` and carries every adapter as an ordinary method, since interfaces have no default method bodies (section 3). `xs.iter()`, `m.iter()`, `s.chars()`, `(0..n).iter()` and `Iter.from(it)` give one. Adapters are lazy; nothing runs until a consumer or a `for` loop pulls items.
+`Iter<T, uses E>` is a concrete type that implements `Iterator<uses E>` with `Item = T` and carries every adapter as an ordinary method, since interfaces have no default method bodies ([Items](../spec/quince-spec.md#interfaces)). `xs.iter()`, `m.iter()`, `s.chars()`, `(0..n).iter()` and `Iter.from(it)` give one. Adapters are lazy; nothing runs until a consumer or a `for` loop pulls items.
 
 ```
 impl<T, uses E> Iter<T, uses E> {
@@ -1427,7 +1427,7 @@ impl<T, Err> Result<T, Err> {
 }
 ```
 
-- There is no `unwrap()` (section 4). `unwrap_or` is kept because it can't panic.
+- There is no `unwrap()` ([Errors and failure](../spec/quince-spec.md#expected-failures-result-and-option)). `unwrap_or` is kept because it can't panic.
 
 ### Duration, Timestamp, Url and Regex
 
@@ -1550,10 +1550,10 @@ impl<T, Err, uses E> Pool<T, Err, uses E> {
 }
 ```
 
-- `modify` and `update` take pure closures (section 9).
+- `modify` and `update` take pure closures ([Concurrency](../spec/quince-spec.md#shared-state)).
 - There is no unbounded channel and no non-blocking `try_send` or `try_receive`, matching `select`, which has no default arm.
 - `Pool` names the error and effects of its `open` function, because `checkout` may open a new value: `PgDb { pool: Pool<PgConn, PgError, uses Net> }`. `checkout` returns `Err` only when opening fails.
-- `TaskScope` has no methods; tasks start with `spawn in` (section 9). `Resource` is built with `Resource.adopt` lent with res.ptr(), closed with res.close(), checked with res.is\_closed() and tied to a callback with res.keep(cb), all only in the package that declares the foreign type (section 11).
+- `TaskScope` has no methods; tasks start with `spawn in` ([Concurrency](../spec/quince-spec.md#long-lived-work-fire-and-forget)). `Resource` is built with `Resource.adopt` lent with res.ptr(), closed with res.close(), checked with res.is\_closed() and tied to a callback with res.keep(cb), all only in the package that declares the foreign type ([Interop with C](../spec/quince-spec.md#11-interop)).
 
 ### Types the built-in effects use
 
@@ -1565,28 +1565,28 @@ pub struct ProcessOutput { pub status: Int, pub stdout: Bytes, pub stderr: Bytes
 pub struct Metadata { pub size: Int, pub is_dir: Bool, pub modified: Timestamp }
 ```
 
-- `Outbound`, `Inbound` and `Listener` are reference types (section 3): copies share one connection, they can cross a task boundary, so a server can hand an accepted connection to a task, and a connection closes with `close` or when its last reference is dropped. std.testing builds in-memory ones for fake handlers. `Inbound` connections take `Listen` operations, so a server that only accepts connections needs `uses Listen` and not `Net`.
+- `Outbound`, `Inbound` and `Listener` are reference types ([Types](../spec/quince-spec.md#mutation)): copies share one connection, they can cross a task boundary, so a server can hand an accepted connection to a task, and a connection closes with `close` or when its last reference is dropped. std.testing builds in-memory ones for fake handlers. `Inbound` connections take `Listen` operations, so a server that only accepts connections needs `uses Listen` and not `Net`.
 
 ### Standard library index
 
-Every standard library name this spec uses that isn't in the prelude. Each needs an import (section 7), and its full signature is in the [Quince](https://claude.ai/artifact/MRcpqw3BqGotK6yE1psFvC) [standard library API](https://claude.ai/artifact/MRcpqw3BqGotK6yE1psFvC) doc.
+Every standard library name this spec uses that isn't in the prelude. Each needs an import ([Packages and modules](../spec/quince-spec.md#modules-and-imports)), and its full signature is in the [Quince](https://claude.ai/artifact/MRcpqw3BqGotK6yE1psFvC) [standard library API](https://claude.ai/artifact/MRcpqw3BqGotK6yE1psFvC) doc.
 
 | Name | Package | Used in |
 | --- | --- | --- |
-| Log effect, Log.info, `log.json` | std.log | Sections 3, 5, 9 |
-| fixed\_clock, Generate | std.testing | Sections 5, 6 |
-| Encoder, Decoder, Encode and Decode methods | std.encoding | Section 3 |
-| json.decode, json.encode, json.Value | std.json | Sections 3, 7 |
-| toml, form formats | std.toml, std.form | Section 3 |
-| get, serve, Request, Response, ServeError | std.http | Sections 5, 7, 9 |
-| net.only(host) | std.net | Section 5 |
-| CInt and the other C types, CString, Ptr, ConstPtr, CBuf, Callback | std.ffi | Sections 3, 11 |
-| Ref, Atomic, ConcurrentMap, Channel, Pool, ChannelClosed | std.sync | Sections 3, 9, 11 |
-| with\_timeout, TimedOut | std.time | Section 9 |
-| Resource, with\_resource | std.ffi | Sections 3, 11 |
-| FsError, Metadata | std.fs | Section 5, Appendix: Prelude |
-| NetError, Outbound, Inbound, Listener | std.net | Section 5, Appendix: Prelude |
-| ProcessError, ProcessOutput | std.process | Appendix: Prelude |
-| Match, Captures | std.regex | Appendix: Prelude |
+| Log effect, Log.info, `log.json` | std.log | [Types](../spec/quince-spec.md#3-type-system), [Effects](../spec/quince-spec.md#5-effects-and-capabilities), [Concurrency](../spec/quince-spec.md#9-concurrency) |
+| fixed\_clock, Generate | std.testing | [Effects](../spec/quince-spec.md#5-effects-and-capabilities), [Testing](../spec/quince-spec.md#6-contracts-and-testing) |
+| Encoder, Decoder, Encode and Decode methods | std.encoding | [Types](../spec/quince-spec.md#3-type-system) |
+| json.decode, json.encode, json.Value | std.json | [Types](../spec/quince-spec.md#3-type-system), [Packages and modules](../spec/quince-spec.md#modules-and-imports) |
+| toml, form formats | std.toml, std.form | [Types](../spec/quince-spec.md#3-type-system) |
+| get, serve, Request, Response, ServeError | std.http | [Effects](../spec/quince-spec.md#5-effects-and-capabilities), [Packages and modules](../spec/quince-spec.md#modules-and-imports), [Concurrency](../spec/quince-spec.md#9-concurrency) |
+| net.only(host) | std.net | [Effects](../spec/quince-spec.md#5-effects-and-capabilities) |
+| CInt and the other C types, CString, Ptr, ConstPtr, CBuf, Callback | std.ffi | [Types](../spec/quince-spec.md#3-type-system), [Interop with C](../spec/quince-spec.md#11-interop) |
+| Ref, Atomic, ConcurrentMap, Channel, Pool, ChannelClosed | std.sync | [Types](../spec/quince-spec.md#3-type-system), [Concurrency](../spec/quince-spec.md#9-concurrency), [Interop with C](../spec/quince-spec.md#11-interop) |
+| with\_timeout, TimedOut | std.time | [Concurrency](../spec/quince-spec.md#9-concurrency) |
+| Resource, with\_resource | std.ffi | [Types](../spec/quince-spec.md#3-type-system), [Interop with C](../spec/quince-spec.md#11-interop) |
+| FsError, Metadata | std.fs | [Effects](../spec/quince-spec.md#5-effects-and-capabilities), [Built-in effect operations](../spec/quince-spec.md#built-in-effect-operations) |
+| NetError, Outbound, Inbound, Listener | std.net | [Effects](../spec/quince-spec.md#5-effects-and-capabilities), [Built-in effect operations](../spec/quince-spec.md#built-in-effect-operations) |
+| ProcessError, ProcessOutput | std.process | [Built-in effect operations](../spec/quince-spec.md#built-in-effect-operations) |
+| Match, Captures | std.regex | [Duration, Timestamp, Url and Regex](#duration-timestamp-url-and-regex) |
 
-Names in examples that are not std: `retry` in section 5 is an illustrative signature, and `load_config` and the database types (`Db`, `PgDb`, `Rows`, `DbError`) belong to the example program.
+Names in examples that are not std: `retry` in [Effects](../spec/quince-spec.md#5-effects-and-capabilities) is an illustrative signature, and `load_config` and the database types (`Db`, `PgDb`, `Rows`, `DbError`) belong to the example program.

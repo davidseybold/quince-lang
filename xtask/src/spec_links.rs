@@ -1,6 +1,7 @@
 //! `cargo xtask spec-links`: checks that every relative link in the spec's Markdown files, and
 //! every link from the std API doc into the spec, names an existing file, and that every
-//! `#fragment` into a Markdown file names one of its headings.
+//! `#fragment` into a Markdown file names one of its headings. It also fails on a positional
+//! reference ("section 5", "(below)") left in the spec's prose.
 
 use crate::spec_rules::report_located;
 use quince_spec::links::{self, Link};
@@ -19,6 +20,7 @@ pub fn check(root: &Path) -> Result<(), String> {
     let mut anchors = Anchors::default();
     let mut errors = Vec::new();
     let mut checked = 0;
+    let mut references = 0;
     let inside: Vec<_> = sources.iter().map(|path| (path.as_str(), false)).collect();
     let outside = LINKING_IN
         .iter()
@@ -27,6 +29,9 @@ pub fn check(root: &Path) -> Result<(), String> {
     for (path, only_into_spec) in inside.into_iter().chain(outside) {
         let text = std::fs::read_to_string(root.join(path))
             .map_err(|e| format!("can't read {path}: {e}"))?;
+        if !only_into_spec {
+            references += positional(path, &text, &mut errors);
+        }
         for link in links::links(&text) {
             if link.is_external() {
                 continue;
@@ -49,15 +54,37 @@ pub fn check(root: &Path) -> Result<(), String> {
             }
         }
     }
+    errors.sort_by(|a, b| (&a.path, a.line).cmp(&(&b.path, b.line)));
     report_located(&errors);
     if !errors.is_empty() {
-        return Err(format!("{} broken link(s)", errors.len()));
+        return Err(format!(
+            "{} broken link(s) and {references} positional reference(s)",
+            errors.len() - references
+        ));
     }
     eprintln!(
-        "spec-links: {checked} relative link(s) in {} file(s), all resolve",
+        "spec-links: {checked} relative link(s) in {} file(s), all resolve; no positional references",
         sources.len()
     );
     Ok(())
+}
+
+/// Adds an error for each positional reference in the prose of the spec file at `path`, and
+/// returns how many there were.
+fn positional(path: &str, text: &str, errors: &mut Vec<FileError>) -> usize {
+    let found = links::positional_references(text);
+    for reference in &found {
+        errors.push(FileError {
+            path: path.to_string(),
+            line: reference.line,
+            message: format!(
+                "positional reference `{}`: replace it with a relative link to the text it means, \
+                 such as `[Effects](reference/effects.md)`, so it stays true when text moves",
+                reference.text
+            ),
+        });
+    }
+    found.len()
 }
 
 /// What's wrong with one link, if anything.
@@ -231,15 +258,18 @@ mod tests {
                     "spec/README.md",
                     "# Spec\n\n[Ok](reference/a.md) [Bad](reference/b.md)\n",
                 ),
-                ("spec/reference/a.md", "# A\n\n[Up](../README.md#spec)\n"),
+                (
+                    "spec/reference/a.md",
+                    "# A\n\n[Up](../README.md#spec) (see Effects below)\n",
+                ),
                 (
                     "std/API.md",
-                    "# API\n\n[Spec](../spec/reference/a.md#nope) [Elsewhere](missing.md)\n",
+                    "# API\n\n[Spec](../spec/reference/a.md#nope) [Elsewhere](missing.md) (spec §3)\n",
                 ),
             ],
         );
         let err = check(&root).unwrap_err();
-        assert_eq!(err, "2 broken link(s)");
+        assert_eq!(err, "2 broken link(s) and 1 positional reference(s)");
     }
 
     #[test]

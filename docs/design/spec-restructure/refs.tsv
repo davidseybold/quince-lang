@@ -1,0 +1,260 @@
+# Positional references rewritten as links (docs/design/spec-restructure.md, decision 7).
+# where (spec, or std for std/API.md)	unit (rule ID, or L and its first line: in the baseline for spec, in std/API.md for std)	old phrase	new phrase	final link target(s) from the repo root
+spec	L33	(section 3)	([Prelude and special interfaces](#operators-on-user-types))	spec/reference/prelude.md
+spec	lex.continue.signature	sections 5 and 6	[Effects](#5-effects-and-capabilities) and [Contracts](#requires-and-ensures)	spec/reference/effects.md spec/reference/contracts.md
+spec	lex.no-contextual	(section 2, Literals)	([Literals](#literals))	spec/reference/lexical.md#literals
+spec	lex.keyword-not-name	(section 3)	([Prelude and special interfaces](#serialization))	spec/reference/prelude.md
+spec	item.const.typed-pure	(section 5)	([Effects](#5-effects-and-capabilities))	spec/reference/effects.md
+spec	item.const.no-ref	(section 3)	([Types](#3-type-system))	spec/reference/types.md
+spec	item.const.no-ref	(section 5)	([Effects](#5-effects-and-capabilities))	spec/reference/effects.md
+spec	lex.name.foreign-exempt	(section 11)	([Interop with C](#11-interop))	spec/reference/interop.md
+spec	item.arg.semver	(section 7)	([Dependencies and publishing](#enforced-semantic-versioning))	spec/tooling/dependencies.md
+spec	type.type-arg.optional	(section 3, Inference rules)	([Inference rules](#inference-rules))	spec/reference/types.md#inference-rules
+spec	expr.op.range.parens	(see Ranges)	(see [Ranges](#ranges))	spec/reference/expressions.md#ranges
+spec	expr.op.is-pattern	(section 4)	([Patterns](#patterns))	spec/reference/patterns.md
+spec	expr.op.no-conversion	(section 3)	([Types](#built-in-types))	spec/reference/types.md
+spec	expr.op.no-conversion	section 3, Operators on user types	[Operators on user types](#operators-on-user-types)	spec/reference/prelude.md#operators-on-user-types
+spec	expr.op.float-total-order	(section 3)	([Types](#built-in-types))	spec/reference/types.md
+spec	L170	the prelude appendix	[the standard library API](../std/API.md#ranges)	std/API.md#ranges
+spec	expr.block.fn-value	in section 3	in [Mutation](#mutation)	spec/reference/types.md#mutation
+spec	expr.block.unit-context	(section 4)	([Errors and failure](#expected-failures-result-and-option))	spec/reference/errors.md
+spec	lex.comment.doc	(see section 6)	(see [Testing](#executable-examples-in-doc-comments))	spec/reference/testing.md
+spec	item.attr.unknown	(section 7)	([Packages and modules](#editions))	spec/reference/packages.md
+spec	L210	(section 6)	([Contracts](#requires-and-ensures))	spec/reference/contracts.md
+spec	L211	(section 6)	([Contracts](#static-verification-optional))	spec/reference/contracts.md
+spec	L212	(section 7)	([Dependencies and publishing](#enforced-semantic-versioning))	spec/tooling/dependencies.md
+spec	L213	(section 9)	([Interop with C](#calling-c))	spec/reference/interop.md
+spec	L214	(section 11)	([Interop with C](#trust))	spec/reference/interop.md
+spec	L215	(section 11)	([Interop with C](#memory-across-the-boundary))	spec/reference/interop.md
+spec	L216	(section 11)	([Interop with C](#memory-across-the-boundary))	spec/reference/interop.md
+spec	L218	(section 3)	([Prelude and special interfaces](#serialization))	spec/reference/prelude.md
+spec	L219	(section 6)	([Testing](#unit-tests))	spec/reference/testing.md
+spec	L220	(section 3, Serialization)	([Serialization](#serialization))	spec/reference/prelude.md#serialization
+spec	L221	(section 5)	([Effects](#handlers-in-tests-and-production))	spec/reference/effects.md
+spec	type.int	(see section 4)	(see [Errors and failure](#panics-bugs))	spec/reference/errors.md
+spec	type.collections	(see Mutation below)	(see [Mutation](#mutation))	spec/reference/types.md#mutation
+spec	type.never	(see Inference rules)	(see [Inference rules](#inference-rules))	spec/reference/types.md#inference-rules
+spec	type.fn	(section 5)	([Effects](#effect-variables))	spec/reference/effects.md
+spec	type.tagged	(section 2)	([Lexical structure](#literals))	spec/reference/lexical.md
+spec	type.range	(section 2, Ranges)	([Ranges](#ranges))	spec/reference/expressions.md#ranges
+spec	item.struct.value	(see Mutation below)	(see [Mutation](#mutation))	spec/reference/types.md#mutation
+spec	item.struct.literal-visibility	(section 6)	([Contracts](#requires-and-ensures))	spec/reference/contracts.md
+spec	type.mut.shared-in-ref	(listed under Reference types below)	(listed under [Reference types](#mutation))	spec/reference/types.md
+spec	type.mut.shared-in-ref	(section 5)	([Effects](#5-effects-and-capabilities))	spec/reference/effects.md
+spec	type.mut.shared-in-ref	(section 2)	([Items](#constants))	spec/reference/items.md
+spec	type.mut.c-memory-scope	(section 11)	([Interop with C](#memory-across-the-boundary))	spec/reference/interop.md
+spec	type.mut.copy-report	(section 10)	([Memory](#memory-management))	spec/reference/memory.md
+spec	L324	(section 9)	([Concurrency](#long-lived-work-fire-and-forget))	spec/reference/concurrency.md
+spec	L325	(section 11)	([Interop with C](#memory-across-the-boundary))	spec/reference/interop.md
+spec	L326	(section 11)	([Interop with C](#memory-across-the-boundary))	spec/reference/interop.md
+spec	L327	(section 11)	([Interop with C](#callbacks))	spec/reference/interop.md
+spec	L328	(section 11)	([Interop with C](#generated-bindings))	spec/reference/interop.md
+spec	L329	(Appendix: Prelude)	([Types the built-in effects use](../std/API.md#types-the-built-in-effects-use))	std/API.md#types-the-built-in-effects-use
+spec	type.ref.release-pure	(section 11)	([Interop with C](#memory-across-the-boundary))	spec/reference/interop.md
+spec	type.ref.no-cross	(section 9)	([Concurrency](#shared-state))	spec/reference/concurrency.md
+spec	item.iface.type-params	(section 5)	([Effects](#effect-variables))	spec/reference/effects.md
+spec	prelude.iter.next-var-self	(see Mutation above)	(see [Mutation](#mutation))	spec/reference/types.md#mutation
+spec	L353	(section 2, Type arguments and construction)	([Type arguments and construction](#type-arguments-and-construction))	spec/reference/types.md#type-arguments-and-construction
+spec	effect.handler.uses	(section 5)	([Effects](#declaring-and-inferring))	spec/reference/effects.md
+spec	prelude.auto.encode	(see Serialization below)	(see [Serialization](#serialization))	spec/reference/prelude.md#serialization
+spec	prelude.wire.semver	(section 7)	([Dependencies and publishing](#enforced-semantic-versioning))	spec/tooling/dependencies.md
+spec	effect.op-call	(section 5)	([Effects](#handlers-in-tests-and-production))	spec/reference/effects.md
+spec	type.never.while-true	(section 2)	([Statements](#keywords))	spec/reference/statements.md
+spec	err.panic.no-catch	(section 9)	([Concurrency](#9-concurrency))	spec/reference/concurrency.md
+spec	err.panic.no-catch	(section 9, Cancellation)	([Cancellation](#cancellation))	spec/reference/concurrency.md#cancellation
+spec	err.panic.contract	(section 6)	([Contracts](#requires-and-ensures))	spec/reference/contracts.md
+spec	err.panic.explicit	(section 3)	([Types](#built-in-types))	spec/reference/types.md
+spec	err.panic.task	(section 9)	([Concurrency](#long-lived-work-fire-and-forget))	spec/reference/concurrency.md
+spec	L547	section 3 Reference types	[Reference types](#mutation)	spec/reference/types.md
+spec	L549	Appendix: Prelude	[Built-in effect operations](#built-in-effect-operations)	spec/reference/effects.md#built-in-effect-operations
+spec	effect.handler.crossing	(section 3)	([Types](#mutation))	spec/reference/types.md
+spec	effect.handler.crossing	(section 9)	([Concurrency](#9-concurrency))	spec/reference/concurrency.md
+spec	L553	in section 11	in [Interop with C](#11-interop)	spec/reference/interop.md
+spec	effect.keyword-decl-only	Effect variables (below)	[Effect variables](#effect-variables)	spec/reference/effects.md#effect-variables
+spec	effect.unused-pub	(section 7)	([Dependencies and publishing](#enforced-semantic-versioning))	spec/tooling/dependencies.md
+spec	effect.pure-param	an effect variable (below)	an [effect variable](#effect-variables)	spec/reference/effects.md#effect-variables
+spec	effect.effvar.iface	in section 3	in [Prelude and special interfaces](#interfaces-1)	spec/reference/prelude.md
+spec	effect.effvar.pure-ifaces	(section 3)	([Prelude and special interfaces](#operators-on-user-types))	spec/reference/prelude.md
+spec	exec.cap.inherit	(section 9)	([Concurrency](#9-concurrency))	spec/reference/concurrency.md
+spec	exec.cap.inherit	(section 11)	([Interop with C](#callbacks))	spec/reference/interop.md
+spec	L640	(see package effects above)	(see [package effects](#declaring-and-inferring))	spec/reference/effects.md#declaring-and-inferring
+spec	effect.with.package-main-only	(section 7)	([Packages](#packages))	spec/reference/packages.md#packages
+spec	test.package-effect-proof	(section 6)	([Testing](#unit-tests))	spec/reference/testing.md
+spec	test.foreign-opt-in	(section 11)	([Interop with C](#testing-foreign-code))	spec/reference/interop.md
+spec	test.itest.packages	(section 7)	([Packages](#packages))	spec/reference/packages.md#packages
+spec	mod.namespace	(Packages, below)	([Packages](#packages))	spec/reference/packages.md#packages
+spec	mod.name-sources	(below)	([Prelude and special interfaces](#modules-and-imports))	spec/reference/prelude.md
+spec	mod.import.major	(The manifest, below)	([The manifest](#the-manifest))	spec/tooling/dependencies.md#the-manifest
+spec	prelude.only	Appendix: Prelude	the [table of prelude names](#prelude-names)	spec/reference/prelude.md#prelude-names
+spec	prelude.not-ref-types	section 3	[Types](#mutation)	spec/reference/types.md
+spec	mod.pkg.project	(section 5)	([Program execution](#capabilities-at-runtime))	spec/reference/execution.md
+spec	mod.pkg.project	(section 11)	([Interop with C](#linking))	spec/reference/interop.md
+spec	mod.pkg.project	under The manifest below	under [The manifest](#the-manifest)	spec/tooling/dependencies.md#the-manifest
+spec	L762	(above)	([Modules and imports](#modules-and-imports))	spec/reference/packages.md#modules-and-imports
+spec	mod.pkg.test-packages	(section 6)	([Testing](#integration-tests))	spec/reference/testing.md
+spec	mod.pkg.multi-project	(The manifest, below)	([The manifest](#the-manifest))	spec/tooling/dependencies.md#the-manifest
+spec	L780	(section 11)	(Interop with C)	spec/reference/interop.md
+spec	L791	(section 11, Linking)	(Interop with C, Linking)	spec/reference/interop.md#linking
+spec	L794	(section 5)	(Program execution)	spec/reference/execution.md
+spec	dep.tag	(Content addressing, below)	([Content addressing](#content-addressing))	spec/tooling/dependencies.md#content-addressing
+spec	dep.manifest.future-room	(section 5)	([Program execution](#capabilities-at-runtime))	spec/reference/execution.md
+spec	dep.hash.verify	(above)	([Version resolution](#version-resolution))	spec/tooling/dependencies.md#version-resolution
+spec	dep.hash.verify	(section 10)	([Toolchain](#incremental-compilation))	spec/tooling/toolchain.md
+spec	dep.publish.needs-review	A needs-review finding (below)	A [needs-review finding](#enforced-semantic-versioning)	spec/tooling/dependencies.md#enforced-semantic-versioning
+spec	dep.semver.impl-review	(section 3)	([Items](#interfaces))	spec/reference/items.md
+spec	tool.cli.query	(below)	([Query API](#query-api))	spec/tooling/diagnostics.md#query-api
+spec	tool.cli.bind	(section 11)	([Interop with C](#generated-bindings))	spec/reference/interop.md
+spec	tool.cli.update	(section 7)	([Dependencies and publishing](#version-resolution))	spec/tooling/dependencies.md
+spec	tool.cli.add	(section 7)	([Dependencies and publishing](#version-resolution))	spec/tooling/dependencies.md
+spec	diag.query.source	(section 6)	([Testing](#unit-tests))	spec/reference/testing.md
+spec	diag.query.handlers	(section 5)	([Effects](#handlers-in-tests-and-production))	spec/reference/effects.md
+spec	conc.error-type	(section 4)	([Errors and failure](#the--operator))	spec/reference/errors.md
+spec	conc.cancelled-silent	(see Cancellation)	(see [Cancellation](#cancellation))	spec/reference/concurrency.md#cancellation
+spec	conc.background.scope-failed	(see Cancellation)	(see [Cancellation](#cancellation))	spec/reference/concurrency.md#cancellation
+spec	conc.cancel.stop	(listed below)	(listed in [Cancellation](#cancellation))	spec/reference/concurrency.md#cancellation
+spec	conc.cancel.unwind	(section 11)	([Interop with C](#memory-across-the-boundary))	spec/reference/interop.md
+spec	conc.cancel.scope-sees	(below)	([Cancellation](#cancellation))	spec/reference/concurrency.md#cancellation
+spec	conc.cancel.pure	(section 5)	([Effects](#5-effects-and-capabilities))	spec/reference/effects.md
+spec	conc.cancel.cleanup-limit	(section 11)	([Interop with C](#memory-across-the-boundary))	spec/reference/interop.md
+spec	L998	(section 3, Reference types)	([Reference types](#mutation))	spec/reference/types.md
+spec	L1039	(section 11)	([Interop with C](#11-interop))	spec/reference/interop.md
+spec	ffi.callback-cancel	(section 11)	([Interop with C](#callbacks))	spec/reference/interop.md
+spec	mem.c-scope	(section 11)	([Interop with C](#memory-across-the-boundary))	spec/reference/interop.md
+spec	mem.copy-report	(section 8)	([Query API](#query-api))	spec/tooling/diagnostics.md#query-api
+spec	tool.profile.overflow	(section 4)	([Errors and failure](#panics-bugs))	spec/reference/errors.md
+spec	tool.incr.body	from section 7	from [Content addressing](#content-addressing)	spec/tooling/dependencies.md#content-addressing
+spec	tool.debug.locations	(section 9)	([Testing](#deterministic-testing))	spec/reference/testing.md
+spec	ffi.cbuf.def	section 3	[Types](#mutation)	spec/reference/types.md
+spec	ffi.no-unsafe	`allow_native` (below)	[`allow_native`](#trust)	spec/reference/interop.md#trust
+spec	ffi.cmem.drop-close	(section 10)	([Memory](#memory-management))	spec/reference/memory.md
+spec	ffi.cmem.cycle-warn	(section 10)	([Memory](#memory-management))	spec/reference/memory.md
+spec	ffi.cmem.cleanup-limit	(section 9, Cancellation)	([Cancellation](#cancellation))	spec/reference/concurrency.md#cancellation
+spec	L1255	in section 9	in [Calling C](#calling-c)	spec/reference/interop.md#calling-c
+spec	ffi.ffitest.step	(section 5)	([Effects](#handlers-in-tests-and-production))	spec/reference/effects.md
+spec	lex.c-name	the tokens of section 2	the tokens of [Lexical structure](#2-lexical-structure-and-syntax)	spec/reference/lexical.md
+spec	L1387	(section 7)	([Prelude and special interfaces](#modules-and-imports))	spec/reference/prelude.md
+spec	L1395	in section 3	in [Operators on user types](#operators-on-user-types)	spec/reference/prelude.md#operators-on-user-types
+spec	L1396	(section 9)	([Concurrency](#long-lived-work-fire-and-forget))	spec/reference/concurrency.md
+spec	L1399	(section 5)	([Effects](#built-in-effects))	spec/reference/effects.md
+spec	L1403	(section 7)	([Prelude and special interfaces](#modules-and-imports))	spec/reference/prelude.md
+spec	L1433	(section 3)	([Automatic equality and hashing](#automatic-equality-and-hashing))	spec/reference/prelude.md#automatic-equality-and-hashing
+spec	prelude.eq-ord-impls	(section 3)	([Types](#built-in-types))	spec/reference/types.md
+spec	expr.index.list	(section 4)	([Errors and failure](#panics-bugs))	spec/reference/errors.md
+spec	effect.builtin-ops	(section 5)	([Effects](#handlers-in-tests-and-production))	spec/reference/effects.md
+spec	effect.state-no-ops	the reference-type methods above	the reference-type methods in [std.sync](../std/API.md#reference-types-and-concurrency-stdsync)	std/API.md#reference-types-and-concurrency-stdsync
+spec	L2044	(section 5)	([Program execution](#capabilities-at-runtime))	spec/reference/execution.md
+spec	L2047	(section 9)	([Cancellation](#cancellation))	spec/reference/concurrency.md#cancellation
+std	L20	Spec §6	The spec's [Contracts](../spec/quince-spec.md#requires-and-ensures) chapter	spec/reference/contracts.md
+std	L23	(spec §9)	([Concurrency](../spec/quince-spec.md#9-concurrency))	spec/reference/concurrency.md
+std	L33	(spec §3, Mutation)	([Mutation](../spec/quince-spec.md#mutation))	spec/reference/types.md#mutation
+std	L43	(spec §3)	([Items](../spec/quince-spec.md#methods))	spec/reference/items.md
+std	L43	(spec §3)	([Types](../spec/quince-spec.md#built-in-types))	spec/reference/types.md
+std	L47	(spec §3)	([Types](../spec/quince-spec.md#built-in-types))	spec/reference/types.md
+std	L49	(spec §5)	([Program execution](../spec/quince-spec.md#capabilities-at-runtime))	spec/reference/execution.md
+std	L50	(spec §9)	([Concurrency](../spec/quince-spec.md#shared-state))	spec/reference/concurrency.md
+std	L52	(spec §7)	([Packages and modules](../spec/quince-spec.md#modules-and-imports))	spec/reference/packages.md
+std	L94	(spec §4)	([Errors and failure](../spec/quince-spec.md#panics-bugs))	spec/reference/errors.md
+std	L110	(spec §3)	([Types](../spec/quince-spec.md#built-in-types))	spec/reference/types.md
+std	L117	from spec §3	from [Types](../spec/quince-spec.md#built-in-types)	spec/reference/types.md
+std	L129	(spec §3)	([Types](../spec/quince-spec.md#built-in-types))	spec/reference/types.md
+std	L179	(spec §3)	([Types](../spec/quince-spec.md#built-in-types))	spec/reference/types.md
+std	L198	(spec §3)	([Mutation](../spec/quince-spec.md#mutation))	spec/reference/types.md#mutation
+std	L205	(spec §4)	([Expressions](../spec/quince-spec.md#list))	spec/reference/expressions.md
+std	L238	(see Iter)	(see [Iter](#iter))	std/API.md#iter
+std	L242	(spec §4)	([Types](../spec/quince-spec.md#panics-bugs))	spec/reference/types.md
+std	L277	(spec §4)	([Option and Result](#option-and-result))	std/API.md#option-and-result
+std	L281	(spec §4)	([Pattern tests with `is`](../spec/quince-spec.md#pattern-tests-with-is))	spec/reference/expressions.md#pattern-tests-with-is
+std	L289	(spec §4)	([Errors and failure](../spec/quince-spec.md#expected-failures-result-and-option))	spec/reference/errors.md
+std	L300	(spec §9)	([Concurrency](../spec/quince-spec.md#concurrent-blocks))	spec/reference/concurrency.md
+std	L307	(spec appendix)	([Prelude and special interfaces](../spec/quince-spec.md#interfaces-1))	spec/reference/prelude.md
+std	L326	(spec §2)	([Lexical structure](../spec/quince-spec.md#2-lexical-structure-and-syntax))	spec/reference/lexical.md
+std	L328	the way spec §5 describes	the way [Effects](../spec/quince-spec.md#effect-variables) describes	spec/reference/effects.md
+std	L351	(spec §2, Ranges)	([Ranges](../spec/quince-spec.md#ranges))	spec/reference/expressions.md#ranges
+std	L355	(spec appendix)	([Duration, Timestamp, Url and Regex](#duration-timestamp-url-and-regex))	std/API.md#duration-timestamp-url-and-regex
+std	L412	(spec §3)	([Operators on user types](../spec/quince-spec.md#operators-on-user-types))	spec/reference/prelude.md#operators-on-user-types
+std	L412	in spec §3	in [Operators on user types](../spec/quince-spec.md#operators-on-user-types)	spec/reference/prelude.md#operators-on-user-types
+std	L414	(spec §3)	([Automatic equality and hashing](../spec/quince-spec.md#automatic-equality-and-hashing))	spec/reference/prelude.md#automatic-equality-and-hashing
+std	L414	(spec appendix, Interfaces)	([Prelude and special interfaces](../spec/quince-spec.md#interfaces-1))	spec/reference/prelude.md
+std	L415	(spec §2)	([Items](../spec/quince-spec.md#arguments))	spec/reference/items.md
+std	L416	(spec §4)	([The `?` operator](../spec/quince-spec.md#the--operator))	spec/reference/errors.md#the--operator
+std	L418	(spec §3, Generics)	([Generics](../spec/quince-spec.md#generics))	spec/reference/items.md#generics
+std	L424	(spec §6)	([Testing](../spec/quince-spec.md#unit-tests))	spec/reference/testing.md
+std	L425	(spec §7)	([Dependencies and publishing](../spec/quince-spec.md#enforced-semantic-versioning))	spec/tooling/dependencies.md
+std	L427	(spec §3)	([Prelude and special interfaces](../spec/quince-spec.md#functions))	spec/reference/prelude.md
+std	L428	(spec §9)	([Cancellation](../spec/quince-spec.md#cancellation))	spec/reference/concurrency.md#cancellation
+std	L429	(spec §11)	([Interop with C](../spec/quince-spec.md#memory-across-the-boundary))	spec/reference/interop.md
+std	L439	(spec §9)	([Concurrency](../spec/quince-spec.md#long-lived-work-fire-and-forget))	spec/reference/concurrency.md
+std	L457	The spec's prelude appendix holds their exact signatures; where this section and the appendix ever differ, the appendix wins.	The spec's [built-in effect declarations](../spec/quince-spec.md#built-in-effect-operations) hold their exact signatures; where this section and the spec ever differ, the spec wins.	spec/reference/effects.md#built-in-effect-operations
+std	L457	(spec §9)	([Cancellation](../spec/quince-spec.md#cancellation))	spec/reference/concurrency.md#cancellation
+std	L459	(spec §3)	([Effects](../spec/quince-spec.md#declaring-and-inferring))	spec/reference/effects.md
+std	L465	(spec appendix)	([Program execution](../spec/quince-spec.md#built-in-effect-operations))	spec/reference/execution.md
+std	L500	(spec §3)	([Types](../spec/quince-spec.md#mutation))	spec/reference/types.md
+std	L512	(spec §6)	([Testing](../spec/quince-spec.md#unit-tests))	spec/reference/testing.md
+std	L536	(spec §5)	([Program execution](../spec/quince-spec.md#capabilities-at-runtime))	spec/reference/execution.md
+std	L548	(spec §3)	([Types](../spec/quince-spec.md#mutation))	spec/reference/types.md
+std	L548	(prelude, below)	(prelude, [TaskScope and FailurePolicy](#taskscope-and-failurepolicy-prelude))	std/API.md#taskscope-and-failurepolicy-prelude
+std	L548	(spec §9)	([Concurrency](../spec/quince-spec.md#shared-state))	spec/reference/concurrency.md
+std	L582	(spec §9)	([Concurrency](../spec/quince-spec.md#waiting-on-several-channels))	spec/reference/concurrency.md
+std	L588	(spec §3)	([Types](../spec/quince-spec.md#mutation))	spec/reference/types.md
+std	L589	(spec §11)	([Interop with C](../spec/quince-spec.md#memory-across-the-boundary))	spec/reference/interop.md
+std	L596	(spec §9)	([Concurrency](../spec/quince-spec.md#long-lived-work-fire-and-forget))	spec/reference/concurrency.md
+std	L600	(spec §11)	([Interop with C](../spec/quince-spec.md#11-interop))	spec/reference/interop.md
+std	L677	as declared in the spec appendix	as declared in the spec's [Built-in effect operations](../spec/quince-spec.md#built-in-effect-operations)	spec/reference/effects.md#built-in-effect-operations
+std	L677	(spec §5)	([Program execution](../spec/quince-spec.md#capabilities-at-runtime))	spec/reference/execution.md
+std	L701	(spec §3)	([Types](../spec/quince-spec.md#mutation))	spec/reference/types.md
+std	L707	as declared in the spec appendix	as declared in the spec's [Built-in effect operations](../spec/quince-spec.md#built-in-effect-operations)	spec/reference/effects.md#built-in-effect-operations
+std	L707	(spec §5)	([Program execution](../spec/quince-spec.md#capabilities-at-runtime))	spec/reference/execution.md
+std	L743	(spec §3)	([Items](../spec/quince-spec.md#constants))	spec/reference/items.md
+std	L754	(spec §5)	([Effects](../spec/quince-spec.md#effect-variables))	spec/reference/effects.md
+std	L754	(spec §3)	([Types](../spec/quince-spec.md#mutation))	spec/reference/types.md
+std	L773	(spec §3)	([Serialization](../spec/quince-spec.md#serialization))	spec/reference/prelude.md#serialization
+std	L806	(spec §3)	([Serialization](../spec/quince-spec.md#serialization))	spec/reference/prelude.md#serialization
+std	L934	(spec §11)	([Interop with C](../spec/quince-spec.md#c-types))	spec/reference/interop.md
+std	L944	(spec §11)	([Interop with C](../spec/quince-spec.md#callbacks))	spec/reference/interop.md
+std	L948	(spec §11)	([Interop with C](../spec/quince-spec.md#11-interop))	spec/reference/interop.md
+std	L952	(spec §6)	([Testing](../spec/quince-spec.md#unit-tests))	spec/reference/testing.md
+std	L956	(spec §6)	([Testing](../spec/quince-spec.md#unit-tests))	spec/reference/testing.md
+std	L961	spec §6	[Testing](../spec/quince-spec.md#unit-tests)	spec/reference/testing.md
+std	L963	(spec §6)	([Testing](../spec/quince-spec.md#property-tests))	spec/reference/testing.md
+std	L980	(spec §3)	([Effects](../spec/quince-spec.md#declaring-and-inferring))	spec/reference/effects.md
+std	L984	(spec §7)	([Packages and modules](../spec/quince-spec.md#modules-and-imports))	spec/reference/packages.md
+std	L1021	Spec §3 forbids	The spec ([Items](../spec/quince-spec.md#interfaces)) forbids	spec/reference/items.md
+std	L1022	(spec §6)	([Testing](../spec/quince-spec.md#deterministic-testing))	spec/reference/testing.md
+std	L1023	(spec §2)	([Lexical structure](../spec/quince-spec.md#literals))	spec/reference/lexical.md
+std	L1024	The spec appendix lists the prelude.	The spec's [table of prelude names](../spec/quince-spec.md#prelude-names) lists the prelude.	spec/reference/prelude.md#prelude-names
+std	L1025	in spec §5	in [Effects](../spec/quince-spec.md#5-effects-and-capabilities)	spec/reference/effects.md
+std	L1035	Settled by the spec appendix,	Settled by the spec ([Program execution](../spec/quince-spec.md#built-in-effect-operations)),	spec/reference/execution.md
+std	L1038	as spec §5 now declares	as [Effects](../spec/quince-spec.md#5-effects-and-capabilities) now declares	spec/reference/effects.md
+std	L1046	in this appendix	in this section	-
+std	L1046	(section 9)	([Concurrency](../spec/quince-spec.md#shared-state))	spec/reference/concurrency.md
+std	L1046	(section 5)	([Effects](../spec/quince-spec.md#effect-variables))	spec/reference/effects.md
+std	L1050	(below)	([Option and Result](#option-and-result))	std/API.md#option-and-result
+std	L1064	(section 9)	([Cancellation](../spec/quince-spec.md#cancellation))	spec/reference/concurrency.md#cancellation
+std	L1064	(section 11)	([Interop with C](../spec/quince-spec.md#memory-across-the-boundary))	spec/reference/interop.md
+std	L1105	(section 3)	(Types)	spec/reference/types.md
+std	L1145	(section 2)	([Ranges](../spec/quince-spec.md#ranges))	spec/reference/expressions.md#ranges
+std	L1209	(section 11)	(Interop with C)	spec/reference/interop.md
+std	L1295	(section 3)	([Mutation](../spec/quince-spec.md#mutation))	spec/reference/types.md#mutation
+std	L1300	(section 3)	([Items](../spec/quince-spec.md#interfaces))	spec/reference/items.md
+std	L1430	(section 4)	([Errors and failure](../spec/quince-spec.md#expected-failures-result-and-option))	spec/reference/errors.md
+std	L1553	(section 9)	([Concurrency](../spec/quince-spec.md#shared-state))	spec/reference/concurrency.md
+std	L1556	(section 9)	([Concurrency](../spec/quince-spec.md#long-lived-work-fire-and-forget))	spec/reference/concurrency.md
+std	L1556	(section 11)	([Interop with C](../spec/quince-spec.md#11-interop))	spec/reference/interop.md
+std	L1568	(section 3)	([Types](../spec/quince-spec.md#mutation))	spec/reference/types.md
+std	L1572	(section 7)	([Packages and modules](../spec/quince-spec.md#modules-and-imports))	spec/reference/packages.md
+std	L1576	Sections 3, 5, 9	[Types](../spec/quince-spec.md#3-type-system), [Effects](../spec/quince-spec.md#5-effects-and-capabilities), [Concurrency](../spec/quince-spec.md#9-concurrency)	spec/reference/types.md spec/reference/effects.md spec/reference/concurrency.md
+std	L1577	Sections 5, 6	[Effects](../spec/quince-spec.md#5-effects-and-capabilities), [Testing](../spec/quince-spec.md#6-contracts-and-testing)	spec/reference/effects.md spec/reference/testing.md
+std	L1578	Section 3	[Types](../spec/quince-spec.md#3-type-system)	spec/reference/types.md
+std	L1579	Sections 3, 7	[Types](../spec/quince-spec.md#3-type-system), [Packages and modules](../spec/quince-spec.md#modules-and-imports)	spec/reference/types.md spec/reference/packages.md
+std	L1580	Section 3	[Types](../spec/quince-spec.md#3-type-system)	spec/reference/types.md
+std	L1581	Sections 5, 7, 9	[Effects](../spec/quince-spec.md#5-effects-and-capabilities), [Packages and modules](../spec/quince-spec.md#modules-and-imports), [Concurrency](../spec/quince-spec.md#9-concurrency)	spec/reference/effects.md spec/reference/packages.md spec/reference/concurrency.md
+std	L1582	Section 5	[Effects](../spec/quince-spec.md#5-effects-and-capabilities)	spec/reference/effects.md
+std	L1583	Sections 3, 11	[Types](../spec/quince-spec.md#3-type-system), [Interop with C](../spec/quince-spec.md#11-interop)	spec/reference/types.md spec/reference/interop.md
+std	L1584	Sections 3, 9, 11	[Types](../spec/quince-spec.md#3-type-system), [Concurrency](../spec/quince-spec.md#9-concurrency), [Interop with C](../spec/quince-spec.md#11-interop)	spec/reference/types.md spec/reference/concurrency.md spec/reference/interop.md
+std	L1585	Section 9	[Concurrency](../spec/quince-spec.md#9-concurrency)	spec/reference/concurrency.md
+std	L1586	Sections 3, 11	[Types](../spec/quince-spec.md#3-type-system), [Interop with C](../spec/quince-spec.md#11-interop)	spec/reference/types.md spec/reference/interop.md
+std	L1587	Section 5, Appendix: Prelude	[Effects](../spec/quince-spec.md#5-effects-and-capabilities), [Built-in effect operations](../spec/quince-spec.md#built-in-effect-operations)	spec/reference/effects.md spec/reference/effects.md#built-in-effect-operations
+std	L1588	Section 5, Appendix: Prelude	[Effects](../spec/quince-spec.md#5-effects-and-capabilities), [Built-in effect operations](../spec/quince-spec.md#built-in-effect-operations)	spec/reference/effects.md spec/reference/effects.md#built-in-effect-operations
+std	L1589	Appendix: Prelude	[Built-in effect operations](../spec/quince-spec.md#built-in-effect-operations)	spec/reference/effects.md#built-in-effect-operations
+std	L1590	Appendix: Prelude	[Duration, Timestamp, Url and Regex](#duration-timestamp-url-and-regex)	std/API.md#duration-timestamp-url-and-regex
+std	L1592	in section 5	in [Effects](../spec/quince-spec.md#5-effects-and-capabilities)	spec/reference/effects.md
