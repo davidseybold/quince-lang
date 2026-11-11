@@ -312,7 +312,7 @@ fn space_deletions(at: usize, body: &str) -> Option<Vec<(Range<usize>, String)>>
 }
 
 /// True when the invalid escape `text` is a `\u` with no closing `}`. Deleting the `\` of a
-/// needless escape right after it would join the two into one escape, so that one gets no fix.
+/// needless escape right after it could join the two into one escape, so that one gets no fix.
 pub(super) fn opens_unicode(text: &str) -> bool {
     text.starts_with("\\u") && !text.ends_with('}')
 }
