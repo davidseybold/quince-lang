@@ -1,29 +1,44 @@
-//! `SyntaxKind`: every kind of token, and later every kind of CST node.
+//! `SyntaxKind`: every kind of token and of CST node.
 
 macro_rules! syntax_kinds {
     (
         tokens: [$($(#[$meta:meta])* $token:ident),* $(,)?],
         keywords: [$($kw:ident = $kw_text:literal),* $(,)?],
-        punctuation: [$($punct:ident = $punct_text:literal),* $(,)?] $(,)?
+        punctuation: [$($punct:ident = $punct_text:literal),* $(,)?],
+        joined: [$($joined:ident = $joined_text:literal),* $(,)?],
+        nodes: [$($(#[$node_meta:meta])* $node:ident),* $(,)?] $(,)?
     ) => {
-        /// The kind of a token. The parser will add its node kinds to the same enum.
+        /// The kind of a token or a CST node.
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
         #[repr(u16)]
         pub enum SyntaxKind {
             $($(#[$meta])* $token,)*
             $($kw,)*
             $($punct,)*
+            $($joined,)*
+            $($(#[$node_meta])* $node,)*
         }
 
         impl SyntaxKind {
+            /// Every kind, in order, so `ALL[kind as usize] == kind`.
+            pub const ALL: &[SyntaxKind] = &[
+                $(SyntaxKind::$token,)* $(SyntaxKind::$kw,)* $(SyntaxKind::$punct,)*
+                $(SyntaxKind::$joined,)* $(SyntaxKind::$node,)*
+            ];
             /// The keywords of `r[lex.keywords]`, with their kinds.
             pub const KEYWORDS: &[(&str, SyntaxKind)] = &[$(($kw_text, SyntaxKind::$kw)),*];
-            /// Every punctuation token, with its kind. `>=` and `>>` aren't tokens: the parser
-            /// joins two adjacent tokens to form them.
+            /// Every punctuation token the lexer produces, with its kind. `>=` and `>>` aren't
+            /// among them: see [`SyntaxKind::JOINED`].
             pub const PUNCTUATION: &[(&str, SyntaxKind)] =
                 &[$(($punct_text, SyntaxKind::$punct)),*];
-            /// Every kind that is neither a keyword nor punctuation, for tests that walk every
-            /// kind.
+            /// The tokens only the CST has: the tree builder joins two adjacent lexer tokens,
+            /// a `>` and the token after it, into one of these when the parser asks.
+            pub const JOINED: &[(&str, SyntaxKind)] =
+                &[$(($joined_text, SyntaxKind::$joined)),*];
+            /// Every node kind.
+            pub const NODES: &[SyntaxKind] = &[$(SyntaxKind::$node),*];
+            /// Every lexer token kind that is neither a keyword nor punctuation, for tests that
+            /// walk them all.
             #[cfg(test)]
             pub const TOKENS: &[SyntaxKind] = &[$(SyntaxKind::$token),*];
         }
@@ -68,6 +83,16 @@ syntax_kinds! {
         Lt = "<", LtEq = "<=", LtLt = "<<", Gt = ">",
         Amp = "&", AmpAmp = "&&", Pipe = "|", PipePipe = "||", Caret = "^",
     ],
+    joined: [GtGt = ">>", GtEq = ">="],
+    // Each node kind is named after the grammar production it holds, where there is one.
+    // A layer of the parser adds the kinds it builds.
+    nodes: [
+        /// The whole file: the root, and the one node that may be empty.
+        File,
+        /// Tokens the parser skipped while recovering from an error.
+        Skipped,
+        FnDecl, ImplDecl, Block, Name,
+    ],
 }
 
 impl SyntaxKind {
@@ -77,6 +102,24 @@ impl SyntaxKind {
             .iter()
             .find(|(kw, _)| *kw == text)
             .map(|&(_, kind)| kind)
+    }
+
+    /// True for the token kinds the parser never sees: whitespace, line endings, comments,
+    /// block comments, the byte order mark, `Error` and `Semicolon`. A `DocComment` is trivia
+    /// only where it documents nothing, which the parser decides, so it isn't one of these.
+    pub fn is_trivia(self) -> bool {
+        use SyntaxKind::*;
+        matches!(
+            self,
+            Whitespace | Newline | Comment | BlockComment | Bom | Error | Semicolon
+        )
+    }
+
+    /// True for the node kinds that take the comments directly above them: declarations,
+    /// fields, enum variants, members and match arms. The README's CST section has the rule.
+    pub fn attaches_comments(self) -> bool {
+        use SyntaxKind::*;
+        matches!(self, FnDecl | ImplDecl)
     }
 
     /// True for the kinds after which a line always continues, whatever their role

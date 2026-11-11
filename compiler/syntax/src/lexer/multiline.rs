@@ -4,7 +4,7 @@
 use super::Lexer;
 use super::control::ControlIn;
 use crate::literal::escape;
-use crate::{LexError, SyntaxKind, codes};
+use crate::{SyntaxError, SyntaxKind, codes};
 use quince_diagnostics::Applicability;
 use std::ops::Range;
 
@@ -131,7 +131,7 @@ impl Lexer<'_> {
             "" => String::new(),
             _ => format!(", indented with {}", describe(shared)),
         };
-        let error = LexError::new(
+        let error = SyntaxError::new(
             at..at + QUOTES.len(),
             codes::MULTILINE_LAYOUT,
             format!(
@@ -168,7 +168,7 @@ impl Lexer<'_> {
             "a multi-line string's text starts on the line after its opening `\"\"\"`";
         let Some(close) = find_quotes(tail, raw) else {
             let len = tail.trim_end_matches([' ', '\t']).len();
-            self.errors.push(LexError::new(
+            self.errors.push(SyntaxError::new(
                 start..start + len,
                 codes::MULTILINE_LAYOUT,
                 format!("{starts_late}: move this text to the next line"),
@@ -182,7 +182,7 @@ impl Lexer<'_> {
             0 => start + close..start + close + QUOTES.len(),
             len => start..start + len,
         };
-        self.errors.push(LexError::new(
+        self.errors.push(SyntaxError::new(
             range,
             codes::MULTILINE_LAYOUT,
             format!("{starts_late}, and it closes on a line of its own"),
@@ -210,7 +210,7 @@ impl Lexer<'_> {
                 self.bump(SyntaxKind::StringText, line.len());
             }
         }
-        let error = LexError::new(
+        let error = SyntaxError::new(
             open,
             codes::UNCLOSED_MULTILINE,
             "this multi-line string has no closing `\"\"\"` line, so it runs to the end of the \
@@ -327,7 +327,7 @@ fn describe(indent: &str) -> String {
 /// The E0012 for a content `line` that doesn't start with the closing line's `indent`. It
 /// spans the line's indentation, or, when it has none, the line and its line ending, so that
 /// it never shares a span with an error inside the line.
-fn indent_error(text: &str, line: Range<usize>, indent: &str) -> LexError {
+fn indent_error(text: &str, line: Range<usize>, indent: &str) -> SyntaxError {
     let lead = &text[line.start..line.start + indent_len(&text[line.clone()])];
     let range = if lead.is_empty() {
         let ending = if text[line.end..].starts_with("\r\n") {
@@ -359,12 +359,12 @@ fn indent_error(text: &str, line: Range<usize>, indent: &str) -> LexError {
              least that far, or move the closing `\"\"\"` left"
         )
     };
-    LexError::new(range, codes::MULTILINE_LAYOUT, message)
+    SyntaxError::new(range, codes::MULTILINE_LAYOUT, message)
 }
 
 /// The E0012 at the closing line's `indent`, at `range`, when none of the lines, whose
 /// indentations are `leads`, starts with it.
-fn closing_error(range: Range<usize>, indent: &str, leads: &[&str]) -> LexError {
+fn closing_error(range: Range<usize>, indent: &str, leads: &[&str]) -> SyntaxError {
     let message = if leads.iter().all(|lead| indent.starts_with(lead)) {
         // Each lead is a prefix of the others, so the shortest is what they share.
         let shared = leads.iter().min_by_key(|lead| lead.len()).expect("a line");
@@ -386,5 +386,5 @@ fn closing_error(range: Range<usize>, indent: &str, leads: &[&str]) -> LexError 
             describe(indent)
         )
     };
-    LexError::new(range, codes::MULTILINE_LAYOUT, message)
+    SyntaxError::new(range, codes::MULTILINE_LAYOUT, message)
 }

@@ -1,6 +1,6 @@
 //! `decode_source`: the one place source bytes become text (`r[lex.source.utf8]`).
 
-use crate::{LexError, codes};
+use crate::{SyntaxError, codes};
 use std::ops::Range;
 
 /// Source text decoded from bytes, with what decoding replaced.
@@ -11,7 +11,7 @@ pub struct Decoded {
     /// The byte range in `text` of each U+FFFD that replaced invalid bytes, in order.
     pub replaced: Vec<Range<u32>>,
     /// One E0014 for each line that holds invalid bytes, at its first run.
-    pub errors: Vec<LexError>,
+    pub errors: Vec<SyntaxError>,
 }
 
 impl Decoded {
@@ -63,7 +63,7 @@ pub fn decode_source(bytes: &[u8]) -> std::io::Result<Decoded> {
             in_run = true;
         }
     }
-    let mut errors: Vec<LexError> = Vec::new();
+    let mut errors: Vec<SyntaxError> = Vec::new();
     let mut last_line = None;
     for ((bytes, line), range) in runs.iter().zip(&replaced) {
         if last_line == Some(*line) {
@@ -78,7 +78,7 @@ pub fn decode_source(bytes: &[u8]) -> std::io::Result<Decoded> {
             shown.join(" ")
         );
         let range = range.start as usize..range.end as usize;
-        errors.push(LexError::new(range, codes::INVALID_UTF8, message));
+        errors.push(SyntaxError::new(range, codes::INVALID_UTF8, message));
     }
     Ok(Decoded {
         text,

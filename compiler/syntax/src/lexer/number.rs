@@ -1,7 +1,7 @@
 //! Numbers: where an `Int` or `Float` token ends, and what is wrong with it (E0008).
 
 use super::Lexer;
-use crate::{LexError, SyntaxKind, codes};
+use crate::{SyntaxError, SyntaxKind, codes};
 use quince_diagnostics::Applicability;
 use std::ops::Range;
 
@@ -194,10 +194,10 @@ fn problem_error(
     kind: SyntaxKind,
     range: Range<usize>,
     problem: Problem,
-) -> LexError {
+) -> SyntaxError {
     let part = &text[range.clone()];
     let at = start + range.start..start + range.end;
-    let error = |message: String| LexError::new(at.clone(), codes::MALFORMED_NUMBER, message);
+    let error = |message: String| SyntaxError::new(at.clone(), codes::MALFORMED_NUMBER, message);
     let lowercase = |what: &str| {
         let lower = part.to_ascii_lowercase();
         error(format!("{what} is written lowercase")).with_fix(

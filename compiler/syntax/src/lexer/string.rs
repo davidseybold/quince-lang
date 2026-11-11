@@ -4,7 +4,7 @@
 use super::Lexer;
 use super::control::{ControlIn, code_point, is_control};
 use crate::literal::{BadEscape, escape};
-use crate::{LexError, SyntaxKind, codes};
+use crate::{SyntaxError, SyntaxKind, codes};
 use quince_diagnostics::Applicability;
 use std::ops::Range;
 
@@ -146,7 +146,7 @@ impl Lexer<'_> {
         if self.rest().starts_with('\r') && !self.rest().starts_with("\r\n") {
             return;
         }
-        let error = LexError::new(open, codes::UNCLOSED_STRING, message.to_string());
+        let error = SyntaxError::new(open, codes::UNCLOSED_STRING, message.to_string());
         // After a `\`, an inserted `"` would be escaped, and the string still unclosed.
         let error = if dangling {
             error
@@ -185,10 +185,10 @@ fn is_word(b: u8) -> bool {
 }
 
 /// The E0007 for the braces at `start` around `body`, and their `}` when `closed`.
-fn interpolation_error(start: usize, body: &str, closed: bool) -> LexError {
+fn interpolation_error(start: usize, body: &str, closed: bool) -> SyntaxError {
     let range = start..start + 1 + body.len() + usize::from(closed);
     let error =
-        |message: String| LexError::new(range.clone(), codes::INVALID_INTERPOLATION, message);
+        |message: String| SyntaxError::new(range.clone(), codes::INVALID_INTERPOLATION, message);
     let brace = "a literal brace is written `\\{`";
     if !closed {
         return error(format!(
@@ -269,9 +269,9 @@ pub(super) fn escape_error(
     at: usize,
     problem: BadEscape,
     within: EscapeIn,
-) -> LexError {
+) -> SyntaxError {
     let error =
-        |message: String| LexError::new(at..at + text.len(), codes::INVALID_ESCAPE, message);
+        |message: String| SyntaxError::new(at..at + text.len(), codes::INVALID_ESCAPE, message);
     let example = "as in `\\u{1F600}`";
     // An unknown escape, which shows a control character by its code point, never as itself.
     let escaped = match problem {

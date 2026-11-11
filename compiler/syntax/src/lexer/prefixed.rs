@@ -5,7 +5,7 @@ use super::Lexer;
 use super::control::{ControlIn, is_control};
 use super::string::{EscapeIn, escape_error, opens_unicode};
 use crate::literal::{BadEscape, TAGS, byte_escape};
-use crate::{LexError, SyntaxKind, codes};
+use crate::{SyntaxError, SyntaxKind, codes};
 use quince_diagnostics::Applicability;
 use std::ops::Range;
 
@@ -173,7 +173,7 @@ impl<'a> Lexer<'a> {
             ..=8 => format!(", `{escapes}`"),
             _ => String::new(),
         };
-        let error = LexError::new(
+        let error = SyntaxError::new(
             part.clone(),
             codes::NON_ASCII_BYTES,
             format!(
@@ -192,7 +192,7 @@ impl<'a> Lexer<'a> {
 
 /// The E0010 for the identifier `prefix`, at `range`, before a `"`, or before `"""` when it is
 /// `multiline`.
-fn unknown_tag_error(range: Range<usize>, prefix: &str, multiline: bool) -> LexError {
+fn unknown_tag_error(range: Range<usize>, prefix: &str, multiline: bool) -> SyntaxError {
     let message = if multiline && prefix == "b" {
         "bytes literals have no multi-line form: write a `b\"...\"` literal on one line, with \
          `\\n` for each line break"
@@ -205,5 +205,5 @@ fn unknown_tag_error(range: Range<usize>, prefix: &str, multiline: bool) -> LexE
              and `b\"` start raw strings and bytes literals"
         )
     };
-    LexError::new(range, codes::UNKNOWN_TAG, message)
+    SyntaxError::new(range, codes::UNKNOWN_TAG, message)
 }

@@ -1,6 +1,6 @@
 # quince_syntax
 
-The lexer now, and the parser, CST and formatter later. This file holds the contracts the spec leaves to the implementation: what a token is, and which errors the lexer owns. The design is in [`docs/design/m1-lexer.md`](../../docs/design/m1-lexer.md). The language rules are in the spec's [Lexical structure](../../spec/reference/lexical.md) chapter, and aren't restated here.
+The lexer and the CST's tree builder now, and the parser and formatter later. This file holds the contracts the spec leaves to the implementation: what a token is, which errors the lexer owns, and where trivia sits in the CST. The designs are in [`docs/design/m1-lexer.md`](../../docs/design/m1-lexer.md) and [`docs/design/m1-parser.md`](../../docs/design/m1-parser.md). The language rules are in the spec's [Lexical structure](../../spec/reference/lexical.md) chapter, and aren't restated here.
 
 ## Source text
 
@@ -14,7 +14,7 @@ The lexer now, and the parser, CST and formatter later. This file holds the cont
 - `lex(&Decoded)` lexes decoded text into a `Lexed`, which holds its tokens and errors. `lex_str(&str)` lexes text that never came from bytes.
 - A `Token` is a `SyntaxKind` and a byte length. A token starts where the one before it ends.
 - Every byte belongs to exactly one token, so the token texts concatenate to the input. No token is empty.
-- The lexer never fails and never stops early. An error produces a `LexError` (byte offsets, a code, a message and fixes) and a token, and lexing goes on. `Lexed::diagnostics` turns the errors into `Diagnostic`s through a `LineIndex`.
+- The lexer never fails and never stops early. An error produces a `SyntaxError` (byte offsets, a code, a message and fixes) and a token, and lexing goes on. `Lexed::diagnostics` turns the errors into `Diagnostic`s through a `LineIndex`.
 - Trivia, which the parser skips:
   - `Whitespace`: a run of spaces and tabs.
   - `Comment`: `//` up to its line ending.
@@ -70,3 +70,17 @@ The lexer reports each lexical problem once, and the parser must not report it a
 | E0015 | A run of control characters other than tabs and line endings, or bidirectional-format characters (`r[lex.source.control]`), in a literal or comment. Not inside an invalid escape, which is an E0006, nor a bidirectional character in bytes, which is an E0011, nor in the unchecked text of a multi-line string | In a `"` or `"""` string, a test's name or a char, replace each with its `\u{...}` escape; in bytes, with its `\x` escape (`safe`). None in raw and tagged literals, comments, or an interpolation's braces |
 
 Messages describe Quince, the same way for every input. An error says what Quince expects, such as the escapes a string takes or what a path is, and the lexer never looks for a construct from another language to call it out (decided by David, 2026-11-11). An E0006 in bytes gives the `\x` escapes for a `\u{...}` escape, and E0011 the `\x` escapes of the character, since both are Quince escapes. No message holds a control or bidirectional-format character: it names one by its code point, such as U+0007.
+
+## The CST
+
+The tree is a `rowan` tree, in the `cst` module. The parser's layer 1 completes this section with the shapes of the nodes.
+
+- `SyntaxKind` holds the node kinds after the token kinds, and `QuinceLanguage` maps it to `rowan`. A node kind is named after the grammar production it holds, where there is one. `File` is the root, and `Skipped` holds the tokens the parser skipped while recovering from an error.
+- The tree is lossless: its text is the input, and its tokens are the lexer's, in order, with their kinds. The exceptions are `GtGt` and `GtEq`, CST-only tokens that each hold a `>` and the token right after it, which the parser joins. No token is empty, and no node is, except the root of an empty file.
+- The parser never builds the tree. It emits events: start a node, finish it, take the next significant token, join the next two, and report an error. The tree builder turns them and the lexer's tokens into the tree, and places every token the parser didn't read. Those are the trivia: the kinds for which `SyntaxKind::is_trivia()` is true, and doc comments that document nothing.
+- Where trivia goes:
+  - Trivia before a node's first token goes outside the node, before it.
+  - Trivia after a node's last token goes outside it too, so it lands in the node that holds the next token. A comment at the end of a block's last line goes in the block, before its `}`. Trivia after the last token goes in the root.
+  - The exception: comment lines directly above a node whose kind `attaches_comments()` (a declaration, field, enum variant, member or match arm) go inside the node, with their line endings and the indentation of the node's own line. A comment line starts a line, holds only comments and whitespace, and ends with a line ending. The run stops at a blank line, or at a line with anything else on it, such as code or a `;`. The indentation before the first comment stays outside.
+  - For that rule, a comment is a `Comment`, a `BlockComment`, an `Error` token or a doc comment the parser left as trivia. So a comment at the end of a line of code never goes in the node below it. The byte order mark never goes inside a node: it belongs to the file.
+  - Comments go in the outermost node that starts at the token below them, and only when that node's kind takes them.

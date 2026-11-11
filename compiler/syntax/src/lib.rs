@@ -3,11 +3,13 @@
 //! The token contract and the error contract the parser builds on are in this crate's
 //! `README.md`.
 
+mod cst;
 mod kind;
 mod lexer;
 pub mod literal;
 mod source;
 
+pub use cst::{QuinceLanguage, SyntaxElement, SyntaxNode, SyntaxToken};
 pub use kind::SyntaxKind;
 pub use lexer::{Lexed, Token, lex, lex_str};
 pub use source::{Decoded, decode_source};
@@ -32,7 +34,9 @@ pub mod codes {
     pub const LONE_CARRIAGE_RETURN: &str = "E0013";
     pub const INVALID_UTF8: &str = "E0014";
     pub const CONTROL_CHARACTER: &str = "E0015";
-    pub const ALL: [&str; 15] = [
+    /// The codes the lexer and `decode_source` report. The lexer's mutation test requires
+    /// every one of them from its mutants.
+    pub const LEXER: &[&str] = &[
         UNKNOWN_CHARACTER,
         SEMICOLON,
         BLOCK_COMMENT,
@@ -49,29 +53,36 @@ pub mod codes {
         INVALID_UTF8,
         CONTROL_CHARACTER,
     ];
+    /// The codes the parser reports.
+    pub const PARSER: &[&str] = &[];
+
+    /// Every code this crate reports.
+    pub fn all() -> impl Iterator<Item = &'static str> {
+        LEXER.iter().chain(PARSER).copied()
+    }
 }
 
-/// A problem found while decoding or lexing, in byte offsets of the decoded text.
+/// A problem found while decoding, lexing or parsing, in byte offsets of the decoded text.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LexError {
+pub struct SyntaxError {
     pub range: Range<u32>,
     /// One of [`codes`].
     pub code: &'static str,
     pub message: String,
-    pub fixes: Vec<LexFix>,
+    pub fixes: Vec<SyntaxFix>,
 }
 
 /// A fix whose edits replace byte ranges of the decoded text.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LexFix {
+pub struct SyntaxFix {
     pub description: String,
     pub applicability: Applicability,
     pub edits: Vec<(Range<u32>, String)>,
 }
 
-impl LexError {
-    fn new(range: Range<usize>, code: &'static str, message: String) -> LexError {
-        LexError {
+impl SyntaxError {
+    fn new(range: Range<usize>, code: &'static str, message: String) -> SyntaxError {
+        SyntaxError {
             range: offset(range.start)..offset(range.end),
             code,
             message,
@@ -84,12 +95,12 @@ impl LexError {
         description: &str,
         applicability: Applicability,
         edits: Vec<(Range<usize>, String)>,
-    ) -> LexError {
+    ) -> SyntaxError {
         let edits = edits
             .into_iter()
             .map(|(range, text)| (offset(range.start)..offset(range.end), text))
             .collect();
-        self.fixes.push(LexFix {
+        self.fixes.push(SyntaxFix {
             description: description.to_string(),
             applicability,
             edits,
@@ -100,7 +111,7 @@ impl LexError {
     /// This error as a diagnostic in `file`, with positions from `index`, the index of the
     /// decoded text.
     pub fn to_diagnostic(&self, file: &str, index: &LineIndex) -> Diagnostic {
-        let code = Code::parse(self.code).expect("lexer codes are well formed");
+        let code = Code::parse(self.code).expect("syntax codes are well formed");
         let span = |range: &Range<u32>| Span {
             file: file.to_string(),
             start: index.position(range.start as usize),

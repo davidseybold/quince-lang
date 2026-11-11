@@ -84,7 +84,8 @@ fn mutations_keep_the_invariants() {
             reported.extend(errors.iter().map(|e| e.code));
         }
     }
-    let missing: Vec<_> = (codes::ALL.iter())
+    let missing: Vec<_> = codes::LEXER
+        .iter()
         .filter(|c| !reported.contains(*c))
         .collect();
     assert!(missing.is_empty(), "no mutant reported {missing:?}");

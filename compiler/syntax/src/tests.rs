@@ -1,10 +1,11 @@
-//! Lexer tests: token dumps and the invariants.
+//! Tests: the lexer's token dumps and invariants here, and each area in its own module.
 
 use crate::{Lexed, SyntaxKind, lex_str};
 use std::path::Path;
 
 mod chars;
 mod control;
+mod cst;
 mod errors;
 mod multiline;
 mod mutations;
