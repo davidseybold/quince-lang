@@ -253,7 +253,7 @@ The operators Quince leaves out (`r[expr.op.excluded]`) get no code or hint of t
 
 | Code | Problem | Fix | Waits on |
 | --- | --- | --- | --- |
-| E0016 | A token that can't go here: "expected X, found Y" | Insert a line break after an attribute on its declaration's line (`safe`); insert a missing `,` between list items on separate lines (`needs-review`). Otherwise none | |
+| E0016 | A token that can't go here: "expected X, found Y" | Insert a line break after an attribute on its declaration's line (`safe`); insert a missing `,` between list items on separate lines (`needs-review`); remove parentheses around a type that isn't a function type (`safe`, Q14). Otherwise none | |
 | E0017 | An opening bracket with no closing one, at the opener | None | |
 | E0018 | A line break that ends a statement too early, including before `else` or a body's `{` (decision 4) | Replace the break and the indentation after it with a space (`safe`), unless a comment ends the line | Q3, Q12 |
 | E0019 | Operators that need parentheses (decision 6) | Add the parentheses for the usual reading (`needs-review`) | |
@@ -383,7 +383,7 @@ So `a < b > c` stays a chained comparison with its fix, as the spec's example wa
 
 **8. Where a `uses` list ends (layer 2).** `effects = "*" | effect_ref { "," effect_ref }`, and `type_path` includes `c_name`, so in `handler: fn(Request) -> Response uses E, host: String` (`std/API.md`, `http.serve`), `host` could be read as a second effect. The same goes for `Pool.new`'s `open:` parameter, struct fields, and `Output = T` in a bound. Proposed: `r[effect.uses-list]` "A comma continues a `uses` list only when a type path follows it that isn't followed by `:` or `=`. So a parameter, a field or a named bound argument after a function type ends its effects. In a list of types, a function type's effects take every type path after them. That applies to type arguments, tuple types and a function type's parameters, so `Map<String, fn() uses Io, Db>` gives the function both effects."
 
-*Consequence:* a function type with effects can't be followed by another type in such a list. `(fn() uses Io, Int)` reads `Int` as a second effect, which is an error, and `fn(fn() uses Io, Int) -> T` does the same. Each is written with an alias for the function type. Neither the spec nor `std/API.md` has such a type today.
+*Consequence:* a function type with effects that another type follows in such a list is written in parentheses (question 14). `(fn() uses Io, Int)` reads `Int` as a second effect, which is an error, so it is written `((fn() uses Io), Int)`, and `fn(fn() uses Io, Int) -> T` is written `fn((fn() uses Io), Int) -> T`. Neither the spec nor `std/API.md` has such a type today.
 
 **9. Doc comments and attributes on members (layer 7).** In the grammar, `impl_item`, the members of `interface_decl` and `effect_decl`, and the items of `foreign_decl` take no doc comments, and the first three take no attributes. But `@deprecated` applies to "any public declaration", and `@unchecked` and `@verify` to functions. Proposed: each of the four takes `{ doc_comment } { attribute NEWLINE }` before it, as `decl` does. For the grammar:
 ```
@@ -408,11 +408,28 @@ This gives one way to write it.
 
 No preference beyond saying which. Allowing it is the reversible direction, since forbidding it later breaks code.
 
-**14. Whose effects follow a returned function type (layer 2).** In `fn make() -> fn(Int) -> Int uses Io {`, the `uses Io` can belong to the returned function type or to `make`. The grammar has no parenthesized type, so neither reading can be forced. Proposed: `r[effect.uses-return]` "When a function's return type is a function type, a `uses` after it belongs to the outer function. To return a function with effects, name its type with an alias: `type Handler = fn(Request) -> Response uses Net`." The same holds for closures and for a function type whose return type is a function type.
+**14. Whose effects follow a returned function type (layer 2).** In `fn make() -> fn(Int) -> Int uses Io {`, the `uses Io` can belong to the returned function type or to `make`. The grammar has no parenthesized type, so neither reading can be forced. Proposed (decided by David, 2026-11-11, pending the wording):
+- `r[effect.uses-return]` "When a function's return type is a function type written without parentheses, a `uses` after it belongs to the outer function." The same holds for closures, and for a function type whose return type is a function type.
+- `r[type.fn-parens]` "A function type may be written in parentheses, which end it: `fn make() -> (fn(Int) -> Int uses Io) uses Net`. Only a function type takes them: `(Int)` is an error, since a single type needs no grouping." Its fix removes the parentheses.
+- For the grammar, a `fn_type` production, used both bare and in parentheses:
+```
+type         = type_path [ type_args ] | "(" ")" | "(" type "," type { "," type } [ "," ] ")"
+             | fn_type | "(" fn_type ")"
+fn_type      = "fn" "(" [ type { "," type } ] ")" [ "->" type ] [ "uses" effects ]
+```
 
-*Why:* every signature reads `-> T uses E`, so an agent reading the header expects the effects to be the declaration's. Returning a function with effects is the rarer case.
+So the three cases read:
+```
+fn make_plain() -> fn(Int) -> Int uses Net {            // make_plain uses Net
+fn make() -> (fn(Int) -> Int uses Io) {                 // the returned function uses Io
+fn make_logged() -> (fn(Int) -> Int uses Io) uses Net { // both
+```
 
-*Alternative:* the innermost function type takes the `uses`, as a greedy parse would. Rejected: a declaration that returns a function would then need an alias to state its own effects.
+*Why:* every signature reads `-> T uses E`, so an agent reading the header expects the effects to be the declaration's. The parentheses keep a returned function's effects in the signature, where they can be seen, rather than in an alias elsewhere. An alias would also draw `r[item.alias.lint]`'s warning in a public API. Allowing parentheses only around function types keeps one spelling for every other type.
+
+*Alternatives:*
+- An alias, `type Transform = fn(Int) -> Int uses Io`, as the only way. Rejected: it hides the effects from the signature, and the linter flags it in public APIs.
+- The innermost function type takes the `uses`, as a greedy parse would. Rejected: a declaration that returns a function would then need parentheses or an alias to state its own effects.
 
 ## Risks and trade-offs
 
@@ -468,7 +485,7 @@ Rule IDs in brackets are what each task's fixtures cite. Grammar productions are
 
 **Layer 2: `m1/parser-types`**
 - [ ] Spec: questions 8, 11 and 14, and a bump.
-- [ ] Types, generics, bounds, effect lists; joined `>>` and `>=`. [`grammar.type`, `grammar.type_args`, `grammar.generics`, `grammar.bounds`, `grammar.effects`, `lex.no-shift-token`]
+- [ ] Types, generics, bounds, effect lists; parenthesized function types (question 14); joined `>>` and `>=`. [`grammar.type`, `grammar.fn_type` once approved, `grammar.type_args`, `grammar.generics`, `grammar.bounds`, `grammar.effects`, `lex.no-shift-token`]
 - [ ] Struct, enum, newtype, alias and import declarations; attributes; doc comments; E0024. [`grammar.struct_decl`, `grammar.enum_decl`, `grammar.newtype_decl`, `grammar.alias_decl`, `grammar.import`, `grammar.attribute`, `item.attr.placement`, `item.enum.field-visibility`, `lex.comment.doc`, `intro.excl.wildcard-imports`]
 
 **Layer 3: `m1/parser-exprs`**
