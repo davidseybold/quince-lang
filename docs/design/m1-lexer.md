@@ -336,7 +336,7 @@ Rule IDs in brackets are what each task's fixtures cite. Rules added by spec que
 **Layer 2: `m1/lexer-tokens`**
 - [ ] Spec: the approved wording from questions 1, 4 and 6, the `source` construct, and a minor version bump.
 - [ ] `SyntaxKind`, `Token`, `Lexed`, `lex`, trivia and the lossless invariant; unit tests for keywords, `continues_line()` and the grammar sync.
-- [ ] `decode_source`, `Decoded`, BOM and line endings; E0013, E0014; the replacement-column rule in `compiler/diagnostics/README.md`; switch the runner to `decode_source`. [`lex.source.utf8`, `lex.source.bom`, `lex.source.line-end`, `lex.source.whitespace`, `lex.source.ascii`]
+- [ ] `decode_source`, `Decoded`, BOM and line endings; E0013, E0014; the replacement-column rule in `compiler/diagnostics/README.md`; switch the runner to `decode_source`, and update the fixture README's sentence on how invalid UTF-8 decodes (one U+FFFD per run, not per sequence). [`lex.source.utf8`, `lex.source.bom`, `lex.source.line-end`, `lex.source.whitespace`, `lex.source.ascii`]
 - [ ] Punctuation, `>` alone, `;`, unknown characters; E0001, E0002. [`lex.braces`]
 - [ ] Comments, doc comments and block comments; E0003. [`lex.comment.line`]
 - [ ] Numbers, the tuple-index rule, `literal::int_value` and `float_value`; E0008. [`lex.lit.int.forms`, `lex.lit.float.forms`, `lex.lit.underscore`, `lex.lit.int.prefix`, `lex.lit.int.leading-zero`, `lex.lit.float.shape`, `lex.lit.no-suffix`]

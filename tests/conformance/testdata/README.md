@@ -22,7 +22,7 @@ Header lines of the form `// <word>:`, where the word is lowercase ASCII letters
   - `run` builds and runs the file. Its program must build without errors, and warnings aren't judged (test those with a check fixture). `// exit: <n>`, set at most once, gives the expected exit code (default 0). Standard output must equal the sibling `<name>.stdout` file, and with no such file it must be empty. Standard error isn't compared yet.
 - `//~ CODE` expects a diagnostic with that code starting on the same line. `//~^ CODE` expects one on the line above, and each extra `^` moves one more line up. Expectations apply only to `check` and `parse` fixtures, and `exit` and a `.stdout` file only to `run` fixtures. Anything else is an error.
   - A comment may list several codes, `//~ E0001 E0001`, and each code expects one diagnostic. Each diagnostic satisfies at most one expectation. Nothing but codes may follow `//~`.
-  - A diagnostic at the very end of a file that ends with a newline counts as being on the last line.
+  - A diagnostic at the very end of a file that ends with a line break counts as being on the last line.
   - Every error and warning the compiler reports must be expected.
 - Lines are numbered as diagnostic positions count them (`compiler/diagnostics/README.md`): LF, CR LF and a lone CR each end a line, and a leading byte order mark isn't part of line 1, so it doesn't hide the header.
 - Every fix a backend reports is checked with `Fix::check` and `Fix::check_positions` (`compiler/diagnostics/README.md`), and a malformed fix fails the fixture. Every edit position must exist in the fixture. A fixture is the only file there is, so an edit to any other file must create it, with an insertion at `[1, 1]`.
