@@ -341,21 +341,14 @@ pub struct Edit {
 mod tests {
     use super::*;
 
-    /// The example diagnostic from the spec's Diagnostics and queries chapter, read from the
-    /// spec itself so the two can't drift.
-    pub(crate) fn spec_example() -> String {
-        let spec = include_str!("../../../spec/tooling/diagnostics.md");
-        let section = &spec[spec
-            .find("## Structured diagnostics")
-            .expect("spec has a Structured diagnostics section")..];
-        let open = section.find("```\n").expect("code block") + 4;
-        let close = open + section[open..].find("```").expect("closed code block");
-        section[open..close].to_string()
+    /// A diagnostic with a fix, as a JSON fixture.
+    pub(crate) fn example_text() -> String {
+        include_str!("../testdata/example.json").to_string()
     }
 
     #[test]
-    fn spec_example_round_trips() {
-        let text = spec_example();
+    fn example_round_trips() {
+        let text = example_text();
         let diagnostic: Diagnostic = serde_json::from_str(&text).unwrap();
         assert_eq!(diagnostic.code.as_str(), "E0412");
         assert_eq!(diagnostic.span.start, Position(42, 3));
@@ -477,7 +470,7 @@ mod tests {
 
     #[test]
     fn unknown_fields_are_rejected() {
-        let text = spec_example().replacen("\"docs\"", "\"notes\": [], \"docs\"", 1);
+        let text = example_text().replacen("\"docs\"", "\"notes\": [], \"docs\"", 1);
         assert!(serde_json::from_str::<Diagnostic>(&text).is_err());
     }
 

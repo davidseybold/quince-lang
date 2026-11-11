@@ -64,7 +64,7 @@ Phase 2 ends when `quince check` fully checks any Quince program, an agent can d
 - Built-in types, structs, enums, newtypes, constants, generics, interfaces and methods.
 - Mutation rules (`var`, `var self`), operators on user types, automatic `Eq` and `Hash`, `Encode` and `Decode` derivation checks.
 - Inference, `Result` and `Option`, `?`, patterns, `is` tests, exhaustive `match`, the Never type.
-- *Exit:* conformance tests for every rule in those chapters pass; every spec example that should type-check does.
+- *Exit:* conformance tests for every rule in those chapters pass, including `check` fixtures of whole programs that should type-check.
 
 **M4. Effects and contracts.** Effects, Program execution, Contracts and Testing (static parts), and the static rules of Concurrency.
 
@@ -138,7 +138,7 @@ Phase 4 ends when four programs (an HTTP service with a database, a CLI tool, a 
 - `foreign` blocks, C types, `Resource`, `CBuf`, `CString`, callbacks, `@borrowed` and `@owned`, the foreign-call thread pool, `@pinned`.
 - `[native]` linking and `sources` built with the bundled C compiler, `allow_native`, the test opt-in rules.
 - `quince bind` over libclang.
-- *Exit:* the spec's sqlite wrapper works end to end, from `quince bind` on the header to passing tests.
+- *Exit:* a sqlite wrapper, kept as a fixture project in `testdata`, works end to end, from `quince bind` on the header to passing tests.
 
 ## Phase 5: Toward 1.0
 

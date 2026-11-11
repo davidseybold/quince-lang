@@ -333,11 +333,4 @@ mod tests {
         let errors = messages(Spec::load(&root).unwrap_err());
         assert!(errors[0].starts_with("spec/README.md: can't read the file"));
     }
-
-    #[test]
-    fn loads_the_real_spec() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let spec = Spec::load(&root).unwrap();
-        assert!(!spec.files.is_empty());
-    }
 }

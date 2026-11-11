@@ -828,6 +828,51 @@ let x = 1 //~ E0100
         assert_eq!(spec_version(&late), None);
     }
 
+    /// `load_rules` over a small spec the test writes: each chapter's tags map to its title,
+    /// grammar productions to [`GRAMMAR_SECTION`], which comes last, and the version is read.
+    #[test]
+    fn loads_rules_from_a_small_spec() {
+        let root = std::env::temp_dir()
+            .join(format!("quince_conformance-tests-{}", std::process::id()))
+            .join("small-spec");
+        let _ = std::fs::remove_dir_all(&root);
+        let files = [
+            (
+                "spec/chapters.txt",
+                "lex  reference/lexical.md  Lexical structure\n\
+                 stmt  reference/statements.md  Statements\n",
+            ),
+            ("spec/README.md", "# Spec\n\nNov 11 · David · Draft v1.2\n"),
+            (
+                "spec/reference/lexical.md",
+                "# Lexical structure\n\nr[lex.braces]\nBraces balance.\n",
+            ),
+            (
+                "spec/reference/statements.md",
+                "# Statements\n\nr[stmt.order]\nStatements run in order.\n",
+            ),
+            ("spec/retired-rules.txt", ""),
+            ("spec/moved-rules.txt", ""),
+            ("spec/grammar.ebnf", "// terminals: name\n\nfile = name\n"),
+        ];
+        for (path, text) in files {
+            let path = root.join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, text).unwrap();
+        }
+        let rules = load_rules(&root).unwrap();
+        let section = |id: &str| rules.ids.get(id).map(String::as_str);
+        assert_eq!(section("lex.braces"), Some("Lexical structure"));
+        assert_eq!(section("stmt.order"), Some("Statements"));
+        assert_eq!(section("grammar.file"), Some(GRAMMAR_SECTION));
+        assert_eq!(rules.ids.len(), 3);
+        assert_eq!(
+            rules.sections,
+            ["Lexical structure", "Statements", GRAMMAR_SECTION]
+        );
+        assert_eq!(rules.spec_version, "1.2");
+    }
+
     #[test]
     fn malformed_fixture_fails() {
         let r = run("fn main() {}\n", None, &NoBackend);
@@ -924,27 +969,5 @@ let x = 1 //~ E0100
                 .unwrap()
                 .is_empty()
         );
-    }
-
-    #[test]
-    fn loads_the_real_spec() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let rules = load_rules(&root).unwrap();
-        assert_eq!(
-            rules.ids.get("grammar.fn_decl").map(String::as_str),
-            Some(GRAMMAR_SECTION)
-        );
-        assert_eq!(
-            rules
-                .ids
-                .get("stmt.bind.shadow.same-scope")
-                .map(String::as_str),
-            Some("Statements")
-        );
-        assert_eq!(
-            rules.sections.last().map(String::as_str),
-            Some(GRAMMAR_SECTION)
-        );
-        assert_eq!(rules.spec_version, "0.11");
     }
 }

@@ -148,11 +148,11 @@ mod tests {
     }
 
     fn example() -> Value {
-        serde_json::from_str(&crate::tests::spec_example()).unwrap()
+        serde_json::from_str(&crate::tests::example_text()).unwrap()
     }
 
     #[test]
-    fn spec_example_validates() {
+    fn example_validates() {
         assert_eq!(validate(&schema(), &example()), Vec::<String>::new());
     }
 
