@@ -47,9 +47,145 @@ pub fn float_value(text: &str) -> f64 {
     number.parse().expect("a Float token starts with a digit")
 }
 
+/// The value of one `StringText` token's text in a `"` string, with its escapes decoded.
+/// Interpolation splits a string's text, and no escape spans two `StringText` tokens, so each
+/// is decoded on its own. For an invalid escape, which the lexer has already reported, `\'`
+/// and `\}` decode to the character, as their fixes make them, and any other is kept as
+/// written.
+pub fn string_value(text: &str) -> String {
+    let mut value = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(i) = rest.find('\\') {
+        value.push_str(&rest[..i]);
+        let escape = escape(&rest[i..]);
+        match escape.value {
+            Ok(c) | Err(BadEscape::Needless(c)) => value.push(c),
+            Err(_) => value.push_str(&rest[i..i + escape.len]),
+        }
+        rest = &rest[i + escape.len..];
+    }
+    value.push_str(rest);
+    value
+}
+
+/// An escape: its length in bytes, and the character it stands for or what is wrong with it.
+pub(crate) struct Escape {
+    pub len: usize,
+    pub value: Result<char, BadEscape>,
+}
+
+/// What is wrong with an escape in a `"` string (`r[lex.lit.string.escapes]`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BadEscape {
+    /// A `\` at a line end or the end of the text.
+    Dangling,
+    /// `\'` or `\}`, whose character needs no escape.
+    Needless(char),
+    /// `\x`, with the value of the two hex digits after it, if there are two.
+    Hex(Option<u8>),
+    /// `\u` with no braces, with what `\u` and four hex digits would mean in other languages.
+    UnicodeNoBraces(Option<char>),
+    UnicodeUnclosed,
+    /// `\u{...\}`, with the scalar value the digits name, if they name one.
+    UnicodeEscapedBrace(Option<char>),
+    UnicodeEmpty,
+    UnicodeNotHex,
+    /// More than six digits, with the scalar value they name, if they name one.
+    UnicodeTooLong(Option<char>),
+    UnicodeSurrogate,
+    UnicodeTooBig,
+    /// Any other character after the `\`.
+    Unknown(char),
+}
+
+/// The escape at the start of `text`, which starts with `\`. It never takes a line ending, a
+/// `"` that isn't escaped, or the `\` of the next escape.
+pub(crate) fn escape(text: &str) -> Escape {
+    let ok = |len, c| Escape { len, value: Ok(c) };
+    let bad = |len, problem| Escape {
+        len,
+        value: Err(problem),
+    };
+    let Some(c) = text[1..].chars().next() else {
+        return bad(1, BadEscape::Dangling);
+    };
+    match c {
+        'n' => ok(2, '\n'),
+        't' => ok(2, '\t'),
+        'r' => ok(2, '\r'),
+        '0' => ok(2, '\0'),
+        '\\' | '"' | '{' => ok(2, c),
+        '\n' | '\r' => bad(1, BadEscape::Dangling),
+        '\'' | '}' => bad(2, BadEscape::Needless(c)),
+        'x' => match hex_run(&text[2..], 2) {
+            2 => bad(4, BadEscape::Hex(u8::from_str_radix(&text[2..4], 16).ok())),
+            _ => bad(2, BadEscape::Hex(None)),
+        },
+        'u' => unicode_escape(text),
+        c => bad(1 + c.len_utf8(), BadEscape::Unknown(c)),
+    }
+}
+
+/// `\u{...}` at the start of `text` (`r[lex.lit.string.unicode-escape]`).
+fn unicode_escape(text: &str) -> Escape {
+    let bad = |len, problem| Escape {
+        len,
+        value: Err(problem),
+    };
+    let Some(inner) = text[2..].strip_prefix('{') else {
+        // `\u0041`, as Java, JavaScript and Python write it.
+        if hex_run(&text[2..], 4) == 4 {
+            let value = u32::from_str_radix(&text[2..6], 16)
+                .ok()
+                .and_then(char::from_u32);
+            return bad(6, BadEscape::UnicodeNoBraces(value));
+        }
+        return bad(2, BadEscape::UnicodeNoBraces(None));
+    };
+    let end = inner
+        .find(['}', '"', '{', '\\', '\n', '\r'])
+        .unwrap_or(inner.len());
+    let digits = &inner[..end];
+    // `\u{AB\}` is one bad escape, so that deleting the `\` of a `\}` can't complete it. Only
+    // with hex digits: a fix can turn `\'` into `'`, and that must not regroup the escape.
+    let hex = digits.bytes().all(|b| b.is_ascii_hexdigit());
+    let close = match &inner[end..] {
+        rest if rest.starts_with('}') => 1,
+        rest if rest.starts_with("\\}") && hex => 2,
+        _ => return bad(3 + end, BadEscape::UnicodeUnclosed),
+    };
+    let len = 3 + end + close;
+    let value = || u32::from_str_radix(digits, 16).ok();
+    let scalar = if digits.is_empty() {
+        Err(BadEscape::UnicodeEmpty)
+    } else if !digits.bytes().all(|b| b.is_ascii_hexdigit()) {
+        Err(BadEscape::UnicodeNotHex)
+    } else if digits.len() > 6 {
+        Err(BadEscape::UnicodeTooLong(value().and_then(char::from_u32)))
+    } else {
+        match value().expect("six hex digits fit in a u32") {
+            0xD800..=0xDFFF => Err(BadEscape::UnicodeSurrogate),
+            n => char::from_u32(n).ok_or(BadEscape::UnicodeTooBig),
+        }
+    };
+    match close {
+        1 => Escape { len, value: scalar },
+        _ => bad(len, BadEscape::UnicodeEscapedBrace(scalar.ok())),
+    }
+}
+
+/// How many of the first `max` characters of `text` are hex digits, stopping at the first that
+/// isn't.
+fn hex_run(text: &str, max: usize) -> usize {
+    text.bytes()
+        .take(max)
+        .take_while(u8::is_ascii_hexdigit)
+        .count()
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{float_value, int_value};
+    use super::{float_value, int_value, string_value};
 
     #[test]
     fn int_values() {
@@ -95,5 +231,33 @@ mod tests {
         assert_eq!(float_value("1e"), 1.0);
         assert_eq!(float_value("2.5e_"), 2.5);
         assert_eq!(float_value("00.5"), 0.5);
+    }
+
+    #[test]
+    fn string_values() {
+        assert_eq!(string_value("plain text"), "plain text");
+        assert_eq!(
+            string_value(r#"a\tb\nc\rd\0e\\f\"g\{h"#),
+            "a\tb\nc\rd\0e\\f\"g{h"
+        );
+        assert_eq!(
+            string_value(r"\u{41}\u{e9}\u{1F600}\u{10FFFF}"),
+            "A\u{e9}\u{1F600}\u{10FFFF}"
+        );
+        assert_eq!(string_value("caf\u{e9} }"), "caf\u{e9} }");
+        assert_eq!(string_value(""), "");
+    }
+
+    #[test]
+    fn invalid_escapes_decode_as_their_fixes_make_them_or_stay_as_written() {
+        assert_eq!(string_value(r"it\'s \}"), "it's }");
+        assert_eq!(string_value(r"C:\path"), r"C:\path");
+        assert_eq!(
+            string_value(r"\x41 \u{D800} \u{} \u41 \u{12"),
+            r"\x41 \u{D800} \u{} \u41 \u{12"
+        );
+        assert_eq!(string_value("a\\"), "a\\");
+        assert_eq!(string_value(r"\u{ab\}"), r"\u{ab\}");
+        assert_eq!(string_value("\\\u{e9}"), "\\\u{e9}");
     }
 }

@@ -29,6 +29,9 @@ r[test.unit-location]
 r[test.name]
 - A test's name is plain text: it doesn't interpolate, so braces in it need no escape.
 
+r[test.name-escapes]
+- A test's name takes the same escapes as a string, but `{` is plain text.
+
 r[test.attr]
 - A top-level declaration marked `@test`, such as a fake handler, is compiled only by `quince` `test`.
 

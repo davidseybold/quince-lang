@@ -1,0 +1,13 @@
+// rule: lex.lit.string.unicode-escape
+// mode: parse
+// \u{...} holds one to six hex digits naming a Unicode scalar value.
+fn f() {
+  let a = "\u{41}\u{e9}\u{1F600}\u{10FFFF}\u{0}\u{00FFFF}"
+  let b = "\u{}" //~ E0006
+  let c = "\u{D800}" //~ E0006
+  let d = "\u{DFFF}" //~ E0006
+  let e = "\u{110000}" //~ E0006
+  let g = "\u{0000041}" //~ E0006
+  let h = "\u{12G4}" //~ E0006
+  let i = "\u41" //~ E0006
+}

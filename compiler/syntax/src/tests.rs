@@ -5,6 +5,7 @@ use std::path::Path;
 
 mod errors;
 mod numbers;
+mod strings;
 
 /// `Kind "text"`, one token per line, after checking the invariants.
 fn dump(text: &str) -> String {

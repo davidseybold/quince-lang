@@ -1,0 +1,8 @@
+// rule: test.name-escapes
+// mode: parse
+// A test's name takes the same escapes as a string, but { is plain text.
+test "quotes \"x\", a tab \t, a {brace} and \{ too" {
+}
+
+test "a bad \q escape" { //~ E0006
+}

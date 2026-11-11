@@ -31,6 +31,21 @@ pub const REGISTRY: &[CodeInfo] = &[
         include_str!("../explain/E0003.md"),
     ),
     error(
+        "E0004",
+        "unclosed string",
+        include_str!("../explain/E0004.md"),
+    ),
+    error(
+        "E0006",
+        "invalid escape",
+        include_str!("../explain/E0006.md"),
+    ),
+    error(
+        "E0007",
+        "interpolation that isn't a path",
+        include_str!("../explain/E0007.md"),
+    ),
+    error(
         "E0008",
         "malformed number",
         include_str!("../explain/E0008.md"),

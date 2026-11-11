@@ -5,6 +5,7 @@ use quince_diagnostics::{Applicability, Diagnostic, LineIndex};
 use std::ops::Range;
 
 mod number;
+mod string;
 
 /// A token is its kind and its length in bytes. It starts where the previous token ends.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -171,23 +172,6 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    /// Until strings have their own rules: everything from a `"` to the next `"` on the line.
-    fn string(&mut self) {
-        self.bump(SyntaxKind::StringStart, 1);
-        let len = self
-            .rest()
-            .find(['"', '\n', '\r'])
-            .unwrap_or(self.rest().len());
-        if len > 0 {
-            self.bump(SyntaxKind::StringText, len);
-        }
-        if self.rest().starts_with('"') {
-            self.bump(SyntaxKind::StringEnd, 1);
-        } else {
-            self.unclosed_literal_end = Some(self.pos);
-        }
-    }
-
     /// Until chars have their own rules: everything from a `'` to the next `'` on the line.
     fn char_literal(&mut self) {
         let rest = &self.rest()[1..];
@@ -210,7 +194,8 @@ impl<'a> Lexer<'a> {
                 .to_string(),
         );
         // A CR that ends an unclosed literal would leave it unclosed if it became a line feed.
-        let error = if self.unclosed_literal_end == Some(at) {
+        // After another CR, a line feed would join it into one CR LF, losing a line ending.
+        let error = if self.unclosed_literal_end == Some(at) || self.text[..at].ends_with('\r') {
             error
         } else {
             error.with_fix(

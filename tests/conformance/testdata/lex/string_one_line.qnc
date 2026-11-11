@@ -1,0 +1,10 @@
+// rule: lex.lit.string.one-line
+// mode: parse
+// A "..." string stays on one line, so a string with no closing quote ends at its
+// line end, and the next line is code again.
+fn f() {
+  let a = "closed"
+  let b = "never closed
+  //~^ E0004
+  let c = "closed again"
+}

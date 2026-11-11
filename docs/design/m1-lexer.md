@@ -117,7 +117,7 @@ A test reads the keyword list from `spec/reference/lexical.md` through `quince_s
 
 - `Int` covers `42`, `1_000_000`, `0xFF`, `0b1010` and `0o17`. `Float` covers `3.14`, `1e-9` and `2.5e10`. The exact forms are spec question 4.
 - A `.` belongs to a float only when a digit follows it. So `1..10` is `1`, `..`, `10`, and `3.14159.to_fixed(2)` is a float then `.to_fixed`. An `e` after digits starts an exponent.
-- **After a `.` token with no trivia between, only digits are lexed.** So `pair.0.1` is `pair` `.` `0` `.` `1`, not `pair` `.` `0.1`, and the grammar's `"." int` works for nested tuples. Apart from E0001's raw-string hint, which reads the token before a `#`, this is the only place the lexer looks back, and only one token. Layer 4 reads "only digits" as a decimal integer with no point, exponent or base prefix: letters glued to it are still a suffix (`t.0u8` is one malformed `Int`), and a leading zero is still an error (`t.01`).
+- **After a `.` token with no trivia between, only digits are lexed.** So `pair.0.1` is `pair` `.` `0` `.` `1`, not `pair` `.` `0.1`, and the grammar's `"." int` works for nested tuples. Apart from E0001's raw-string hint, which reads the token before a `#`, and two string rules in decision 8, this is the only place the lexer looks back, and only one token. Those string rules are a `"` glued to an identifier, one token back, and a test's name, which looks back past spaces to `test` (decided by David, 2026-11-11). Layer 4 reads "only digits" as a decimal integer with no point, exponent or base prefix: letters glued to it are still a suffix (`t.0u8` is one malformed `Int`), and a leading zero is still an error (`t.01`).
 - A minus sign is always its own token. `r[lex.lit.int.neg]` joins it to the literal in prefix position, which the parser knows and the lexer doesn't.
 - A malformed number (`0b102`, `1__0`, `1_`, `0x`, `1e`, `007`) keeps its `Int` or `Float` kind and gets an E0008, so the parser sees a literal and reports nothing more.
 - Letters glued to a number (`1u8`, `10px`, `1.5f32`) stay part of it, as a malformed literal of the kind its digits give. The message says literal types come from context (`let b: UInt8 = 1`), and the fix removes the suffix (`needs-review`).
@@ -135,7 +135,8 @@ StringStart  ( StringText | StringIndent | StringNewline | Interp... )*  [ Strin
 - `StringText` is literal text, escapes included. Escapes are validated here and decoded later by `literal::string_value`.
 - In the multi-line forms (`"""` and `r"""`), each line break inside the string is a `StringNewline` token. That keeps the parser's line-end logic out of strings, while the formatter still sees the string's lines.
 - Each line's stripped indentation is a `StringIndent` token: the closing line's indentation on each content line (`r[lex.lit.string.multiline]`), the closing line's own indentation before `"""`, and all of any line that holds only whitespace, whatever its length, since such a line becomes empty. The formatter re-indents a multi-line string by rewriting those tokens, which leaves its value unchanged.
-- **Interpolation is tokenized**, in the forms that interpolate (`"` and `"""`): `InterpStart` (`{`), then the path as ordinary `Ident`, `SelfKw`, `Dot` and `Int` tokens, then `InterpEnd` (`}`). Since only a name, `self` or a constant followed by field steps is allowed (`r[lex.lit.string.interp-path]` today, `interp-root` after spec question 2), the lexer never has to lex an expression or a nested string, so this is one extra lexer state, not recursion. Names in strings are then real tokens in the CST, and rename, find-references and `query` treat them like any other name.
+- **Interpolation is tokenized**, in the forms that interpolate (`"` and `"""`): `InterpStart` (`{`), then the path as ordinary `Ident`, `SelfKw`, `Dot` and `Int` tokens, then `InterpEnd` (`}`). Since only a name, `self` or a constant followed by field steps is allowed (`r[lex.lit.string.interp-root]`, which replaced `interp-path` after spec question 2), the lexer never has to lex an expression or a nested string, so this is one extra lexer state, not recursion. Names in strings are then real tokens in the CST, and rename, find-references and `query` treat them like any other name.
+- **A test's name doesn't interpolate** (`r[test.name]`), but it takes a string's escapes (`r[test.name-escapes]`, decided by David, 2026-11-11). So a `"` string whose previous token, skipping spaces, is `test` has no interpolation tokens, and its `{` is text.
 - `}` alone is text (`r[lex.lit.string.lone-brace]`).
 - Raw, bytes and tagged forms produce only `StringText` between start and end, with no escapes (raw and tagged) or a reduced set (bytes, `r[lex.lit.bytes]`).
 - A known tag is one of `url`, `re`, `dur`, `ts`. An identifier glued to `"` that isn't a tag (`foo"x"`, `br"x"`, `f"x"`) is an E0010 listing the tags. A keyword is never a tag, so `test"adds"` is `test` and a string.
@@ -356,9 +357,11 @@ Rule IDs in brackets are what each task's fixtures cite. Rules added by spec que
 - [x] Numbers, the tuple-index rule, `literal::int_value` and `float_value`; E0008. [`lex.lit.int.forms`, `lex.lit.float.forms`, `lex.lit.underscore`, `lex.lit.int.prefix`, `lex.lit.int.leading-zero`, `lex.lit.float.shape`, `lex.lit.no-suffix`]
 
 **Layer 5: `m1/lexer-strings`**
-- [ ] Spec: questions 2 and 7, retiring `lex.lit.string.interp-path`, and a bump.
-- [ ] String shape and escapes, `literal::string_value`; E0004, E0006. [`lex.lit.string.escapes`, `lex.lit.string.one-line`, `lex.lit.string.unicode-escape`]
-- [ ] Interpolation tokens; E0007. [`lex.lit.string.interp`, `lex.lit.string.interp-root`, `lex.lit.string.lone-brace`]
+- [x] Spec: questions 2 and 7, retiring `lex.lit.string.interp-path`, and a bump.
+- [x] Spec: `r[test.name-escapes]` (decided by David in review); test names don't interpolate. [`test.name`, `test.name-escapes`]
+- [x] E0013: no fix for a CR right after another CR (a layer 3 fix, folded in by David).
+- [x] String shape and escapes, `literal::string_value`; E0004, E0006. [`lex.lit.string.escapes`, `lex.lit.string.one-line`, `lex.lit.string.unicode-escape`]
+- [x] Interpolation tokens; E0007. [`lex.lit.string.interp`, `lex.lit.string.interp-root`, `lex.lit.string.lone-brace`]
 
 **Layer 6: `m1/lexer-literals`**
 - [ ] Spec: questions 3 and 8, and a bump.

@@ -90,14 +90,17 @@ r[lex.lit.no-suffix]
 r[lex.lit.string.interp]
 - String: `"hello {name}"`. UTF-8; interpolation with {} is the only formatting syntax.
 
-r[lex.lit.string.interp-path]
-- Inside braces only a name or a field path is allowed ({name}, {user.name}), never another expression. A field path may read a newtype or tuple position, as in {id.0}.
+r[lex.lit.string.interp-root]
+- Inside braces only a path is allowed, never another expression: a name, `self` or a constant name, followed by any number of field names or tuple positions, with no spaces: `{name}`, `{user.name}`, `{self.email}`, `{id.0}`, `{MAX_RETRIES}`.
 
 r[lex.lit.string.lone-brace]
 - Only { opens interpolation, so a lone } is plain text and needs no escape.
 
 r[lex.lit.string.escapes]
 - String escapes: \\n \\t \\\\ \\" \\{ \\r \\0 \\u{1F600}.
+
+r[lex.lit.string.unicode-escape]
+- `\u{...}` holds one to six hex digits naming a Unicode scalar value, so `\u{}`, surrogates (`\u{D800}`) and values above `\u{10FFFF}` are errors.
 
 r[lex.lit.string.one-line]
 - A "..." string stays on one line.
@@ -119,6 +122,9 @@ r[lex.lit.char.escapes]
 
 r[lex.lit.bytes]
 - Bytes: `b"GET /"`, `b"\x00\xFF"`. Type Bytes: ASCII characters, \\x escapes and the escapes \\n \\r \\t \\0 \\\\ \\". No interpolation
+
+r[lex.lit.bytes.hex-escape]
+- `\x` takes exactly two hex digits, and appears only in bytes literals.
 
 r[lex.lit.tagged]
 - Tagged literal: `url"https://..."`, `re"[a-z]+"`, `dur"30s"`. Validated at compile time; a fixed, language-defined set of tags (v1: url, re, dur, ts).
