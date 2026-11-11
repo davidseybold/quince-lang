@@ -9,7 +9,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 /// The conformance fixtures of the lexer, relative to the repo root.
 const LEX_FIXTURES_DIR: &str = "tests/conformance/testdata/lex";
 
-/// Mutants made from each fixture. With 38 fixtures, the test takes about 0.2 s in debug, so it
+/// Mutants made from each fixture. With 38 fixtures, the test takes about 0.25 s in debug, so it
 /// adds nothing to the crate's run, which the exhaustive `every_short_*` tests set.
 const MUTANTS_PER_SEED: usize = 120;
 

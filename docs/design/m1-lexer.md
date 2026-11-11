@@ -91,7 +91,7 @@ So the lexer offers only a helper for the parser: `SyntaxKind::continues_line()`
 - `=`, `+=`, `-=`, `*=`, `/=`, `%=`, `=>`, `->` (`r[lex.continue.more]`);
 - the binary operators other than `>` and `*`: `+`, `-`, `/`, `%`, `&`, `|`, `^`, `<<`, `&&`, `||`, `==`, `!=`, `<`, `<=`, `..`, `..=` and `is`. `-`, `|` and `<` also have other roles (prefix minus, pattern alternation, opening type arguments), but each of those continues the line too.
 
-`>` and `*` are the two kinds that depend on context: `>` closes type arguments, and `*` is the effect set in `uses *`. The parser decides those, including the second `>` of a `>>` shift. No test checks the list against the spec (decision 11); the parser's fixtures check where lines continue. Comments are trivia here too: a line ends with its last token before any comment.
+`>` and `*` are the two kinds that depend on context: `>` closes type arguments, and `*` is the effect set in `uses *`. The parser decides those, including the second `>` of a `>>` shift. A unit test checks the list against its own hand-written copy, not the spec (decision 11); the parser's fixtures will check where lines continue. Comments are trivia here too: a line ends with its last token before any comment.
 
 *Alternative:* Go-style terminator insertion in the lexer. Rejected for the reasons above: it would need a lexer that tracks generics and signatures, which is a parser.
 
@@ -111,7 +111,7 @@ The lexer takes the longest match among the grammar's punctuation terminals, wit
 - The 38 keywords of `r[lex.keywords]` each have their own kind (`FnKw`, `SelfTypeKw` for `Self`, and so on). There are no contextual keywords (`r[lex.no-contextual]`), so the lexer has no context to track: `main`, `limit`, `TaskScope` and the tag names lex as identifiers everywhere.
 - `c_name` lexes as an identifier too. Whether a C name may be a keyword is a question for the parser doc.
 
-A unit test checks that every keyword and punctuation in the lexer's tables lexes as one token of its kind. No test reads the keyword list or the grammar from the spec (decision 11).
+A unit test checks the keyword table against its own hand-written copy of the 38 keywords, not the spec (decision 11), and checks that every keyword and punctuation lexes as one token of its kind.
 
 ### 7. Numbers
 
@@ -214,7 +214,7 @@ The runner changes:
 ### 11. Testing
 
 - **Unit tests** in `quince_syntax` compare token dumps (`kind "text"` per line) with hand-written expected text, and check decoded values through `literal`. No snapshot crate.
-- **No test reads the spec** (decided by David, 2026-11-11). No test lexes or parses the spec's code blocks, or compares the lexer's tables with the spec's keyword list or grammar. Tests use the `testdata` fixtures and their own inputs. Layer 7 removed the spec sync tests that earlier layers added, and with them `quince_syntax`'s dev-dependency on `quince_spec`.
+- **No `quince_syntax` test reads the spec** (decided by David, 2026-11-11). No lexer or parser test lexes or parses the spec's code blocks, or reads the spec's keyword list or grammar. Tests use the `testdata` fixtures and their own inputs, such as hand-written copies of the keyword list and of decision 4's line-continuing tokens. Layer 7 removed the spec sync tests that earlier layers added, and with them `quince_syntax`'s dev-dependency on `quince_spec`.
 - **Invariants on every input:** no panic; the token texts concatenate to the input; no token is empty; every error range lies inside the input on character boundaries. These run over seeded mutations (inserted, deleted and swapped bytes, from a small dependency-free PRNG) of the `lex/` fixtures, as bytes so they reach invalid UTF-8 and `decode_source`. The mutants together must report every code, which the fixtures guarantee, since every code has one. Each fixture's mutants come from a stream seeded by its own bytes, so editing another fixture doesn't change them. The unit-test inputs aren't collected (layer 7): the fixtures cover every code and literal form, and the `every_short_*` tests already try every short literal text. The mutations take about 0.2 s in debug. The crate's run takes about 2 s in debug, set by `every_short_multiline_string`, so they add no time to it; the first goal of under a second was already missed before layer 7. A `cargo-fuzz` target needs nightly and a dependency, so it waits for the parser doc, which owns the fuzzing exit criterion.
 - **Conformance fixtures:** one per diagnostic code, as `cargo xtask diagnostics` requires, and one per rule in Tasks.
 
@@ -330,7 +330,7 @@ Found while writing this. None of them block the lexer.
 - **Coverage ratchet.** M0 left this for M1. Decide it once the parser adds real coverage.
 - **Adjacent literals** (layer 6b). A quote in a string that isn't escaped can leave two literals side by side with no lexical error: `"press "b" now"` is a string and then a bytes literal, and `"the "r" key"` a string and then a raw string. With an unknown tag, as in `"say "hi" now"`, the lexer reports E0010. The parser reports two adjacent literals as it reports any two expressions with nothing between them, with no hint for this shape (decision 9). Likewise `r"a\"b"` is a raw string, `r"a\"`, then an unclosed bytes literal.
 
-- **No spec corpus** (decided by David, 2026-11-11). M1's exit criterion no longer asks for the spec's code blocks to parse, and no test reads the spec (decision 11). The parser is tested with `testdata` fixtures only, and `fmt` with its own.
+- **No spec corpus** (decided by David, 2026-11-11). M1's exit criterion no longer asks for the spec's code blocks to parse, and no lexer or parser test reads the spec (decision 11). The parser is tested with `parse` fixtures in `testdata`, and `fmt` with `fmt` fixtures, a mode the formatter doc adds to the fixture format.
 
 ## For later milestones
 

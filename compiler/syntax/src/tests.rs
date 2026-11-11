@@ -131,11 +131,85 @@ fn tokens_for_errors() {
     assert_eq!(dump("/**/"), "BlockComment \"/**/\"\n");
 }
 
-/// Every keyword and punctuation token in the lexer's tables lexes as one token of its kind.
+/// The keywords of `r[lex.keywords]`, copied by hand so the table can't lose, gain or rename
+/// one unnoticed.
+const KEYWORDS: [&str; 38] = [
+    "fn",
+    "let",
+    "var",
+    "type",
+    "struct",
+    "enum",
+    "interface",
+    "impl",
+    "match",
+    "is",
+    "if",
+    "else",
+    "for",
+    "in",
+    "while",
+    "return",
+    "break",
+    "continue",
+    "import",
+    "pub",
+    "uses",
+    "requires",
+    "ensures",
+    "test",
+    "forall",
+    "with",
+    "concurrent",
+    "spawn",
+    "background",
+    "foreign",
+    "true",
+    "false",
+    "self",
+    "Self",
+    "const",
+    "effect",
+    "select",
+    "as",
+];
+
+/// The tokens after which a line always continues (decision 4 of the lexer design doc), copied
+/// by hand.
+const CONTINUES_LINE: [&str; 29] = [
+    ",", "(", "[", "{", "=", "+=", "-=", "*=", "/=", "%=", "=>", "->", "+", "-", "/", "%", "&",
+    "|", "^", "<<", "&&", "||", "==", "!=", "<", "<=", "..", "..=", "is",
+];
+
+/// The keyword table is exactly [`KEYWORDS`], and every keyword and punctuation token lexes as
+/// one token of its kind.
 #[test]
-fn every_keyword_and_punctuation_is_one_token() {
+fn keywords_and_punctuation() {
+    let mut ours: Vec<&str> = SyntaxKind::KEYWORDS.iter().map(|(text, _)| *text).collect();
+    let mut expected = KEYWORDS.to_vec();
+    ours.sort();
+    expected.sort();
+    assert_eq!(ours, expected);
     for &(text, kind) in SyntaxKind::KEYWORDS.iter().chain(SyntaxKind::PUNCTUATION) {
         assert_eq!(single_token(text), kind, "{text}");
+    }
+}
+
+/// A keyword or punctuation token continues a line exactly when it is in [`CONTINUES_LINE`].
+#[test]
+fn continues_line() {
+    for text in CONTINUES_LINE {
+        assert!(
+            single_token(text).continues_line(),
+            "{text} must continue a line"
+        );
+    }
+    for &(text, kind) in SyntaxKind::PUNCTUATION.iter().chain(SyntaxKind::KEYWORDS) {
+        assert_eq!(
+            kind.continues_line(),
+            CONTINUES_LINE.contains(&text),
+            "{text}"
+        );
     }
 }
 
