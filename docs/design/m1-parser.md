@@ -1,6 +1,6 @@
 # M1: Parser
 
-Status: passed design review (four passes). On 2026-11-11 David decided the three dependency questions, approved spec questions 2 to 12 as proposed, chose parentheses for question 14, allowed tuple positions as places for question 13, and approved question 1 as proposed. Every question is decided. This is the second design doc of M1 (Syntax), after [the lexer](m1-lexer.md). The formatter doc (`quince fmt`) follows it.
+Status: passed design review (six passes, the last two over the decisions recorded after approval). On 2026-11-11 David decided the three dependency questions, approved spec questions 2 to 12 as proposed, chose parentheses for question 14, allowed tuple positions as places for question 13, and approved question 1 as proposed. Every question is decided. This is the second design doc of M1 (Syntax), after [the lexer](m1-lexer.md). The formatter doc (`quince fmt`) follows it.
 
 ## Why
 
@@ -350,7 +350,7 @@ Each spec question lands in the layer that enforces it, with a minor version bum
 
 **Decided by David, 2026-11-11:** questions 1 to 12 are approved as proposed, question 13 allows tuple positions as places, and question 14 uses parentheses for function types, as written below.
 
-Questions 1 to 5 come from the lexer doc's handover. The rest came up while reading the grammar. Each gives proposed wording and the tag it would have. Every ID uses a construct already listed in `spec/chapters.txt`, and a question that changes a rule's meaning retires its ID and adds a new one (`AGENTS.md`, "Rule IDs").
+Questions 1 to 5 come from the lexer doc's handover. The rest came up while reading the grammar. Each gives its approved wording and the tag it has. Every ID uses a construct already listed in `spec/chapters.txt`, and a question that changes a rule's meaning retires its ID and adds a new one (`AGENTS.md`, "Rule IDs").
 
 **1. Naming classes (layer 8).** `r[lex.name.case]` names the styles but doesn't define them, and `r[lex.name.enforced]` makes the answer a compile error. `T` and `URL` fit two classes. Approved, in Lexical structure's Naming section:
 - `r[lex.name.snake]` "A `snake_case` name is lowercase letters, digits and single underscores between them, and starts with a letter: `x2`, `utf8_len`. `_unused`, `trailing_` and `a__b` aren't `snake_case`."
@@ -468,7 +468,7 @@ Rule IDs in brackets are what each task's fixtures cite. Grammar productions are
 
 **Before building**
 - [x] David decides questions A, B and C (2026-11-11).
-- [x] Design review passes (four passes, and a check of the decisions recorded after it).
+- [x] Design review passes (six passes, the last two over the decisions recorded after approval).
 - [x] David decides spec questions 1 to 14 (2026-11-11).
 
 **Layer 0: `m1/parser-cst`**
