@@ -150,6 +150,7 @@ StringStart  ( StringText | StringIndent | StringNewline | Interp... )*  [ Strin
 - A char literal with no closing `'` ends before its line ending.
 - A lone CR is a line ending here too (decision 3), so it ends a one-line string or char literal. Only E0013 is reported then, not E0004 or E0009, since the missing quote is the CR's fault.
 - A multi-line string with no closing `"""` line runs to the end of the file. That one does swallow the file, and Risks covers it. Its lines aren't checked for escapes or interpolation, since they are more likely code than text, so one missing line is one E0005, not an error for every backslash and brace after it.
+- Except: with no closing line, a `"""` after text on a line, as Java and Kotlin close a string, ends it there, with the E0005 at those quotes and a `needs-review` fix that moves them to a line of their own. It can't change a valid program, which has a closing line, and it keeps the habit agents bring from those languages from swallowing the file (decided by David, 2026-11-11, in review of layer 6a, instead of allowing that closing form in the spec, which would give a second way to write the same string).
 - Text after the opening `"""` is one E0012 and one unchecked `StringText`. A `"""` later on that line closes the string, so Python's `"""text"""` is one E0012 and can't swallow the file.
 - A line that doesn't start with the closing line's indentation is an E0012 at its indentation. When no line starts with it, the closing `"""` is what is out of place, so that is one E0012, at the closing line, not one per line.
 
@@ -165,7 +166,7 @@ Codes are numbered in the order they are registered, from E0001, skipping the re
 | E0002 | A `;` (statements end at line breaks) | At a line end, delete it (`safe`) | |
 | E0003 | A block comment `/* */` (`r[lex.comment.line]`) | When it covers whole lines, rewrite it as `//` lines (`safe`) | |
 | E0004 | A one-line string, raw, bytes or tagged literal with no closing `"` | Insert `"` at the line end (`needs-review`) | |
-| E0005 | A multi-line string with no closing `"""` line | None | |
+| E0005 | A multi-line string with no closing `"""` line | For a `"""` after text on a line, move it to a line of its own (`needs-review`) | |
 | E0006 | An invalid escape: unknown (`\q`), `\'` in a string, `\}`, a bad `\u{...}`, a bad `\x` or one outside bytes | For `\'` and `\}`, delete the backslash (`safe`) | Q7 for `\u` and `\x` details |
 | E0007 | An interpolation that isn't a name or field path | For spaces inside the braces, delete them (`safe`) | Q2 |
 | E0008 | A malformed number (decision 7) | Remove a suffix (`needs-review`); lowercase an exponent `E` or a base prefix (`safe`) | Q4 |
@@ -297,7 +298,7 @@ All eight are approved: question 1 in its strict form, the other seven as propos
 
 ## Risks and trade-offs
 
-- [A multi-line string with no closing line swallows the rest of the file, so the parser reports nothing after it] → E0005 points at the opening `"""`, and fixing it restores everything. A heuristic close (the first line that looks like code) would guess wrong in strings that hold code, which is a common use. Accepted.
+- [A multi-line string with no closing line swallows the rest of the file, so the parser reports nothing after it] → E0005 points at the opening `"""`, and fixing it restores everything. When a line holds `"""` after text, the string ends there instead (decision 8), which covers the common slip. A heuristic close (the first line that looks like code) would guess wrong in strings that hold code, which is a common use. Accepted.
 - [An unclosed `/*` swallows the rest of the file in the same way] → E0003 points at it. Quince has no block comments, so this only happens to code written from habit, and the message says to use `//`.
 - [`parse` fixtures pass against a lexer-only backend even when they aren't valid syntax] → Layer 1 puts the rule in the fixture README, review checks it, and the parser layer reruns every fixture.
 - [Acceptance-only fixtures mark a rule covered before its value is tested] → Decision 11 limits what a lexer fixture may cite. Values are unit-tested now, and `run` fixtures cite the same rules from M6. The coverage report can't show the difference. Accepted until a test kind marks partial coverage.

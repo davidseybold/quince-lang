@@ -53,8 +53,9 @@ fn meanings(text: &str) -> Vec<String> {
 /// Every multi-line string, raw or not or a test's name, whose text between the quotes is up
 /// to five characters that matter to it, keeps the invariants and never puts two errors on
 /// one span. `StringIndent` is only spaces and tabs. A safe fix removes its error and adds
-/// none, and an E0006 or E0013 fix keeps every token's meaning. The only other fix here is
-/// E0004's, which needs review, on a `"` after the string.
+/// none, and an E0006 or E0013 fix keeps every token's meaning. The other fixes need review:
+/// E0005's, which moves closing quotes after text to a line of their own, removes its error
+/// and adds none too, and E0004's is on a `"` after the string.
 #[test]
 fn every_short_multiline_string() {
     let alphabet: Vec<char> = " \t\na\"\\{}\r".chars().collect();
@@ -93,8 +94,10 @@ fn every_short_multiline_string() {
                     continue;
                 };
                 if fix.applicability != Applicability::Safe {
-                    assert_eq!(error.code, "E0004", "{text:?}");
-                    continue;
+                    assert!(["E0004", "E0005"].contains(&error.code), "{text:?}");
+                    if error.code == "E0004" {
+                        continue;
+                    }
                 }
                 let mut fixed = text.clone();
                 for (range, with) in fix.edits.iter().rev() {
@@ -255,6 +258,49 @@ fn indentation() {
     ));
 }
 
+/// With no closing line, quotes after text end the string, as Java and Kotlin close one,
+/// with an E0005 there, so the rest of the file is still checked as code.
+#[test]
+fn closing_quotes_after_text() {
+    let text = "f(\"\"\"\n    a\n      b\"\"\") \\";
+    assert_eq!(
+        errors(text),
+        [
+            r#"E0005 19..22 => "f(\"\"\"\n    a\n      b\n    \"\"\") \\""#,
+            "E0001 24..25"
+        ]
+    );
+    assert_eq!(
+        tokens(text),
+        "Ident:f LParen:( StringStart:\"\"\" StringNewline:\n StringIndent:     StringText:a \
+         StringNewline:\n StringIndent:     StringText:  b StringEnd:\"\"\" RParen:) \
+         Whitespace:  Error:\\"
+    );
+    let fix = &lex_str(text).errors[0].fixes[0];
+    assert_eq!(fix.applicability, Applicability::NeedsReview);
+    assert_eq!(
+        message(&text[..22]),
+        "a multi-line string's closing `\"\"\"` goes on a line of its own, so this one is text, \
+         and the string has no closing line: move it to the next line, indented with 4 spaces"
+    );
+    assert!(message("\"\"\"\na\"\"\"").ends_with("move it to the next line"));
+    // The lines are checked once the string is closed, and the fix keeps CR LF.
+    assert_eq!(
+        errors("\"\"\"\r\n  \\q\"\"\""),
+        [
+            "E0006 7..9",
+            r#"E0005 9..12 => "\"\"\"\r\n  \\q\r\n  \"\"\"""#
+        ]
+    );
+    // A raw string has no escapes, so `\"""` closes it too.
+    assert_eq!(
+        errors("r\"\"\"\n\\\"\"\""),
+        [r#"E0005 6..9 => "r\"\"\"\n\\\n\"\"\"""#]
+    );
+    // A closing line later on wins.
+    assert_eq!(errors("\"\"\"\na\"\"\"\n\"\"\""), Vec::<String>::new());
+}
+
 #[test]
 fn unclosed_multiline_strings() {
     // The rest of the file isn't checked as string text.
@@ -266,8 +312,8 @@ fn unclosed_multiline_strings() {
     );
     assert_eq!(errors("\"\"\"a\nb"), ["E0005 0..3", "E0012 3..4"]);
     assert_eq!(errors("\"\"\""), ["E0005 0..3"]);
-    assert!(!message("\"\"\"\n a").contains("after other text"));
-    assert!(message("\"\"\"\n a\"\"\"").ends_with("is text, not the end of the string"));
+    // Escaped quotes are text, so they don't end it.
+    assert_eq!(errors("\"\"\"\n a\\\"\"\"\n"), ["E0005 0..3"]);
     // A lone CR in it is still reported.
     assert_eq!(
         errors("\"\"\"\na\rb"),

@@ -2,7 +2,9 @@
 //! missing closing line (E0005) and layout errors (E0012).
 
 use super::Lexer;
+use crate::literal::escape;
 use crate::{LexError, SyntaxKind, codes};
+use quince_diagnostics::Applicability;
 use std::ops::Range;
 
 /// The quotes that open and close a multi-line string.
@@ -32,6 +34,9 @@ impl Lexer<'_> {
             content.push(line);
         }
         let Some(indent) = closing else {
+            if let Some((last, at)) = quotes_after_text(self.text, &content, raw) {
+                return self.closed_after_text(&content[..=last], at, raw, interpolates);
+            }
             return self.unclosed_multiline(open..open + open_len, first_error, &content);
         };
         let indent_text = &self.text[indent.clone()];
@@ -43,7 +48,29 @@ impl Lexer<'_> {
         // When no line has the closing line's indentation, the closing line is the slip.
         let closing_is_wrong =
             !leads.is_empty() && leads.iter().all(|l| !l.starts_with(indent_text));
-        for line in content {
+        self.content_lines(&content, indent_text, !closing_is_wrong, raw, interpolates);
+        self.string_newline();
+        if closing_is_wrong {
+            self.errors
+                .push(closing_error(indent.clone(), indent_text, &leads));
+        }
+        if !indent.is_empty() {
+            self.bump(SyntaxKind::StringIndent, indent.len());
+        }
+        self.bump(SyntaxKind::StringEnd, QUOTES.len());
+    }
+
+    /// The content `lines`, each after its line ending, dropping the closing line's `indent`.
+    /// A line that doesn't start with it is an E0012 when `report_indent` says so.
+    fn content_lines(
+        &mut self,
+        lines: &[Range<usize>],
+        indent: &str,
+        report_indent: bool,
+        raw: bool,
+        interpolates: bool,
+    ) {
+        for line in lines {
             self.string_newline();
             let text = &self.text[line.clone()];
             if is_blank(text) {
@@ -53,28 +80,67 @@ impl Lexer<'_> {
                 }
                 continue;
             }
-            let kept = if text.starts_with(indent_text) {
-                indent_text.len()
+            let kept = if text.starts_with(indent) {
+                indent.len()
             } else {
-                if !closing_is_wrong {
+                if report_indent {
                     self.errors
-                        .push(indent_error(self.text, line.clone(), indent_text));
+                        .push(indent_error(self.text, line.clone(), indent));
                 }
-                common_prefix(text, indent_text)
+                common_prefix(text, indent)
             };
             if kept > 0 {
                 self.bump(SyntaxKind::StringIndent, kept);
             }
             self.line_text(line.end, raw, interpolates);
         }
-        self.string_newline();
-        if closing_is_wrong {
-            self.errors
-                .push(closing_error(indent.clone(), indent_text, &leads));
-        }
-        if !indent.is_empty() {
-            self.bump(SyntaxKind::StringIndent, indent.len());
-        }
+    }
+
+    /// A string with no closing line whose last line of `lines` holds `"""` after text, at
+    /// `at`, as Java and Kotlin close one. That `"""` is text (`r[lex.lit.multiline-close]`),
+    /// but the string ends there, with an E0005, so the rest of the file is still checked.
+    /// The fix moves the quotes to a line of their own, with the indentation the lines share,
+    /// which is what the lines drop here too.
+    fn closed_after_text(
+        &mut self,
+        lines: &[Range<usize>],
+        at: usize,
+        raw: bool,
+        interpolates: bool,
+    ) {
+        let text = self.text;
+        let mut lines = lines.to_vec();
+        lines.last_mut().expect("the line with the quotes").end = at;
+        let shared = (lines.iter())
+            .map(|line| &text[line.clone()])
+            .filter(|line| !is_blank(line))
+            .map(|line| &line[..indent_len(line)])
+            .reduce(|a, b| &a[..common_prefix(a, b)])
+            .expect("the line with the quotes isn't blank");
+        let newline = if text[..lines[0].start].ends_with("\r\n") {
+            "\r\n"
+        } else {
+            "\n"
+        };
+        self.content_lines(&lines, shared, true, raw, interpolates);
+        let indented = match shared {
+            "" => String::new(),
+            _ => format!(", indented with {}", describe(shared)),
+        };
+        let error = LexError::new(
+            at..at + QUOTES.len(),
+            codes::UNCLOSED_MULTILINE,
+            format!(
+                "a multi-line string's closing `\"\"\"` goes on a line of its own, so this one is \
+                 text, and the string has no closing line: move it to the next line{indented}"
+            ),
+        )
+        .with_fix(
+            "move the closing `\"\"\"` to a line of its own",
+            Applicability::NeedsReview,
+            vec![(at..at, format!("{newline}{shared}"))],
+        );
+        self.errors.push(error);
         self.bump(SyntaxKind::StringEnd, QUOTES.len());
     }
 
@@ -154,19 +220,12 @@ impl Lexer<'_> {
                 self.bump(SyntaxKind::StringText, line.len());
             }
         }
-        let mid_line = (content.iter()).any(|line| self.text[line.clone()].contains(QUOTES));
-        let hint = if mid_line {
-            "; a `\"\"\"` after other text on its line is text, not the end of the string"
-        } else {
-            ""
-        };
         let error = LexError::new(
             open,
             codes::UNCLOSED_MULTILINE,
-            format!(
-                "this multi-line string has no closing `\"\"\"` line, so it runs to the end of \
-                 the file: end it with a line that starts with `\"\"\"` after its indentation{hint}"
-            ),
+            "this multi-line string has no closing `\"\"\"` line, so it runs to the end of the \
+             file: end it with a line that starts with `\"\"\"` after its indentation"
+                .to_string(),
         );
         self.errors.insert(first_error, error);
     }
@@ -219,6 +278,29 @@ fn lines_after(text: &str, mut at: usize) -> impl Iterator<Item = Range<usize>> 
                 .find(['\n', '\r'])
                 .unwrap_or(text.len() - start);
         Some(start..at)
+    })
+}
+
+/// The first `"""` in the content `lines`, as the index of its line and its position. In a
+/// string that isn't `raw`, quotes that an escape takes, as in `\"""`, don't count.
+fn quotes_after_text(text: &str, lines: &[Range<usize>], raw: bool) -> Option<(usize, usize)> {
+    lines.iter().enumerate().find_map(|(i, line)| {
+        let line_text = &text[line.clone()];
+        let found = if raw {
+            line_text.find(QUOTES)
+        } else {
+            let mut at = 0;
+            loop {
+                let rest = &line_text[at..];
+                match rest.chars().next() {
+                    None => break None,
+                    Some('\\') => at += escape(rest).len,
+                    Some(_) if rest.starts_with(QUOTES) => break Some(at),
+                    Some(c) => at += c.len_utf8(),
+                }
+            }
+        };
+        found.map(|at| (i, line.start + at))
     })
 }
 
