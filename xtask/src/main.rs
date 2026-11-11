@@ -14,8 +14,9 @@ usage: cargo xtask <command>
 
 commands:
   ci                    run every check and print a summary
-  spec-rules            check the rule-ID tags in spec/quince-spec.md
-  spec-rules --strip    print the spec with every rule-ID tag removed
+  spec-rules            check spec/chapters.txt and the rule-ID tags in every chapter
+  spec-rules --strip [<file>]
+                        print one chapter file, or every one, with its rule-ID tags removed
   spec-grammar          check spec/grammar.ebnf against the spec's grammar appendices
   spec-grammar --write  regenerate spec/grammar.ebnf from the spec
   diagnostics           check every diagnostic code has explain text and a conformance test
@@ -29,7 +30,8 @@ fn main() -> ExitCode {
     match args.as_slice() {
         ["ci"] => ci::run(&root),
         ["spec-rules"] => exit(spec_rules::check(&root)),
-        ["spec-rules", "--strip"] => exit(spec_rules::strip(&root)),
+        ["spec-rules", "--strip"] => exit(spec_rules::strip(&root, None)),
+        ["spec-rules", "--strip", file] => exit(spec_rules::strip(&root, Some(file))),
         ["spec-grammar"] => exit(spec_grammar::check(&root)),
         ["spec-grammar", "--write"] => exit(spec_grammar::write(&root)),
         ["diagnostics"] => exit(diagnostics::check(&root)),

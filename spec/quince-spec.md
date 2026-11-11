@@ -1,7 +1,5 @@
 # Quince Language Spec
 
-Nov 10, 2026 · @David · Draft v0.5
-
 ## 1. Overview and design principles
 
 Quince is a statically typed, automatically memory-managed, general-purpose language designed so that both AI agents and humans can write, read, and verify code with as little hidden context as possible. Every rule below serves one goal: a reader should be able to understand a function correctly from the function itself.

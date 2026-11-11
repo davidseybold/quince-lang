@@ -6,20 +6,30 @@
 //! coverage. A backtick run with no closing run on the same line is literal text, as in
 //! CommonMark.
 
-use crate::SpecError;
+use crate::{ChapterFile, FileError, SpecError};
 use std::collections::{HashMap, HashSet};
 
 /// The topic reserved for IDs derived from grammar productions, such as `grammar.fn_decl`.
 pub const GRAMMAR_TOPIC: &str = "grammar";
 
-/// One tagged rule in the spec.
+/// One tag found in a file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Rule {
     pub id: String,
     /// 1-based line of the tag.
     pub line: usize,
-    /// The `## ` heading the tag sits under, such as `2. Lexical structure and syntax`.
-    pub section: String,
+}
+
+/// One tagged rule in the spec, with the chapter file that holds it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpecRule {
+    pub id: String,
+    /// The chapter file, relative to the repo root.
+    pub path: String,
+    /// 1-based line of the tag.
+    pub line: usize,
+    /// The title of the chapter, from the manifest.
+    pub chapter: String,
 }
 
 /// The topics listed in `spec/rule-topics.txt`, each with its 1-based line in that file.
@@ -46,7 +56,8 @@ pub fn topic(id: &str) -> &str {
     id.split('.').next().unwrap_or(id)
 }
 
-fn is_valid_segment(segment: &str) -> bool {
+/// One ID segment: lowercase letters and digits joined by single hyphens.
+pub fn is_valid_segment(segment: &str) -> bool {
     segment.split('-').all(|word| {
         !word.is_empty()
             && word
@@ -55,61 +66,72 @@ fn is_valid_segment(segment: &str) -> bool {
     })
 }
 
-/// Parses every tag in the spec and checks format, placement, topics and uniqueness. Returns
-/// every rule, or every problem found.
+/// Parses every tag in every chapter file and checks format, placement, topics and uniqueness
+/// across them. Returns every rule found, even when there are problems, and every problem.
 pub fn check(
-    spec: &str,
+    files: &[ChapterFile],
     retired: &HashSet<String>,
     topics: &Topics,
-) -> Result<Vec<Rule>, Vec<SpecError>> {
-    let (rules, mut errors) = parse(spec);
-    let mut first_line: HashMap<&str, usize> = HashMap::new();
-    for rule in &rules {
-        let mut error = |message: String| {
-            errors.push(SpecError {
-                line: rule.line,
-                message,
-            })
-        };
-        if let Some(first) = first_line.get(rule.id.as_str()) {
-            error(format!(
-                "duplicate rule ID `{}`; it is first used on line {first}",
-                rule.id
-            ));
-        } else {
-            first_line.insert(&rule.id, rule.line);
+) -> (Vec<SpecRule>, Vec<FileError>) {
+    let mut rules = Vec::new();
+    let mut errors = Vec::new();
+    let mut first_use: HashMap<String, (String, usize)> = HashMap::new();
+    for file in files {
+        let (found, mut file_errors) = parse(&file.text);
+        for rule in &found {
+            let mut error = |message: String| {
+                file_errors.push(SpecError {
+                    line: rule.line,
+                    message,
+                })
+            };
+            if let Some((path, line)) = first_use.get(&rule.id) {
+                error(format!(
+                    "duplicate rule ID `{}`; it is first used at {path}:{line}",
+                    rule.id
+                ));
+            } else {
+                first_use.insert(rule.id.clone(), (file.path.clone(), rule.line));
+            }
+            if retired.contains(&rule.id) {
+                error(format!(
+                    "rule ID `{}` is retired (spec/retired-rules.txt) and can't be reused; pick a new ID",
+                    rule.id
+                ));
+            }
+            let topic = topic(&rule.id);
+            if topic == GRAMMAR_TOPIC {
+                error(format!(
+                    "rule ID `{}` uses the reserved topic `grammar`, which belongs to IDs derived \
+                     from grammar productions; pick another topic",
+                    rule.id
+                ));
+            } else if !topics.contains_key(topic) {
+                error(format!(
+                    "rule ID `{}` has the topic `{topic}`, which spec/rule-topics.txt doesn't list; \
+                     reuse a listed topic, or add this one there with the subject it covers",
+                    rule.id
+                ));
+            }
         }
-        if retired.contains(&rule.id) {
-            error(format!(
-                "rule ID `{}` is retired (spec/retired-rules.txt) and can't be reused; pick a new ID",
-                rule.id
-            ));
-        }
-        let topic = topic(&rule.id);
-        if topic == GRAMMAR_TOPIC {
-            error(format!(
-                "rule ID `{}` uses the reserved topic `grammar`, which belongs to IDs derived \
-                 from grammar productions; pick another topic",
-                rule.id
-            ));
-        } else if !topics.contains_key(topic) {
-            error(format!(
-                "rule ID `{}` has the topic `{topic}`, which spec/rule-topics.txt doesn't list; \
-                 reuse a listed topic, or add this one there with the subject it covers",
-                rule.id
-            ));
-        }
+        file_errors.sort_by_key(|e| e.line);
+        errors.extend(
+            file_errors
+                .into_iter()
+                .map(|e| FileError::new(&file.path, e)),
+        );
+        rules.extend(found.into_iter().map(|rule| SpecRule {
+            id: rule.id,
+            path: file.path.clone(),
+            line: rule.line,
+            chapter: file.title.clone(),
+        }));
     }
-    if errors.is_empty() {
-        Ok(rules)
-    } else {
-        errors.sort_by_key(|e| e.line);
-        Err(errors)
-    }
+    (rules, errors)
 }
 
 /// Listed topics that no rule uses, as errors on their lines in `spec/rule-topics.txt`.
-pub fn unused_topics(rules: &[Rule], topics: &Topics) -> Vec<SpecError> {
+pub fn unused_topics(rules: &[SpecRule], topics: &Topics) -> Vec<SpecError> {
     let used: HashSet<&str> = rules.iter().map(|rule| topic(&rule.id)).collect();
     let mut errors: Vec<SpecError> = topics
         .iter()
@@ -184,7 +206,7 @@ fn entries(text: &str) -> impl Iterator<Item = (usize, &str)> {
         .filter(|(_, entry)| !entry.is_empty() && !entry.starts_with('#'))
 }
 
-/// The spec with every tag and the space after it removed.
+/// A chapter file with every tag and the space after it removed.
 pub fn strip(spec: &str) -> String {
     let mut out = String::with_capacity(spec.len());
     let mut in_code_block = false;
@@ -213,13 +235,12 @@ pub fn strip(spec: &str) -> String {
     out
 }
 
-/// Finds every tag and reports misplaced or malformed ones, without the uniqueness and topic
-/// checks.
+/// Finds every tag in one file and reports misplaced or malformed ones, without the uniqueness
+/// and topic checks.
 pub fn parse(spec: &str) -> (Vec<Rule>, Vec<SpecError>) {
     let mut rules = Vec::new();
     let mut errors = Vec::new();
     let mut in_code_block = false;
-    let mut section = String::new();
     for (index, line) in spec.lines().enumerate() {
         let line_no = index + 1;
         let trimmed = line.trim_start();
@@ -245,9 +266,6 @@ pub fn parse(spec: &str) -> (Vec<Rule>, Vec<SpecError>) {
                 }
             }
             continue;
-        }
-        if let Some(heading) = trimmed.strip_prefix("## ") {
-            section = heading.trim().to_string();
         }
         let is_heading = trimmed.starts_with('#');
         for tag in find_tags(line, true) {
@@ -280,7 +298,6 @@ pub fn parse(spec: &str) -> (Vec<Rule>, Vec<SpecError>) {
                 rules.push(Rule {
                     id: tag.id,
                     line: line_no,
-                    section: section.clone(),
                 });
             }
         }
@@ -397,15 +414,33 @@ mod tests {
         topics(&["bind", "lit", "type", "a", "ok"])
     }
 
-    fn rules(spec: &str) -> Vec<Rule> {
-        check(spec, &HashSet::new(), &test_topics()).unwrap()
+    fn file(path: &str, title: &str, text: &str) -> ChapterFile {
+        ChapterFile {
+            prefix: "x".into(),
+            title: title.into(),
+            path: path.into(),
+            file: path.into(),
+            text: text.into(),
+        }
     }
 
+    fn check_one(spec: &str, retired: &HashSet<String>) -> (Vec<SpecRule>, Vec<FileError>) {
+        check(&[file("spec.md", "Spec", spec)], retired, &test_topics())
+    }
+
+    fn rules(spec: &str) -> Vec<SpecRule> {
+        let (rules, errors) = check_one(spec, &HashSet::new());
+        assert_eq!(errors, Vec::new());
+        rules
+    }
+
+    /// Each problem as `line N: message`.
     fn messages(spec: &str) -> Vec<String> {
-        match check(spec, &HashSet::new(), &test_topics()) {
-            Ok(_) => Vec::new(),
-            Err(errors) => errors.into_iter().map(|e| e.to_string()).collect(),
-        }
+        check_one(spec, &HashSet::new())
+            .1
+            .into_iter()
+            .map(|e| format!("line {}: {}", e.line, e.message))
+            .collect()
     }
 
     #[test]
@@ -437,19 +472,51 @@ mod tests {
     }
 
     #[test]
-    fn finds_tags_with_their_sections() {
-        let spec = "## 2. Syntax\n\n- r[bind.let] `let` binds. r[bind.var] `var` too.\n\n## 3. Types\n\nr[type.int] Int.\n";
-        let found: Vec<_> = rules(spec)
+    fn finds_tags_with_their_chapters() {
+        let files = [
+            file(
+                "spec/reference/a.md",
+                "Syntax",
+                "# Syntax\n\n- r[bind.let] `let` binds. r[bind.var] `var` too.\n",
+            ),
+            file(
+                "spec/reference/b.md",
+                "Types",
+                "# Types\n\nr[type.int] Int.\n",
+            ),
+        ];
+        let (found, errors) = check(&files, &HashSet::new(), &test_topics());
+        assert_eq!(errors, Vec::new());
+        let found: Vec<_> = found
             .into_iter()
-            .map(|r| (r.id, r.line, r.section))
+            .map(|r| (r.id, r.path, r.line, r.chapter))
             .collect();
         let expected = [
-            ("bind.let", 3, "2. Syntax"),
-            ("bind.var", 3, "2. Syntax"),
-            ("type.int", 7, "3. Types"),
+            ("bind.let", "spec/reference/a.md", 3, "Syntax"),
+            ("bind.var", "spec/reference/a.md", 3, "Syntax"),
+            ("type.int", "spec/reference/b.md", 3, "Types"),
         ]
-        .map(|(id, line, section)| (id.to_string(), line, section.to_string()));
+        .map(|(id, path, line, chapter)| {
+            (id.to_string(), path.to_string(), line, chapter.to_string())
+        });
         assert_eq!(found, expected);
+    }
+
+    #[test]
+    fn errors_name_their_file() {
+        let files = [
+            file("spec/reference/a.md", "A", "r[bind.let] a\n"),
+            file("spec/reference/b.md", "B", "\nr[bind.let] b\nr[nope.x] c\n"),
+        ];
+        let (found, errors) = check(&files, &HashSet::new(), &test_topics());
+        assert_eq!(found.len(), 3);
+        let errors: Vec<_> = errors.into_iter().map(|e| e.to_string()).collect();
+        assert_eq!(errors.len(), 2, "{errors:?}");
+        assert_eq!(
+            errors[0],
+            "spec/reference/b.md:2: duplicate rule ID `bind.let`; it is first used at spec/reference/a.md:1"
+        );
+        assert!(errors[1].starts_with("spec/reference/b.md:3: rule ID `nope.x` has the topic"));
     }
 
     #[test]
@@ -524,7 +591,7 @@ mod tests {
     fn duplicate_ids() {
         assert_eq!(
             messages("r[bind.let] a\n\nr[bind.let] b\n"),
-            ["line 3: duplicate rule ID `bind.let`; it is first used on line 1"]
+            ["line 3: duplicate rule ID `bind.let`; it is first used at spec.md:1"]
         );
     }
 
@@ -533,7 +600,7 @@ mod tests {
         let (retired, errors) = parse_retired("# retired\n\nbind.old\ngrammar.old_arg\n");
         assert!(errors.is_empty(), "{errors:?}");
         assert!(retired.contains("grammar.old_arg"));
-        let errors = check("r[bind.old] a\n", &retired, &test_topics()).unwrap_err();
+        let (_, errors) = check_one("r[bind.old] a\n", &retired);
         assert_eq!(errors[0].line, 1);
         assert!(errors[0].message.contains("is retired"));
         let (ok, bad) = parse_retired("ok.id\nNot An Id\n");

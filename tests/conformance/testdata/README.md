@@ -15,7 +15,7 @@ fn f() {
 
 Header lines of the form `// <word>:`, where the word is lowercase ASCII letters and hyphens, are directives. The directives are `rule`, `mode` and `exit`. Any other such word before a colon is an error, and so is a case variant such as `// Mode:`. Other comments are free text, including `// Note: ...`. After the first line of code, a comment whose word is `rule`, `mode` or `exit` in any letter case is an error that says to move it into the header.
 
-- `// rule: <id>` cites the spec rule the fixture tests. At least one is required, each ID once. Every ID must exist in `spec/quince-spec.md` (or be `grammar.<production>`) and not be retired.
+- `// rule: <id>` cites the spec rule the fixture tests. At least one is required, each ID once. Every ID must be tagged in a spec chapter listed in `spec/chapters.txt` (or be `grammar.<production>`) and not be retired.
 - `// mode: <mode>` is set at most once. Modes are an open set: later milestones add more (`fmt` in M1), and an unknown mode is an error that lists the known ones.
   - `check` (the default) runs the whole checker as far as it exists. A check fixture must be a valid program under the whole spec apart from its expected diagnostics, so it keeps passing when later stages arrive. No tool can tell until those stages exist, so review enforces this.
   - `parse` runs only the parser, even after later stages exist, so a syntax fixture keeps passing when stages such as name resolution or lints add diagnostics (an unused binding, for example).
@@ -32,7 +32,7 @@ Write the fixture from the spec text alone, before the code that makes it pass. 
 
 ## Coverage report
 
-Each run writes `target/conformance/coverage.json` and prints the total and covered counts per spec section. A rule is covered only when at least one passing fixture cites it, so with no fixtures every rule is uncovered and the run still succeeds. The report has this shape:
+Each run writes `target/conformance/coverage.json` and prints the total and covered counts per spec chapter. A rule is covered only when at least one passing fixture cites it, so with no fixtures every rule is uncovered and the run still succeeds. The report has this shape:
 
 ```
 { "spec_version", "total", "covered",
@@ -40,6 +40,6 @@ Each run writes `target/conformance/coverage.json` and prints the total and cove
                  "rules": [{ "id", "covered_by": [<fixture name>] }] }] }
 ```
 
-- `spec_version` is the spec's draft version, such as `"0.5"`, read from its header.
-- Sections appear in spec order, each named by its `## ` heading. Grammar IDs come last, under `Grammar productions`.
+- `spec_version` is the spec's draft version, such as `"0.5"`, read from the header of `spec/README.md`.
+- Sections are chapters in the order of `spec/chapters.txt`, each named by its title there. A chapter with no rule IDs is left out. Grammar IDs come last, under `Grammar productions`.
 - An empty `covered_by` means the rule is uncovered.

@@ -1,0 +1,10 @@
+# The chapters of the spec, in reading order (compiler/spec/README.md).
+#
+# A chapter line gives the chapter's rule-ID prefix, its file (relative to spec/) and its title.
+# An indented line under it gives a construct of that chapter and the subject it covers. The
+# order of the chapter lines is the reading order, the coverage order and the order the grammar
+# is assembled in. `legacy` is the one-file spec while it is split into chapters; it never
+# appears in a rule ID.
+#
+# chapter  file                           title
+legacy     quince-spec.md                 Quince Language Spec (being split)
