@@ -1,6 +1,6 @@
 # M1: Lexer
 
-Status: draft. Passed design review (three passes); waiting on David for the spec questions. The first design doc of M1 (Syntax). A parser doc and a formatter doc follow it.
+Status: approved. Passed design review (three passes). David decided the spec questions on 2026-11-11: strict on question 1, the rest as proposed. The first design doc of M1 (Syntax). A parser doc and a formatter doc follow it.
 
 ## Why
 
@@ -12,7 +12,7 @@ Getting the token contract right now matters more than the code, which is small.
 
 - **Code:** `compiler/syntax` (`quince_syntax`) gets its first modules and a `README.md` holding the token contract. `quince_diagnostics` gets a line index. `quince_conformance` gets its first backend.
 - **Crate dependencies:** `quince_syntax` gains `quince_diagnostics` (and through it the approved `serde` and `serde_json`), and `quince_spec` as a dev-dependency. `quince_conformance`, and so xtask, gain `quince_syntax`. M0 listed xtask's dependencies as `quince_spec`, `quince_diagnostics`, `quince_conformance` and `serde_json` ([M0 decision 2](m0-repo-harness.md#2-cargo-xtask-ci)). Decision 10 says why the change is fine.
-- **Spec (needs David's approval):** the chapter leaves several things open that a lexer must decide. Spec questions, below, proposes wording for each. Each approved rule lands in the layer whose code enforces it, and each such layer bumps the spec's minor version.
+- **Spec (approved by David, 2026-11-11):** the chapter leaves several things open that a lexer must decide. Spec questions, below, gives the approved wording for each. Each rule lands in the layer whose code enforces it, and each such layer bumps the spec's minor version.
 - **Diagnostic codes:** up to fifteen, the first in the registry (decision 9). A code whose rule waits on a spec question is registered only after approval.
 - **Dependencies:** none new. No `logos`, no `rowan`. Whether the CST uses `rowan` is the parser doc's question.
 - **Delivery:** a stack of five PRs (decision 12).
@@ -221,7 +221,7 @@ The runner changes:
 - Rules with a lexical error (E0002 for `r[lex.braces]`, E0003 for `r[lex.comment.line]`) are cited by their negative fixtures.
 - Accepted forms (`0b1010`, a multi-line string) are cited by fixtures a lexer that rejected the form would fail. They check acceptance, not values. Values are unit-tested until `run` fixtures exist in M6, which then cite the same rules.
 - Rules a broken lexer would still pass, because it would report nothing, are tested by unit tests now and cited by the parser's fixtures. They are `lex.keywords`, `lex.no-contextual`, `lex.no-shift-token`, `lex.grammar-rules`, `lex.ident-classes`, `lex.indentation`, `lex.comment.doc` and `lex.comment.doc-exact`. A lexer that made `>>` one token would fail a parser fixture, not a lexer one.
-- Rules about other tools or about values are cited by those tools' fixtures: `lex.source.encoding-not-format` by `fmt` and `check` fixtures (the formatter doc), and `lex.lit.multiline-value` by `run` fixtures from M6.
+- Rules about other tools or about values are cited by those tools' fixtures: `lex.source.canonical` by `fmt` and `check` fixtures (the formatter doc), and `lex.lit.multiline-value` by `run` fixtures from M6.
 
 ### 12. Delivery as a stack
 
@@ -237,36 +237,36 @@ Each layer should come in at around 500 to 900 changed lines. Layer 2 is the lar
 
 **Literals before their layer.** Layers 2 and 3 must stand alone, so they lex the literal forms they don't handle yet by a fallback rule. Everything from a `"` to the next `"` on the same line is `StringStart`, `StringText` and `StringEnd`, with no validation. Everything from a `'` to the next `'` on the line is a `Char`. A prefix is a separate `Ident`. Until layer 4, `"""` lexes as an empty string followed by another string, so a multi-line string lexes wrongly. Nothing depends on that: no fixture uses those forms, and no command lexes user code until the parser lands.
 
-## Spec questions (need David's approval)
+## Spec questions (decided by David, 2026-11-11)
 
-Each proposed rule would go in `spec/reference/lexical.md` with the tag shown. Every ID has 2 to 4 segments, and its second segment is a construct listed under `lex` in `spec/chapters.txt`. Question 1 adds one construct, `source`. Question 5 doesn't block the lexer.
+All eight are approved: question 1 in its strict form, the other seven as proposed. Each rule goes in `spec/reference/lexical.md` with the tag shown. Every ID has 2 to 4 segments, and its second segment is a construct listed under `lex` in `spec/chapters.txt`. Question 1 adds one construct, `source`. Question 5 doesn't block the lexer.
 
-**1. Source text (layer 2).** The chapter doesn't say what a source file is made of. Proposed, as a new section "Source text" at the top of the chapter, with a `source` construct ("Source text: encoding, line endings, whitespace"):
+**1. Source text (layer 2).** The chapter doesn't say what a source file is made of. Approved, as a new section "Source text" at the top of the chapter, with a `source` construct ("Source text: encoding, line endings, whitespace"):
 - `r[lex.source.utf8]` A source file is UTF-8 text. A file that isn't valid UTF-8 is a compile error.
-- `r[lex.source.bom]` A byte order mark at the start of a file is ignored.
+- `r[lex.source.bom]` A byte order mark at the start of a file is ignored by the compiler.
 - `r[lex.source.line-end]` A line ends at a line feed, or at a carriage return followed by a line feed. A carriage return anywhere else is a compile error.
-- `r[lex.source.encoding-not-format]` The byte order mark and the choice of line ending aren't formatting: `quince` `fmt` keeps a byte order mark and writes every line ending as the file's first one, and `quince` `check` doesn't report either.
+- `r[lex.source.canonical]` `quince` `fmt` writes every line ending as a line feed and removes a byte order mark. So, like any unformatted code, a file with CR LF line endings or a byte order mark compiles but fails `quince` `check` ([Toolchain](../tooling/toolchain.md)).
 - `r[lex.source.whitespace]` Within a line, spaces and tabs are the only whitespace.
 - `r[lex.source.ascii]` Outside literals and comments, source text is ASCII, so identifiers are ASCII letters, digits and underscores.
 
-*Why:* git on Windows checks files out with CR LF, and some editors add a BOM. `r[tool.fmt.check]` makes unformatted code fail `check`, so if `fmt` normalized these, correct code would fail on those machines for something git and the editor control. A lone CR is almost always damage, so it is an error. ASCII-only identifiers follow from the naming rules (`snake_case` has no case for `é`) and keep look-alike characters out of names. They're also the reversible direction: allowing more later breaks nothing.
+*Decision (David, 2026-11-11): strict.* Every Quince file has one canonical byte form. CR LF and a BOM are accepted, so such a file still compiles, but they count as formatting. This is the reversible direction: loosening it later breaks nothing, while the reverse would have made existing code fail `check`. A lone CR is almost always damage, so it is an error, not just unformatted. ASCII-only identifiers follow from the naming rules (`snake_case` has no case for `é`) and keep look-alike characters out of names. They're also the reversible direction: allowing more later breaks nothing.
 
-*Alternative:* `fmt` writes LF and drops the BOM, and `check` reports both. That gives one canonical byte form, but fails the Windows case above.
+*Rejected:* `fmt` keeps the BOM and the file's line endings, and `check` doesn't report them. That spares Windows checkouts made with `core.autocrlf=true`, but leaves two byte forms for the same file and closes off the strict choice later.
 
-*One-way door:* the proposal is the loose direction. Once code relies on it, canonicalizing line endings later would make existing code fail `check`. The strict alternative could be loosened later without breaking anything. So this needs David's decision, not just a nod.
+*Cost:* a Windows checkout that converts line endings fails `check` until `fmt` runs. The mitigation is a `.gitattributes` line, `*.qnc text eol=lf`, in every Quince project. Whether a `quince` command writes it when it creates a project is for M2's project-layout doc.
 
 **2. Interpolation paths (layer 3).** `r[lex.lit.string.interp-path]` allows "a name or a field path", but the spec's own example (Items, `"{self.name} <{self.email}>"`) starts a path with `self`, which is a keyword, not a name. Allowing `self` and constants widens the rule's meaning, so the old ID is retired and replaced:
 - Retire `lex.lit.string.interp-path`, and add `r[lex.lit.string.interp-root]`: "Inside braces only a path is allowed, never another expression: a name, `self` or a constant name, followed by any number of field names or tuple positions, with no spaces: `{name}`, `{user.name}`, `{self.email}`, `{id.0}`, `{MAX_RETRIES}`."
 - A path can't start with a type (`{Config.MAX}`, `{Self.X}`). Bind the value first.
 
-**3. Multi-line strings (layer 4).** `r[lex.lit.string.multiline]` leaves open what may follow the opening `"""`, where the closing one may sit, and what happens to a line indented less than the closing line. Proposed, following Swift:
+**3. Multi-line strings (layer 4).** `r[lex.lit.string.multiline]` leaves open what may follow the opening `"""`, where the closing one may sit, and what happens to a line indented less than the closing line. Approved, following Swift:
 - `r[lex.lit.multiline-open]` After the opening `"""`, only spaces and tabs may come before the line break.
 - `r[lex.lit.multiline-close]` The closing `"""` is the first thing on its line after its indentation, and code may follow it on that line (`""")`). Elsewhere, `"`, `""` and `"""` are text. So a content line can't start with `"""`: a `"""` string writes it `\"""`, and an `r"""` string can't hold it.
 - `r[lex.lit.multiline-indent]` Every line between must start with exactly the closing line's indentation, the same spaces and tabs, except a line that holds only whitespace, which becomes empty. Otherwise it is a compile error.
 - `r[lex.lit.multiline-value]` The value doesn't include the line break before the closing line, and every line break in it is a line feed, whatever the file uses.
 - `r[lex.lit.multiline-forms]` Only `"""` and `r"""` are multi-line. A `"""` string takes the same escapes as a `"` string. `b"""` and tagged multi-line literals don't exist.
 
-**4. Number forms (layer 2).** The examples don't settle the edge cases. Proposed:
+**4. Number forms (layer 2).** The examples don't settle the edge cases. Approved:
 - `r[lex.lit.underscore]` In any numeric literal, including a float's fraction and exponent, an underscore may appear only between two digits. So `1_000` and `1_000.5` are valid, and `_1`, `1_`, `1__0`, `0x_FF` and `1_.5` are not.
 - `r[lex.lit.int.prefix]` The base prefixes are lowercase (`0x`, `0b`, `0o`). Hex digits may be either case.
 - `r[tool.fmt.hex-digits]`, in the Toolchain chapter's formatting rules: "`quince` `fmt` writes hex digits uppercase." The formatter doc cites it.
@@ -274,15 +274,15 @@ Each proposed rule would go in `spec/reference/lexical.md` with the tag shown. E
 - `r[lex.lit.float.shape]` A float has digits on both sides of its point (`1.0`, not `1.` or `.5`), and its exponent is a lowercase `e`, an optional sign and digits. `1E9` is an error whose fix lowercases the `E`.
 - `r[lex.lit.no-suffix]` A numeric literal has no type suffix: its type comes from context.
 
-**5. Code block labels (layer 5, wording only, no bump).** The spec and `std/API.md` don't label their code blocks, so "every code block parses" can't tell Quince from TOML, JSON and REPL transcripts. A skip list keyed by file and first line would break on every edit. Proposed: label every block (`quince`, `toml`, `json`, `text`), and add a `spec-rules` check that fails on an unlabelled block.
+**5. Code block labels (layer 5, wording only, no bump).** The spec and `std/API.md` don't label their code blocks, so "every code block parses" can't tell Quince from TOML, JSON and REPL transcripts. A skip list keyed by file and first line would break on every edit. Approved: label every block (`quince`, `toml`, `json`, `text`), and add a `spec-rules` check that fails on an unlabelled block.
 
-**6. Doc comments (layer 2).** `r[lex.comment.doc]` doesn't say whether `////` is a doc comment. Proposed: `r[lex.comment.doc-exact]` "A doc comment starts with exactly three slashes: `////` starts an ordinary comment", as in Rust.
+**6. Doc comments (layer 2).** `r[lex.comment.doc]` doesn't say whether `////` is a doc comment. Approved: `r[lex.comment.doc-exact]` "A doc comment starts with exactly three slashes: `////` starts an ordinary comment", as in Rust.
 
-**7. Escapes (layer 3).** Proposed:
+**7. Escapes (layer 3).** Approved:
 - `r[lex.lit.string.unicode-escape]` "`\u{...}` holds one to six hex digits naming a Unicode scalar value, so `\u{}`, surrogates (`\u{D800}`) and values above `\u{10FFFF}` are errors."
 - `r[lex.lit.bytes.hex-escape]` "`\x` takes exactly two hex digits, and appears only in bytes literals."
 
-**8. Control and bidirectional characters (layer 4).** The spec doesn't say which characters may appear raw inside literals and comments. The Trojan Source attack (CVE-2021-42574) hides code in bidirectional-format characters, and rustc denies them by default. Proposed:
+**8. Control and bidirectional characters (layer 4).** The spec doesn't say which characters may appear raw inside literals and comments. The Trojan Source attack (CVE-2021-42574) hides code in bidirectional-format characters, and rustc denies them by default. Approved:
 - `r[lex.source.control]` "Apart from tabs and line endings, a literal or comment can't contain a control character (U+0000 to U+001F, and U+007F) or a bidirectional-format character (U+202A to U+202E, U+2066 to U+2069). A `"` or `"""` string writes one as an escape. Raw and tagged literals and comments can't hold them."
 - A carriage return not followed by a line feed falls under `r[lex.source.line-end]` (E0013), not this rule, so one character never gets both codes.
 
@@ -315,12 +315,13 @@ Found while writing this. None of them block the lexer.
 - **Line breaks before a closing bracket.** `r[tool.fmt.check]` says unformatted code compiles, so a call broken over lines without its trailing comma (`f(\n  a,\n  b\n)`) must parse. The line break before `)` can't end a statement there.
 - **C names that are keywords.** A C function whose name is a keyword (POSIX `select`) can't be declared: `r[ffi.cbind.keyword-param]` covers parameters only, and `r[lex.no-contextual]` rules out reading `select` as a name inside `foreign`.
 - **Negative literals.** `r[lex.lit.int.neg]` says the minus is "directly before" the literal. Whether `- 1` counts decides whether the parser checks adjacency.
-- **Rules this doc hands over** (decision 11): fixtures for `lex.keywords`, `lex.no-contextual`, `lex.no-shift-token`, `lex.grammar-rules`, `lex.ident-classes`, `lex.indentation`, `lex.comment.doc` and `lex.comment.doc-exact`. The formatter doc takes `lex.source.encoding-not-format`.
+- **Rules this doc hands over** (decision 11): fixtures for `lex.keywords`, `lex.no-contextual`, `lex.no-shift-token`, `lex.grammar-rules`, `lex.ident-classes`, `lex.indentation`, `lex.comment.doc` and `lex.comment.doc-exact`. The formatter doc takes `lex.source.canonical`.
 - **Coverage ratchet.** M0 left this for M1. Decide it once the parser adds real coverage.
 
 ## For later milestones
 
-- **Lockfile hashes (M11).** If CR LF checkouts are allowed (spec question 1), content hashes must be computed over git's tree or over normalized bytes, or a Windows checkout hashes differently. The M11 design doc should take this up.
+- **Lockfile hashes (M11).** CR LF files still compile (spec question 1), and a Windows checkout can convert line endings, so content hashes must be computed over git's tree or over normalized bytes, or a Windows checkout hashes differently. The M11 design doc should take this up.
+- **`.gitattributes` for Quince projects (M2).** See question 1's cost: decide whether creating a project writes `*.qnc text eol=lf`.
 
 ## Tasks
 
