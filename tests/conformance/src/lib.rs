@@ -878,6 +878,6 @@ let x = 1 //~ E0100
             rules.sections.last().map(String::as_str),
             Some(GRAMMAR_SECTION)
         );
-        assert_eq!(rules.spec_version, "0.5");
+        assert_eq!(rules.spec_version, "0.6");
     }
 }
