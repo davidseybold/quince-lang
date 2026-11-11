@@ -155,7 +155,7 @@ http.serve(8080, handler: fn(req) { handle(req, bg:) })
 - r[item.arg.receiver] On a method call the receiver doesn't count, so the first argument after it may be positional: `counts.update(word, default: 0, ...)`. r[item.arg.fn-value-positional] A call through a function value, such as `handler(req)` or `f(a, b)`, is always positional, because function types have no parameter names.
 - r[item.arg.order] Named arguments are passed in declaration order, so each call has one canonical form.
 - r[item.arg.default] A parameter may have a default value, which must be a literal, an empty list or map literal (`[]` or `{:}`), including a tagged literal such as dur"30s", or the name of a const, including a type's constant such as Int.MAX: `fn retry(times: Int = 3)`. A caller can leave it out.
-- r[item.arg.semver] Adding a parameter with a default is not a breaking change ([Dependencies and publishing](../quince-spec.md#enforced-semantic-versioning)). Renaming any parameter is.
+- r[item.arg.semver] Adding a parameter with a default is not a breaking change ([Dependencies and publishing](../tooling/dependencies.md)). Renaming any parameter is.
 
 ## Attributes
 
@@ -169,7 +169,7 @@ r[item.attr.fixed] Attributes are a fixed set defined by the language. Packages 
 | --- | --- | --- |
 | r[item.attr.unchecked] `@unchecked` | Functions | Skip contract checks in release builds ([Contracts](contracts.md)) |
 | r[item.attr.verify] `@verify` | Functions | Attempt static proof of contracts with `quince` `verify` ([Contracts](contracts.md)) |
-| r[item.attr.extensible] `@extensible` | Enums | Variants may be added without a major version; callers must include a wildcard arm ([Dependencies and publishing](../quince-spec.md#enforced-semantic-versioning)) |
+| r[item.attr.extensible] `@extensible` | Enums | Variants may be added without a major version; callers must include a wildcard arm ([Dependencies and publishing](../tooling/dependencies.md)) |
 | r[item.attr.pinned] `@pinned` | Foreign libraries | Always call from the same OS thread ([Interop with C](interop.md)) |
 | r[item.attr.shareable] `@shareable` | Foreign resource types | The C handle is safe to use from several threads, so its Resource may cross task boundaries. Unverifiable, so it is listed with the package's native dependencies ([Interop with C](interop.md)) |
 | r[item.attr.cleanup] `@cleanup(fn, limit: dur)` | Foreign types | The C function that releases the type, and the cleanup time limit (10 seconds when left out), so it can be held in a Resource ([Interop with C](interop.md)) |

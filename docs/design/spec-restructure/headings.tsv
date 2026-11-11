@@ -2,12 +2,10 @@
 # new	file	heading line it adds
 # moved	baseline line (L120)	baseline heading	file	heading line it became (one row per part when a section splits)
 # dropped	baseline line	baseline heading
-# A baseline heading without a row must still be in quince-spec.md, unchanged.
+# Every baseline heading has a row.
 moved	L5	## 1. Overview and design principles	spec/reference/introduction.md	# Introduction
-moved	L5	## 1. Overview and design principles	spec/quince-spec.md	## 1. Overview and design principles
 moved	L26	### Deliberately excluded	spec/reference/introduction.md	## Deliberately excluded
 moved	L42	## 2. Lexical structure and syntax	spec/reference/lexical.md	# Lexical structure
-moved	L42	## 2. Lexical structure and syntax	spec/quince-spec.md	## 2. Lexical structure and syntax
 moved	L50	### Keywords	spec/reference/lexical.md	## Keywords
 moved	L50	### Keywords	spec/reference/expressions.md	## `return`, `break` and `continue`
 moved	L50	### Keywords	spec/reference/statements.md	## Loops
@@ -26,7 +24,6 @@ moved	L176	### Blocks, statements and expressions	spec/reference/statements.md	#
 moved	L199	### Comments	spec/reference/lexical.md	## Comments
 moved	L204	### Attributes	spec/reference/items.md	## Attributes
 moved	L225	## 3. Type system	spec/reference/types.md	# Types
-moved	L225	## 3. Type system	spec/quince-spec.md	## 3. Type system
 moved	L229	### Built-in types	spec/reference/types.md	## Built-in types
 moved	L251	### Structs	spec/reference/items.md	## Structs
 moved	L267	### Enums (algebraic data types)	spec/reference/items.md	## Enums (algebraic data types)
@@ -39,17 +36,13 @@ moved	L378	### Operators on user types	spec/reference/prelude.md	## Operators on
 moved	L406	### Automatic equality and hashing	spec/reference/prelude.md	## Automatic equality and hashing
 moved	L415	### Serialization	spec/reference/prelude.md	## Serialization
 moved	L449	### Methods	spec/reference/items.md	## Methods
-moved	L449	### Methods	spec/quince-spec.md	### Methods
 moved	L455	### Inference rules	spec/reference/types.md	## Inference rules
 moved	L487	### Exhaustive `match`	spec/reference/expressions.md	## Exhaustive `match`
 moved	L494	### Patterns	spec/reference/patterns.md	# Patterns
 moved	L503	### Pattern tests with `is`	spec/reference/expressions.md	## Pattern tests with `is`
 moved	L732	## 7. Modules, packages, and versioning	spec/reference/packages.md	# Packages and modules
-moved	L732	## 7. Modules, packages, and versioning	spec/quince-spec.md	## 7. Modules, packages, and versioning
 moved	L736	### Modules and imports	spec/reference/packages.md	## Modules and imports
-moved	L736	### Modules and imports	spec/quince-spec.md	### Modules and imports
 moved	L756	### Packages	spec/reference/packages.md	## Packages
-moved	L756	### Packages	spec/quince-spec.md	### Packages
 moved	L833	### Editions	spec/reference/packages.md	## Editions
 moved	L1385	## Appendix: Prelude	spec/reference/prelude.md	# Prelude and special interfaces
 moved	L1405	### Interfaces	spec/reference/prelude.md	## Interfaces
@@ -74,7 +67,6 @@ moved	L575	### Declaring and inferring	spec/reference/effects.md	## Declaring an
 moved	L587	### Effect variables	spec/reference/effects.md	## Effect variables
 moved	L628	### Handlers in tests and production	spec/reference/effects.md	## Handlers in tests and production
 moved	L661	## 6. Contracts and testing	spec/reference/contracts.md	# Contracts
-moved	L661	## 6. Contracts and testing	spec/quince-spec.md	## 6. Contracts and testing
 moved	L665	### `requires` and `ensures`	spec/reference/contracts.md	## `requires` and `ensures`
 moved	L728	### Static verification (optional)	spec/reference/contracts.md	## Static verification (optional)
 moved	L911	## 9. Concurrency	spec/reference/concurrency.md	# Concurrency
@@ -88,10 +80,8 @@ moved	L1899	### Reference types and concurrency (std.sync)	spec/reference/concur
 moved	L1962	### Built-in effect operations	spec/reference/effects.md	## Built-in effect operations
 moved	L610	### Capabilities at runtime	spec/reference/execution.md	## Capabilities at runtime
 moved	L661	## 6. Contracts and testing	spec/reference/testing.md	# Testing
-moved	L661	## 6. Contracts and testing	spec/quince-spec.md	## 6. Contracts and testing
 moved	L685	### Executable examples in doc comments	spec/reference/testing.md	## Executable examples in doc comments
 moved	L698	### Unit tests	spec/reference/testing.md	## Unit tests
-moved	L698	### Unit tests	spec/quince-spec.md	### Unit tests
 moved	L707	### Integration tests	spec/reference/testing.md	## Integration tests
 moved	L715	### Property tests	spec/reference/testing.md	## Property tests
 moved	L1033	### Deterministic testing	spec/reference/testing.md	## Deterministic testing
@@ -109,3 +99,25 @@ dropped	L1267	## Appendix: Expression grammar
 dropped	L1320	### Declarations, types and patterns
 new	spec/reference/execution.md	# Program execution
 new	spec/reference/execution.md	## The `main` function and process exit
+dropped	L1	# Quince Language Spec
+dropped	L9	### Target domain
+dropped	L17	### Core principles
+moved	L191	### Formatting rules (enforced by `quince` `fmt`)	spec/tooling/toolchain.md	## Formatting rules (enforced by `quince` `fmt`)
+moved	L732	## 7. Modules, packages, and versioning	spec/tooling/dependencies.md	# Dependencies and publishing
+moved	L772	### The manifest	spec/tooling/dependencies.md	## The manifest
+moved	L807	### Version resolution	spec/tooling/dependencies.md	## Version resolution
+moved	L816	### Content addressing	spec/tooling/dependencies.md	## Content addressing
+moved	L822	### Enforced semantic versioning	spec/tooling/dependencies.md	## Enforced semantic versioning
+moved	L839	## 8. Toolchain	spec/tooling/toolchain.md	# Toolchain
+moved	L839	## 8. Toolchain	spec/tooling/diagnostics.md	# Diagnostics and queries
+moved	L843	### Commands	spec/tooling/toolchain.md	## Commands
+moved	L864	### Structured diagnostics	spec/tooling/diagnostics.md	## Structured diagnostics
+moved	L891	### Query API	spec/tooling/diagnostics.md	## Query API
+moved	L1046	## 10. Compilation	spec/tooling/toolchain.md	## Compilation
+moved	L1050	### Backend decision	spec/tooling/toolchain.md	## Backend decision
+dropped	L1054	### Pipeline
+moved	L1073	### Build profiles	spec/tooling/toolchain.md	## Build profiles
+moved	L1082	### Targets	spec/tooling/toolchain.md	## Targets
+moved	L1091	### Incremental compilation	spec/tooling/toolchain.md	## Incremental compilation
+moved	L1095	### Debugging	spec/tooling/toolchain.md	## Debugging
+dropped	L1261	## 12. Open questions

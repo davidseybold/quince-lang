@@ -59,7 +59,7 @@ pub fn sync_users(api: ApiClient, store: UserStore) -> Result<Int, SyncError>
 ```
 
 - r[effect.declare-all] Every function declares its effects, public or private, so a reader never has to open a callee to learn what a function can do. r[effect.fix-uses] `quince` `fix` writes in a missing or out-of-date `uses` clause, so nobody works it out by hand.
-- r[effect.unused-warn] Declaring an effect a function doesn't use is a warning, so signatures stay honest in both directions. r[effect.unused-pub] A `pub` function is exempt, because adding an effect later is a breaking change ([Dependencies and publishing](../quince-spec.md#enforced-semantic-versioning)), and r[effect.fix-pub-review] `quince` `fix` marks adding an effect to a `pub` signature `needs-review`.
+- r[effect.unused-warn] Declaring an effect a function doesn't use is a warning, so signatures stay honest in both directions. r[effect.unused-pub] A `pub` function is exempt, because adding an effect later is a breaking change ([Dependencies and publishing](../tooling/dependencies.md)), and r[effect.fix-pub-review] `quince` `fix` marks adding an effect to a `pub` signature `needs-review`.
 - r[effect.closure-type] Closures carry effects in their type: `fn(Int) -> Int uses Log`. r[effect.pure-param] A parameter type with no `uses` accepts only pure closures. A function that should accept effectful ones declares an [effect variable](#effect-variables).
 
 ## Effect variables

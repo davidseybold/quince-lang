@@ -4,9 +4,7 @@
 # An indented line under it gives a construct of that chapter and the subject it covers: the
 # second segment of a rule ID such as `stmt.bind.shadow.same-scope`. Reuse a construct before
 # adding one. The order of the chapter lines is the reading order, the coverage order and the
-# order the grammar is assembled in. `legacy` is the one-file spec while it is split into
-# chapters; it never appears in a rule ID. A chapter file that doesn't exist yet is still in
-# `legacy`.
+# order the grammar is assembled in.
 #
 # chapter  file                           title
 intro      reference/introduction.md      Introduction
@@ -122,4 +120,3 @@ tool       tooling/toolchain.md           Toolchain
   debug       Debugging and debug info
 diag       tooling/diagnostics.md         Diagnostics and queries
   query       `quince query`
-legacy     quince-spec.md                 Quince Language Spec (being split)
