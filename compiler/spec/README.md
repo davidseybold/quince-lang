@@ -1,6 +1,6 @@
 # quince_spec
 
-Reads the language spec for `cargo xtask` and the conformance runner: its chapter manifest, its rule-ID tags and its grammar. This file defines the formats it checks. The spec itself says what Quince means, so nothing here restates it.
+Reads the language spec for `cargo xtask`, the conformance runner and the lexer's corpus test: its chapter manifest, its rule-ID tags, its code block labels and its grammar. This file defines the formats it checks. The spec itself says what Quince means, so nothing here restates it.
 
 ## Chapters
 
@@ -68,11 +68,24 @@ r[effect.net]
 
 `cargo xtask spec-rules` checks all of the above that a tool can check, and names the file and line of every problem.
 
+## Code blocks
+
+Every fenced code block in a chapter file and in `std/API.md` carries a label, so a tool can tell Quince from the other formats the spec shows.
+
+- **Fences.** A fence is a line that starts with ``` after any indentation. On an opening fence, the rest of the line, trimmed, is the label. The next fence closes the block.
+- **Labels.** One of:
+  - `quince`: Quince source that lexes with no errors. The lexer's corpus test lexes every such block. It may be a fragment, such as a signature with no body or a `{ ... }` placeholder, so it isn't promised to parse.
+  - `toml` and `json`: a manifest or a JSON document.
+  - `text`: anything else, such as a REPL transcript or Quince that is wrong on purpose.
+  - `ebnf`: grammar (below).
+
+`cargo xtask spec-rules` fails on a block with no label or with any other label, naming the file and the line of its opening fence.
+
 ## Grammar
 
 `spec/grammar.ebnf` is a machine-readable copy of the spec's grammar that the parser is tested against.
 
-- **Grammar blocks:** grammar lives in fenced code blocks whose info string is `ebnf`, each next to the prose it formalizes. A chapter may hold any number of them. Any other code block is an example.
+- **Grammar blocks:** grammar lives in fenced code blocks whose info string is `ebnf`, each next to the prose it formalizes. A chapter may hold any number of them. A block with any other label is an example.
 - **Contents:** a header of `//` comment lines, then every `ebnf` block in manifest order (document order within a chapter), copied verbatim and separated by one blank line.
 - **Editing:** the header (its terminal list) is the only hand-edited part. `cargo xtask spec-grammar --write` regenerates everything after it, keeping the existing header, or writing the default header when the file doesn't exist.
 

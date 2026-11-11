@@ -216,7 +216,7 @@ The runner changes:
 - **Unit tests** in `quince_syntax` compare token dumps (`kind "text"` per line) with hand-written expected text, and check decoded values through `literal`. No snapshot crate.
 - **Spec sync tests** (decisions 4 and 6): keywords against the spec, punctuation and `continues_line()` against the grammar.
 - **Corpus:** every code block labelled `quince` in the spec chapters and `std/API.md` lexes with no errors (spec question 5).
-- **Invariants on every input:** no panic; the token texts concatenate to the input; no token is empty; every error range lies inside the input on character boundaries. These run over seeded mutations (inserted, deleted and swapped characters, from a small dependency-free PRNG) of the corpus, the unit-test inputs and the `lex/` fixtures. The last two exercise the string and interpolation states, which the corpus barely reaches. They are bounded so `cargo test` stays under a second for this crate. A `cargo-fuzz` target needs nightly and a dependency, so it waits for the parser doc, which owns the fuzzing exit criterion.
+- **Invariants on every input:** no panic; the token texts concatenate to the input; no token is empty; every error range lies inside the input on character boundaries. These run over seeded mutations (inserted, deleted and swapped bytes, from a small dependency-free PRNG) of the corpus and the `lex/` fixtures, as bytes so they reach invalid UTF-8 and `decode_source`. The fixtures exercise the string and interpolation states, which the corpus barely reaches, and the mutants together must report every code. The unit-test inputs aren't collected (layer 7): the fixtures cover every code and literal form, and the `every_short_*` tests already try every short literal text. The mutations take about 0.2 s in debug. The crate's run takes about 2 s in debug, set by `every_short_multiline_string`, so they add no time to it; the first goal of under a second was already missed before layer 7. A `cargo-fuzz` target needs nightly and a dependency, so it waits for the parser doc, which owns the fuzzing exit criterion.
 - **Conformance fixtures:** one per diagnostic code, as `cargo xtask diagnostics` requires, and one per rule in Tasks.
 
 **Coverage honesty.** A fixture cites a rule only when a lexer that broke the rule would fail it. With no parser yet, a `parse` fixture fails only on an unexpected or missing diagnostic. So:
@@ -331,6 +331,8 @@ Found while writing this. None of them block the lexer.
 - **Coverage ratchet.** M0 left this for M1. Decide it once the parser adds real coverage.
 - **Adjacent literals** (layer 6b). A quote in a string that isn't escaped can leave two literals side by side with no lexical error: `"press "b" now"` is a string and then a bytes literal, and `"the "r" key"` a string and then a raw string. With an unknown tag, as in `"say "hi" now"`, the lexer reports E0010. The parser reports two adjacent literals as it reports any two expressions with nothing between them, with no hint for this shape (decision 9). Likewise `r"a\"b"` is a raw string, `r"a\"`, then an unclosed bytes literal.
 
+- **The corpus doesn't parse.** Many `quince` blocks are fragments: API listings with no bodies (`impl Float { fn abs(self) -> Float }`), `{ ... }` placeholders, and top-level `let` statements. They lex, which is all layer 7 checks. A parser corpus needs a rule for them, such as parsing a block as items or as statements, or another label, which is a spec question.
+
 ## For later milestones
 
 - **Lockfile hashes (M11).** CR LF files still compile (spec question 1), and a Windows checkout can convert line endings, so content hashes must be computed over git's tree or over normalized bytes, or a Windows checkout hashes differently. The M11 design doc should take this up.
@@ -399,6 +401,6 @@ Rule IDs in brackets are what each task's fixtures cite. Rules added by spec que
 - [x] Control and bidirectional characters; E0015. [`lex.source.control`]
 
 **Layer 7: `m1/lexer-corpus`**
-- [ ] Spec: label every code block (question 5), and the `spec-rules` check for unlabelled blocks.
-- [ ] Corpus test over the spec and `std/API.md`.
-- [ ] Mutation tests of the invariants.
+- [x] Spec: label every code block (question 5), and the `spec-rules` check for unlabelled blocks. Two blocks are `text` (decided by David, 2026-11-11): the operator examples that are errors on purpose in `expressions.md`, and a REPL transcript in `std/API.md`.
+- [x] Corpus test over the spec and `std/API.md`.
+- [x] Mutation tests of the invariants.

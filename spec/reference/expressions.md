@@ -106,7 +106,7 @@ r[expr.op.bits.chain]
 r[expr.op.bits.parens]
 - `&`, `|`, `^`, `<<` and `>>` have no level: each must be parenthesized as an operand of any other operator, and its own operands are prefix or postfix expressions
 
-```
+```text
 flags & MASK == 0        // error: write (flags & MASK) == 0
 a || b && c              // error: write a || (b && c)
 0 <= i < n               // error: write 0 <= i && i < n
@@ -257,7 +257,7 @@ r[expr.is.bool]
 r[expr.is.scope]
 Inside an `if` condition, variables bound by the pattern are in scope in the true branch, in the right side of a following && and in the body of a while the test heads (never through || or !):
 
-```
+```quince
 if response is Ok(page) {
   render(page)
 }

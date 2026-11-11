@@ -41,7 +41,7 @@ A name is in the prelude only if the language's syntax or the compiler needs it 
 
 ## Interfaces
 
-```
+```quince
 pub interface Eq { fn eq(self, other: Self) -> Bool }
 pub interface Ord { fn compare(self, other: Self) -> Ordering }
 pub enum Ordering { Less, Equal, Greater }
@@ -89,7 +89,7 @@ r[prelude.no-other-ord]
 
 ## Functions
 
-```
+```quince
 pub fn assert(condition: Bool, message: String = "")
 pub fn todo(reason: String) -> Never
 pub fn unreachable(reason: String) -> Never
@@ -107,7 +107,7 @@ Arithmetic operators on user types come from six prelude interfaces, and each op
 r[prelude.user-op.builtin-impls]
 The built-in numeric types implement them, and a user type opts in with an ordinary `impl`:
 
-```
+```quince
 pub interface Sub<R> {
   type Output
   fn sub(self, rhs: R) -> Self.Output
@@ -207,7 +207,7 @@ Only the fields' visibility counts, not the type's own, so a private struct whos
 r[prelude.wire.data-model]
 The std formats (`json`, `toml`, `form`) all read and write through one format-neutral data model, so a type that encodes to one of them encodes to all of them. There is no derive to write and no hand-written codec to drift out of date.
 
-```
+```quince
 @wire(case: camel)
 pub struct Order {
   @wire("type")

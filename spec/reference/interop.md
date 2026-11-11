@@ -13,7 +13,7 @@ c_fn         = "fn" c_name "(" [ c_name ":" type { "," c_name ":" type } [ "," ]
 r[ffi.cbind.generate]
 `quince` `bind <header.h>` reads a C header and generates raw declarations. Bindings are generated rather than hand-written, because a mistyped foreign declaration corrupts memory silently.
 
-```
+```quince
 foreign "sqlite3" uses Fs {
   @cleanup(sqlite3_close, limit: dur"5s")
   type sqlite3
@@ -219,7 +219,7 @@ A package containing a `foreign` block is native, which the toolchain sees in it
 r[ffi.trust.allow]
 A project must allow each native dependency by name in its manifest:
 
-```
+```toml
 [project]
 allow_native = ["sqlite"]
 ```
@@ -232,7 +232,7 @@ Building with an unlisted native dependency is an error. The effect declared on 
 r[ffi.link.table]
 The `[native]` table in `quince``.toml` names every C library the project links and any C sources it builds:
 
-```
+```toml
 [native]
 link = ["minz"]            # found with pkg-config, then the system linker's search path
 sources = ["native/*.c"]   # optional: C files built with the toolchain's C compiler
@@ -265,7 +265,7 @@ r[ffi.cmem.resource-once]
 r[ffi.cmem.with-resource]
 - with\_resource hands its body the resource itself and closes it when the body ends, even on error, panic, or cancellation:
 
-```
+```quince
 let changes = ffi.with_resource(Resource.adopt(out.get()), fn(db) {
   sqlite3_changes(db.ptr())
 })
@@ -304,7 +304,7 @@ r[ffi.cresource.crossing]
 r[ffi.pool.def]
 For the usual case, a handle that isn't, the standard library's `Pool<T, Err, uses E>` holds up to `max` of them and hands each one to a single task at a time:
 
-```
+```quince
 let pool = Pool.new(20, healthy: fn(conn) { conn.is_open() }, fn() { pg.connect(url) })
 let rows = pool.checkout(fn(conn) { conn.query("SELECT 1", params: []) })??
 ```
@@ -374,7 +374,7 @@ r[ffi.callback.local-ref]
 r[ffi.callback.local-abort]
 - A call from anywhere else aborts the process with a message naming the callback.
 
-```
+```quince
 // C: int minz_stream_set_progress(minz_stream *stream, minz_progress_fn on_progress, void *user);
 foreign "minz" uses State {
   @cleanup(minz_stream_free)

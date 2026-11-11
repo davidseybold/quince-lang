@@ -5,6 +5,7 @@ use std::path::Path;
 
 mod chars;
 mod control;
+mod corpus;
 mod errors;
 mod multiline;
 mod numbers;

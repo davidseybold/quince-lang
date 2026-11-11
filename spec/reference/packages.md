@@ -11,7 +11,7 @@ Each dependency, meaning one repository folder at one major version, resolves to
 
 ## Modules and imports
 
-```
+```quince
 import std.http.{Response}
 import std.json
 import acme_billing.{Invoice, InvoiceError}

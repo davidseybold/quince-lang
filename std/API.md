@@ -25,7 +25,7 @@ Every entry is written for an agent that reads one entry and then writes a call.
 
 A sample entry:
 
-```
+```quince
 fn update(var self, key: K, default: V, f: fn(V) -> V uses E) uses E
 ```
 
@@ -130,7 +130,7 @@ Every integer type (`Int8` to `Int64`, `UInt8` to `UInt64`, and `Int`, which is 
 | `fn to_string(self) -> String` | Shortest text that reads back to the same value | O(1) | Equals `display()` |
 | `fn to_fixed(self, decimals: Int) -> String` | Exactly `decimals` digits after the point, rounded half to even | O(1) | `requires decimals >= 0 && decimals <= 20` |
 
-```
+```text
 >>> 3.14159.to_fixed(2)
 "3.14"
 >>> let price = total.to_fixed(2)   // then "Total: {price}"
@@ -315,7 +315,7 @@ There is no `unwrap()` ([Option and Result](#option-and-result)). `expect` state
 
 `Iter<T, uses E>` is a concrete prelude type that implements `Iterator<uses E>` with `Item = T`, and carries every adapter as an ordinary method (decision 3). The spec forbids default method bodies on interfaces, so this is how lazy chains work: `xs.iter()`, `map.iter()`, `s.chars()` and `Iter.from(it)` give an `Iter`, and a chain ends in a consumer such as `to_list()`.
 
-```
+```quince
 let names = users.iter()
   .filter(fn(u) { u.active })
   .map(fn(u) { u.name })
@@ -395,7 +395,7 @@ These are the values of the `dur` and `ts` literals. Both are pure; reading the 
 
 ### Prelude interfaces
 
-```
+```quince
 pub interface Eq { fn eq(self, other: Self) -> Bool }
 pub interface Ord { fn compare(self, other: Self) -> Ordering }      // implementors also implement Eq
 pub interface Hash { fn hash(self, hasher: Hasher) -> Hasher }
@@ -535,7 +535,7 @@ In production these draw from the operating system's secure generator, so they a
 | `run(program: String, args: List<String>, input: Bytes = b"") -> Result<ProcessOutput, ProcessError>` | Runs a program to completion and captures its output. Arguments go as a list, never through a shell | Waits. Fails: `ProcessError.NotFound(program:)`, `PermissionDenied(program:)` or `Other(message:)`. A nonzero exit is not an error: check `output.status` |
 | `exit(code: Int) -> Never` | Cancels every scope, waits for cleanup, exits ([Program execution](../spec/reference/execution.md)) |  |
 
-```
+```quince
 let out = Process.run("git", args: ["rev-parse", "HEAD"])?
 ```
 
@@ -619,7 +619,7 @@ The effect packages hold the types that effect operations name, their error enum
 
 `std.cli` turns command-line arguments into a struct, through the same `Decode` the formats use. Fields become `--kebab-case` flags, `Bool` fields are switches, `Option` fields are optional, `List` fields repeat, and a field named `args: List<String>` collects positional arguments. That field is the only way to take positionals, so a command with one required file checks `args.len() == 1` in code and returns its own error otherwise. An enum of structs gives subcommands. Field doc comments become the `--help` text.
 
-```
+```quince
 /// Fetches every URL in a file.
 pub struct Args {
   /// File with one URL per line.
@@ -649,7 +649,7 @@ Accepted syntax, the same on every OS:
 - Field types: `String`, the integer types, `Float`, `Duration` (`--wait 30s`), `Url`, a dataless enum written by its wire name (so `@wire(case: kebab)` gives `--sort line-count`), and `Option` or `List` of any of these.
 - `--help` prints a usage line, then one line per flag with its type, default and doc comment.
 
-```
+```quince
 pub enum CliError {
   Help(text: String),                      // --help was given; text is the full help
   Invalid(message: String, usage: String), // unknown flag, missing value or a value that doesn't decode
@@ -718,7 +718,7 @@ One package for the client and the server. Requests and responses are plain valu
 | `fn get(url: Url, timeout: Duration = dur"30s") -> Result<Response, HttpError> uses Net` |  | Waits. Follows up to 10 redirects. `timeout` covers the whole call and fails with `HttpError.Timeout`. It is independent of an enclosing `with_timeout`: whichever timer ends first wins, and the outer one gives `Err(TimedOut)` and cancels the call |
 | `fn request(req: Request, timeout: Duration = dur"30s") -> Result<Response, HttpError> uses Net` | Any method | Waits |
 
-```
+```quince
 let resp = http.request(Request.post(url"https://api.example.com/orders").with_json(order))?
 if !resp.is_success() { return Err(SyncError.Rejected(status: resp.status)) }
 let created = resp.json<Order>()?
@@ -756,7 +756,7 @@ let created = resp.json<Order>()?
 | `fn handle(self, req: Request) -> Response uses E` | Dispatches on `req.method` and `req.url.path()`; answers 404 or 405 when nothing matches |  |
 | `Params` | `get(name) -> Option<String>` |  |
 
-```
+```quince
 import std.http.{self, Router}
 
 fn main() -> Result<Unit, AppError> uses * {
@@ -780,7 +780,7 @@ Every format has the same three functions, so learning one teaches all of them. 
 
 Cost is O(n) in the size of the text for every format.
 
-```
+```quince
 let cfg = toml.decode<Config>(Fs.read_text("app.toml")?)?
 let body = json.encode(Report(total:, items:))
 ```
@@ -911,7 +911,7 @@ All four are values, like `List` and `Map`: mutating methods take `var self` and
 
 ### std.log
 
-```
+```quince
 pub effect Log uses Console, Clock {
   fn debug(message: String, fields: Map<String, String> = {:})
   fn info(message: String, fields: Map<String, String> = {:})
@@ -963,7 +963,7 @@ A lent pointer (`bytes.lend()`), `res.ptr()` and `buf.ptr()` may be written only
 | `pub interface Generate { fn generate(gen: Gen) -> (Self, Gen) }` | Replaces the derived generator for `forall` ([Testing](../spec/reference/testing.md)) | `Gen` is threaded like `Hasher`: each call takes the current state and returns the value with the next state, which the caller passes on, as in `let (name, gen) = gen.string(max_len: 20)` then `let (age, gen) = gen.int(0..120)`. Reusing an old `gen` gives the same value again |
 | `Gen` | `fn int(self, range: Range<Int>) -> (Int, Gen)`, and likewise `float`, `bool`, `string(max_len:)`, `list<T: Generate>(max_len:)` and `choose(items)`: each takes `self` and returns the value with the next `Gen` | Values shrink automatically on failure |
 
-```
+```quince
 import std.http.{Response, Status}
 import std.log.{Level}
 import std.testing
@@ -1052,7 +1052,7 @@ Each such section names its package, and code that names one of those types impo
 
 ### Timeouts and resources (std.time, std.ffi)
 
-```
+```quince
 pub fn with_timeout<T, uses E>(limit: Duration, body: fn() -> T uses E)
   -> Result<T, TimedOut>
   uses E, Clock
@@ -1067,7 +1067,7 @@ They are called through their packages: `time.with_timeout` from std.time, which
 
 For each integer type `I` (`Int8`…`Int64`, `UInt8`…`UInt64`):
 
-```
+```quince
 impl I {
   fn parse(text: String, radix: Int = 10) -> Result<I, InvalidFormat>  requires radix >= 2 && radix <= 36
   fn checked_add(self, other: I) -> Option<I>     // also checked_sub, checked_mul, checked_div, checked_rem
@@ -1090,7 +1090,7 @@ impl I {
 - Every integer type has `to_<type>()` for every other integer type, such as `n.to_int64()` and `n.to_uint8()`. It returns the target type when every value fits, and `Option` when some don't.
 - Associated constants: `I.MIN` and `I.MAX`.
 
-```
+```quince
 impl Float {
   fn parse(text: String) -> Result<Float, InvalidFormat>
   fn abs(self) -> Float
@@ -1122,7 +1122,7 @@ impl Float {
 - Associated constants: `Float.PI`, `Float.E`, `Float.INFINITY`, `Float.NAN`, Float.EPSILON. `Float32` has the same methods.
 - `Bool` has no methods; the operators cover it.
 
-```
+```quince
 impl Char {
   fn from_code(code: UInt32) -> Option<Char>
   fn code(self) -> UInt32
@@ -1144,7 +1144,7 @@ impl Char {
 
 `a..b` and `a..=b` build a `Range<T>` over one integer type ([Ranges](../spec/reference/expressions.md#ranges)).
 
-```
+```quince
 impl<T> Range<T> {                       // T is an integer type
   fn contains(self, value: T) -> Bool
   fn len(self) -> Int
@@ -1165,7 +1165,7 @@ impl<T> Iterator for Range<T> { type Item = T }
 
 ### String and Bytes
 
-```
+```quince
 impl String {
   fn from_utf8(bytes: Bytes) -> Result<String, InvalidFormat>
   fn byte_len(self) -> Int
@@ -1203,7 +1203,7 @@ impl String {
 - `String` has no `len`. `s.len()` is a compile error whose suggested fixes are `byte_len()` and `char_count()`, so a length always says which unit it counts.
 - `String` is immutable, so none of its methods take `var self`. Joining is `parts.join(", ")` on a `List<String>`.
 
-```
+```quince
 impl Bytes {
   fn from_list(values: List<UInt8>) -> Bytes
   fn lend(self) -> ConstPtr<UInt8>    // std.ffi; only as a foreign-call argument (Interop with C)
@@ -1222,7 +1222,7 @@ impl Bytes {
 
 ### List
 
-```
+```quince
 impl<T> List<T> {
   fn filled(value: T, count: Int) -> List<T>  requires count >= 0
   fn len(self) -> Int
@@ -1299,7 +1299,7 @@ impl<K: Hash, V> List<(K, V)> { fn to_map(self) -> Map<K, V> }   // later pairs 
 
 `Iter<T, uses E>` is a concrete type that implements `Iterator<uses E>` with `Item = T` and carries every adapter as an ordinary method, since interfaces have no default method bodies ([Items](../spec/reference/items.md)). `xs.iter()`, `m.iter()`, `s.chars()`, `(0..n).iter()` and `Iter.from(it)` give one. Adapters are lazy; nothing runs until a consumer or a `for` loop pulls items.
 
-```
+```quince
 impl<T, uses E> Iter<T, uses E> {
   fn from<I: Iterator<uses E>>(it: I) -> Iter<I.Item, uses E>
   fn next(var self) -> Option<T> uses E
@@ -1351,7 +1351,7 @@ impl<T, uses E> Iterator<uses E> for Iter<T, uses E> { type Item = T }
 
 Both convert from a list with `From`: `Map.from([("a", 1)])`, `Set.from([1, 2, 3])`. A conversion that can fail is named `try_from` and returns `Option`, as in `CString.try_from(s)`, so `T.from(x)` always goes through `From` and never fails.
 
-```
+```quince
 impl<K: Hash, V> Map<K, V> {
   fn len(self) -> Int
   fn is_empty(self) -> Bool
@@ -1396,7 +1396,7 @@ impl<T: Hash> Set<T> {
 
 ### Option and Result
 
-```
+```quince
 impl<T> Option<T> {
   fn is_some(self) -> Bool
   fn is_none(self) -> Bool
@@ -1431,7 +1431,7 @@ impl<T, Err> Result<T, Err> {
 
 ### Duration, Timestamp, Url and Regex
 
-```
+```quince
 impl Duration {
   fn milliseconds(n: Int) -> Duration
   fn seconds(n: Int) -> Duration
@@ -1501,7 +1501,7 @@ impl Captures {
 
 Ref, Atomic, ConcurrentMap, Channel, Pool and ChannelClosed are imported from std.sync, TimedOut from std.time, and Resource from std.ffi. TaskScope, FailurePolicy and ScopeFailed are in the prelude. Every method on a reference type takes `self`, never `var self`, because it changes shared state through the reference's identity. A `let` binding is enough: ` let ch =  ``Channel<Job>.new(100)`.
 
-```
+```quince
 impl<T> Ref<T> {
   fn new(value: T) -> Ref<T>
   fn get(self) -> T uses State
@@ -1559,7 +1559,7 @@ impl<T, Err, uses E> Pool<T, Err, uses E> {
 
 Calling the operations needs no import, but naming the types they use does: FsError and Metadata come from std.fs; NetError, Outbound, Inbound and Listener from std.net; ProcessError and ProcessOutput from std.process.
 
-```
+```quince
 pub enum ProcessError { NotFound(program: String), PermissionDenied(program: String), Other(message: String) }
 pub struct ProcessOutput { pub status: Int, pub stdout: Bytes, pub stderr: Bytes }
 pub struct Metadata { pub size: Int, pub is_dir: Bool, pub modified: Timestamp }

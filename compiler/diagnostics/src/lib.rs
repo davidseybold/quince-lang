@@ -348,7 +348,8 @@ mod tests {
         let section = &spec[spec
             .find("## Structured diagnostics")
             .expect("spec has a Structured diagnostics section")..];
-        let open = section.find("```\n").expect("code block") + 4;
+        let fence = "```json\n";
+        let open = section.find(fence).expect("a json code block") + fence.len();
         let close = open + section[open..].find("```").expect("closed code block");
         section[open..close].to_string()
     }

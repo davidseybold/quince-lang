@@ -5,7 +5,7 @@
 r[exec.cap.main]
 Each effect is backed by a capability that the runtime supplies only to `main`:
 
-```
+```quince
 fn main() -> Result<Unit, AppError> uses * { ... }
 ```
 
