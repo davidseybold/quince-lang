@@ -1,6 +1,6 @@
 # M1: Parser
 
-Status: draft, after three design-review passes. David decided the three dependency questions on 2026-11-11. The spec questions wait on him. This is the second design doc of M1 (Syntax), after [the lexer](m1-lexer.md). The formatter doc (`quince fmt`) follows it.
+Status: passed design review (four passes). David decided the three dependency questions on 2026-11-11. The spec questions wait on him. This is the second design doc of M1 (Syntax), after [the lexer](m1-lexer.md). The formatter doc (`quince fmt`) follows it.
 
 ## Why
 
@@ -231,6 +231,7 @@ Doc comments and attributes aren't member starts: they belong to the declaration
 | `f(a, b` followed by a line `g()` | E0016 at `g` |
 | `struct S {` with `pub` fields on lines of their own | None |
 | `struct S {` missing its `}`, followed by a line `pub fn g() {` | E0017 at the struct's `{` |
+| `f(a b` followed by a line `fn g() {`, with the `)` and the block's `}` missing | E0016 at `b` alone. The missing closers show once it is fixed |
 | `if ok { log("done)` followed by a line `}` | E0004 |
 | `fn f() {` with no `}`, followed later by a line `fn g() {` | E0017 at the first `{` |
 | `f(a` followed by a line `}` | E0017 at `(` |
@@ -301,7 +302,7 @@ Past the limit, E0022 is reported at the token that goes past it, and the parser
 - **The fuzzer** (decided by David, 2026-11-11) is a `cargo-fuzz` target in `compiler/syntax/fuzz/`.
   - That crate is outside the workspace, with its own `[workspace]` table, as `cargo fuzz init` writes. So `cargo xtask ci` and stable builds never build it or its `libfuzzer-sys` dependency. Its `Cargo.lock` is committed, so a run can be reproduced.
   - It runs on nightly Rust, only where someone runs it. `rust-toolchain.toml` pins a stable release, so `AGENTS.md` gives the command as `cargo +nightly fuzz run parse`.
-  - The check itself is a function in `quince_syntax`, `fuzz::check_parse(&[u8])`, which decodes the bytes, parses them and checks the invariants. The target is a few lines that call it, and its seed corpus is the fixtures. A unit test calls the same function on every fixture, so CI keeps the check compiling and passing as `quince_syntax` changes, and only the thin wrapper can break unseen. rust-analyzer splits its fuzz targets the same way (`syntax::fuzz`).
+  - The check itself is a function in `quince_syntax`, `fuzz::check_parse(&[u8])`, which decodes the bytes, parses them and checks the invariants. Its module is compiled only for tests and under a `fuzz` feature, which the fuzz crate turns on, so a check that panics never reaches the crate's public API or a release build. The target is a few lines that call it, and its seed corpus is the fixtures. A unit test calls the same function on every fixture, so CI keeps the check compiling and passing as `quince_syntax` changes, and only the thin wrapper can break unseen. rust-analyzer splits its fuzz targets the same way (`syntax::fuzz`).
   - Fuzzing isn't a CI step, and no run has a set length (decided by David, 2026-11-11). Fuzzing is a way to find bugs, and a clean run proves nothing. So M1's exit asks that the target has been run before M1 closes, and that every crash it found is fixed and has a regression test: a unit test or a fixture, so CI guards against it coming back. The milestone's last PR records when the run was, how long it ran, the corpus size, and what it found.
   - rust-analyzer also builds its fuzz targets in a weekly scheduled workflow, without running them, so they can't rot. A scheduled build-only workflow for `compiler/syntax/fuzz/`, outside `cargo xtask ci`, is open for David. Without it, whoever next runs the target may first have to fix the wrapper.
   - The lexer's mutation test stays as it is.
