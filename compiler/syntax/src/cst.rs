@@ -182,7 +182,8 @@ impl Builder<'_> {
             .unwrap_or(self.tokens.len())
     }
 
-    /// Writes every lexer token from the cursor up to `end`, each as its own token.
+    /// Writes every lexer token from the cursor up to `end`, each as its own token. These are
+    /// trivia, so they don't count as content: a node that holds only trivia is empty.
     fn write_to(&mut self, end: usize) {
         while self.cursor < end {
             let len = self.tokens[self.cursor].len as usize;
@@ -191,10 +192,10 @@ impl Builder<'_> {
             self.green.token(QuinceLanguage::kind_to_raw(kind), text);
             self.offset += len;
             self.cursor += 1;
-            self.mark_holds_token();
         }
     }
 
+    /// Records that the innermost open node holds a significant token, its own or a child's.
     fn mark_holds_token(&mut self) {
         if let Some(holds_token) = self.open.last_mut() {
             *holds_token = true;

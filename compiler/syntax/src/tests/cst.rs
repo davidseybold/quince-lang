@@ -515,6 +515,13 @@ fn an_empty_node_is_a_parser_bug() {
     tree("a", vec![s(File), s(Name), F, T, F]);
 }
 
+/// The comments a declaration takes don't make it hold anything.
+#[test]
+#[should_panic(expected = "only the root may be empty")]
+fn a_node_of_only_comments_is_a_parser_bug() {
+    tree("// a\nfn", vec![s(File), s(FnDecl), F, T, F]);
+}
+
 #[test]
 #[should_panic(expected = "the parser left a significant token")]
 fn a_token_left_over_is_a_parser_bug() {
