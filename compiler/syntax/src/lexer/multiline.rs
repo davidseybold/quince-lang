@@ -21,38 +21,28 @@ impl Lexer<'_> {
         if self.opening_line(raw) {
             return;
         }
-        // The lines after the opening one, up to the closing line, which is the first that
-        // starts with `"""` after its indentation (`r[lex.lit.multiline-close]`).
+        // The lines after the opening one, up to the first `"""` that an escape doesn't take
+        // (`r[lex.lit.multiline-quotes]`): after a line's indentation, which makes it the
+        // closing line, or after text, which is an error that still ends the string.
         let mut content = Vec::new();
         let mut closing = None;
         for line in lines_after(self.text, self.pos) {
-            let indent_len = indent_len(&self.text[line.clone()]);
-            if self.text[line.start + indent_len..].starts_with(QUOTES) {
+            let line_text = &self.text[line.clone()];
+            let indent_len = indent_len(line_text);
+            if line_text[indent_len..].starts_with(QUOTES) {
                 closing = Some(line.start..line.start + indent_len);
                 break;
+            }
+            if let Some(at) = find_quotes(line_text, raw) {
+                content.push(line.clone());
+                return self.closed_after_text(&content, line.start + at, raw, interpolates);
             }
             content.push(line);
         }
         let Some(indent) = closing else {
-            if let Some((last, at)) = quotes_after_text(self.text, &content, raw) {
-                return self.closed_after_text(&content[..=last], at, raw, interpolates);
-            }
             return self.unclosed_multiline(open..open + open_len, first_error, &content);
         };
         let indent_text = &self.text[indent.clone()];
-        // A later string's closing line can end this one, which then breaks the indentation
-        // rule at a line of code, such as that string's opening line. When a line before the
-        // first that breaks it holds `"""` after text, that was the closing slip. A valid
-        // program breaks no rule, so this can't change one.
-        let first_bad = content.iter().position(|line| {
-            let text = &self.text[line.clone()];
-            !is_blank(text) && !text.starts_with(indent_text)
-        });
-        if let Some(bad) = first_bad
-            && let Some((last, at)) = quotes_after_text(self.text, &content[..bad], raw)
-        {
-            return self.closed_after_text(&content[..=last], at, raw, interpolates);
-        }
         let leads: Vec<&str> = (content.iter())
             .map(|line| &self.text[line.clone()])
             .filter(|line| !is_blank(line))
@@ -109,12 +99,10 @@ impl Lexer<'_> {
         }
     }
 
-    /// A string with no closing line, or one whose closing line comes after a line that breaks
-    /// the indentation rule, whose last line of `lines` holds `"""` after text, at `at`, as
-    /// Java and Kotlin close one. That `"""` is text (`r[lex.lit.multiline-close]`),
-    /// but the string ends there, with an E0005, so the rest of the file is still checked.
-    /// The fix moves the quotes to a line of their own, with the indentation the lines share,
-    /// which is what the lines drop here too.
+    /// A string whose last line of `lines` holds `"""` after text, at `at`, as Java and Kotlin
+    /// close one. That is an E0012 (`r[lex.lit.multiline-quotes]`), and the string ends there,
+    /// so the rest of the file is still checked. The fix moves the quotes to a line of their
+    /// own, with the indentation the lines share, which is what the lines drop here too.
     fn closed_after_text(
         &mut self,
         lines: &[Range<usize>],
@@ -141,12 +129,19 @@ impl Lexer<'_> {
             "" => String::new(),
             _ => format!(", indented with {}", describe(shared)),
         };
+        let as_text = if raw {
+            "an `r\"\"\"` string can't hold `\"\"\"`, so text with them is a `\"\"\"` string \
+             that writes `\\\"\"\"`"
+        } else {
+            "for quotes in the text, write `\\\"\"\"`"
+        };
         let error = LexError::new(
             at..at + QUOTES.len(),
-            codes::UNCLOSED_MULTILINE,
+            codes::MULTILINE_LAYOUT,
             format!(
-                "a multi-line string's closing `\"\"\"` goes on a line of its own, so this one is \
-                 text, and the string has no closing line: move it to the next line{indented}"
+                "a multi-line string's text can't hold `\"\"\"`, and its closing `\"\"\"` goes on \
+                 a line of its own: to end the string here, move it to the next line{indented}; \
+                 {as_text}"
             ),
         )
         .with_fix(
@@ -176,7 +171,7 @@ impl Lexer<'_> {
         let start = self.pos;
         let starts_late =
             "a multi-line string's text starts on the line after its opening `\"\"\"`";
-        let Some(close) = tail.find(QUOTES) else {
+        let Some(close) = find_quotes(tail, raw) else {
             let len = tail.trim_end_matches([' ', '\t']).len();
             self.errors.push(LexError::new(
                 start..start + len,
@@ -295,27 +290,22 @@ fn lines_after(text: &str, mut at: usize) -> impl Iterator<Item = Range<usize>> 
     })
 }
 
-/// The first `"""` in the content `lines`, as the index of its line and its position. In a
-/// string that isn't `raw`, quotes that an escape takes, as in `\"""`, don't count.
-fn quotes_after_text(text: &str, lines: &[Range<usize>], raw: bool) -> Option<(usize, usize)> {
-    lines.iter().enumerate().find_map(|(i, line)| {
-        let line_text = &text[line.clone()];
-        let found = if raw {
-            line_text.find(QUOTES)
-        } else {
-            let mut at = 0;
-            loop {
-                let rest = &line_text[at..];
-                match rest.chars().next() {
-                    None => break None,
-                    Some('\\') => at += escape(rest).len,
-                    Some(_) if rest.starts_with(QUOTES) => break Some(at),
-                    Some(c) => at += c.len_utf8(),
-                }
-            }
-        };
-        found.map(|at| (i, line.start + at))
-    })
+/// Where the first `"""` in `line` starts. In a string that isn't `raw`, quotes that an
+/// escape takes, as in `\"""`, don't count.
+fn find_quotes(line: &str, raw: bool) -> Option<usize> {
+    if raw {
+        return line.find(QUOTES);
+    }
+    let mut at = 0;
+    loop {
+        let rest = &line[at..];
+        match rest.chars().next() {
+            None => return None,
+            Some('\\') => at += escape(rest).len,
+            Some(_) if rest.starts_with(QUOTES) => return Some(at),
+            Some(c) => at += c.len_utf8(),
+        }
+    }
 }
 
 /// The length of the spaces and tabs that start `line`.

@@ -1,0 +1,14 @@
+// rule: lex.lit.multiline-quotes
+// mode: parse
+// The closing """ is the first thing on its line after its indentation, and code may
+// follow it there. Elsewhere in the string, " and "" are text, and a """ string writes
+// """ as \""", at the start of a line or after text.
+fn f() -> List<String> {
+  let a = """
+    quotes inside a line: "" and " are text
+    \""" starts this line, and an escaped \""" sits inside this one
+    """
+  [a, """
+    code follows the closing quotes
+    """]
+}

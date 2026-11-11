@@ -54,7 +54,7 @@ fn meanings(text: &str) -> Vec<String> {
 /// to five characters that matter to it, keeps the invariants and never puts two errors on
 /// one span. `StringIndent` is only spaces and tabs. A safe fix removes its error and adds
 /// none, and an E0006 or E0013 fix keeps every token's meaning. The other fixes need review:
-/// E0005's, which moves closing quotes after text to a line of their own, removes its error
+/// E0012's, which moves closing quotes after text to a line of their own, removes its error
 /// and adds none too, and E0004's is on a `"` after the string.
 #[test]
 fn every_short_multiline_string() {
@@ -94,7 +94,7 @@ fn every_short_multiline_string() {
                     continue;
                 };
                 if fix.applicability != Applicability::Safe {
-                    assert!(["E0004", "E0005"].contains(&error.code), "{text:?}");
+                    assert!(["E0004", "E0012"].contains(&error.code), "{text:?}");
                     if error.code == "E0004" {
                         continue;
                     }
@@ -134,10 +134,10 @@ fn multiline_shapes() {
         "StringStart:r\"\"\" StringIndent: \t StringNewline:\n StringText:{a} StringNewline:\n \
          StringEnd:\"\"\""
     );
-    // A quote inside a line is text, and so is a `"""` that doesn't start one.
+    // One or two quotes inside a line are text, and so are escaped ones.
     assert_eq!(
-        tokens("\"\"\"\n a\"\"\"\n \\\"\"\"\n \"\"\"\"x\""),
-        "StringStart:\"\"\" StringNewline:\n StringIndent:  StringText:a\"\"\" StringNewline:\n \
+        tokens("\"\"\"\n a\"\"\n \\\"\"\"\n \"\"\"\"x\""),
+        "StringStart:\"\"\" StringNewline:\n StringIndent:  StringText:a\"\" StringNewline:\n \
          StringIndent:  StringText:\\\"\"\" StringNewline:\n StringIndent:  StringEnd:\"\"\" \
          StringStart:\" StringText:x StringEnd:\""
     );
@@ -258,15 +258,15 @@ fn indentation() {
     ));
 }
 
-/// With no closing line, quotes after text end the string, as Java and Kotlin close one,
-/// with an E0005 there, so the rest of the file is still checked as code.
+/// Quotes after text are an E0012 (`r[lex.lit.multiline-quotes]`), and they end the string,
+/// as Java and Kotlin close one, so the rest of the file is still checked as code.
 #[test]
 fn closing_quotes_after_text() {
     let text = "f(\"\"\"\n    a\n      b\"\"\") \\";
     assert_eq!(
         errors(text),
         [
-            r#"E0005 19..22 => "f(\"\"\"\n    a\n      b\n    \"\"\") \\""#,
+            r#"E0012 19..22 => "f(\"\"\"\n    a\n      b\n    \"\"\") \\""#,
             "E0001 24..25"
         ]
     );
@@ -280,40 +280,48 @@ fn closing_quotes_after_text() {
     assert_eq!(fix.applicability, Applicability::NeedsReview);
     assert_eq!(
         message(&text[..22]),
-        "a multi-line string's closing `\"\"\"` goes on a line of its own, so this one is text, \
-         and the string has no closing line: move it to the next line, indented with 4 spaces"
+        "a multi-line string's text can't hold `\"\"\"`, and its closing `\"\"\"` goes on a line \
+         of its own: to end the string here, move it to the next line, indented with 4 spaces; \
+         for quotes in the text, write `\\\"\"\"`"
     );
-    assert!(message("\"\"\"\na\"\"\"").ends_with("move it to the next line"));
+    assert!(message("\"\"\"\na\"\"\"").contains("move it to the next line; for quotes"));
+    assert!(message("r\"\"\"\na\"\"\"").ends_with("is a `\"\"\"` string that writes `\\\"\"\"`"));
     // The lines are checked once the string is closed, and the fix keeps CR LF.
     assert_eq!(
         errors("\"\"\"\r\n  \\q\"\"\""),
         [
             "E0006 7..9",
-            r#"E0005 9..12 => "\"\"\"\r\n  \\q\r\n  \"\"\"""#
+            r#"E0012 9..12 => "\"\"\"\r\n  \\q\r\n  \"\"\"""#
         ]
     );
-    // A raw string has no escapes, so `\"""` closes it too.
+    // A raw string has no escapes, so `\"""` ends it too.
     assert_eq!(
         errors("r\"\"\"\n\\\"\"\""),
-        [r#"E0005 6..9 => "r\"\"\"\n\\\n\"\"\"""#]
+        [r#"E0012 6..9 => "r\"\"\"\n\\\n\"\"\"""#]
     );
-    // A closing line later on wins.
-    assert_eq!(errors("\"\"\"\na\"\"\"\n\"\"\""), Vec::<String>::new());
-    // Unless the lines before it break the indentation rule after the quotes, as a later
-    // string's opening line does when its closing line ends this one.
-    let two = "  a = \"\"\"\n    x\"\"\"\n  b = \"\"\"\n    y\n    \"\"\"\n";
+    // Quotes after text end the string even when a closing line comes later, so a valid next
+    // string isn't joined into this one.
+    let two = "a = \"\"\"\n  x\"\"\"\nb = \"\"\"\n  y\n  \"\"\"\n";
     assert_eq!(
         errors(two),
-        [r#"E0005 15..18 => "  a = \"\"\"\n    x\n    \"\"\"\n  b = \"\"\"\n    y\n    \"\"\"\n""#]
+        [r#"E0012 11..14 => "a = \"\"\"\n  x\n  \"\"\"\nb = \"\"\"\n  y\n  \"\"\"\n""#]
     );
-    // Fixing one E0005 leaves the other.
+    // The same at column 0, and after a blank line.
+    let column_0 = "a = \"\"\"\nusage\"\"\"\n\nb = \"\"\"\n  y\n  \"\"\"\n";
+    assert_eq!(
+        errors(column_0),
+        [r#"E0012 13..16 => "a = \"\"\"\nusage\n\"\"\"\n\nb = \"\"\"\n  y\n  \"\"\"\n""#]
+    );
+    // Fixing one leaves the other.
     let both = "a = \"\"\"\n  x\"\"\"\nb = \"\"\"\n  y\"\"\"\n";
     assert_eq!(errors(both).len(), 2, "{:?}", errors(both));
     let fixed = both.replacen("  y\"\"\"", "  y\n  \"\"\"", 1);
     assert_eq!(
         errors(&fixed),
-        [r#"E0005 11..14 => "a = \"\"\"\n  x\n  \"\"\"\nb = \"\"\"\n  y\n  \"\"\"\n""#]
+        [r#"E0012 11..14 => "a = \"\"\"\n  x\n  \"\"\"\nb = \"\"\"\n  y\n  \"\"\"\n""#]
     );
+    // On the opening line, escaped quotes don't close the string either.
+    assert_eq!(errors("\"\"\"a\\\"\"\"\n\"\"\""), ["E0012 3..8"]);
 }
 
 #[test]

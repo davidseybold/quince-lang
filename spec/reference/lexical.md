@@ -114,8 +114,8 @@ r[lex.lit.string.raw-multiline]
 r[lex.lit.multiline-open]
 - After the opening `"""`, only spaces and tabs may come before the line break.
 
-r[lex.lit.multiline-close]
-- The closing `"""` is the first thing on its line after its indentation, and code may follow it on that line (`""")`). Elsewhere, `"`, `""` and `"""` are text. So a content line can't start with `"""`: a `"""` string writes it `\"""`, and an `r"""` string can't hold it.
+r[lex.lit.multiline-quotes]
+- The closing `"""` is the first thing on its line after its indentation, and code may follow it on that line (`""")`). Elsewhere in the string, `"` and `""` are text, but `"""` is a compile error: a `"""` string writes it `\"""`, and an `r"""` string can't hold it.
 
 r[lex.lit.multiline-indent]
 - Every line between must start with exactly the closing line's indentation, the same spaces and tabs, except a line that holds only whitespace, which becomes empty. Otherwise it is a compile error.

@@ -150,7 +150,7 @@ StringStart  ( StringText | StringIndent | StringNewline | Interp... )*  [ Strin
 - A char literal with no closing `'` ends before its line ending.
 - A lone CR is a line ending here too (decision 3), so it ends a one-line string or char literal. Only E0013 is reported then, not E0004 or E0009, since the missing quote is the CR's fault.
 - A multi-line string with no closing `"""` line runs to the end of the file. That one does swallow the file, and Risks covers it. Its lines aren't checked for escapes or interpolation, since they are more likely code than text, so one missing line is one E0005, not an error for every backslash and brace after it.
-- Except: with no closing line, or with one that comes after a line breaking the indentation rule, as when a later string's closing line ends this one, a `"""` after text on an earlier line, as Java and Kotlin close a string, ends it there, with the E0005 at those quotes and a `needs-review` fix that moves them to a line of their own. It can't change a valid program, which has a closing line, and it keeps the habit agents bring from those languages from swallowing the file (decided by David, 2026-11-11, in review of layer 6a, instead of allowing that closing form in the spec, which would give a second way to write the same string).
+- A string ends at its first `"""` that an escape doesn't take. After text on a line, as Java and Kotlin close a string, that is an E0012 (`r[lex.lit.multiline-quotes]`), with a `needs-review` fix that moves the quotes to a line of their own, and the code after them is still checked. So the habit agents bring from those languages neither swallows the file nor joins the next string into this one.
 - Text after the opening `"""` is one E0012 and one unchecked `StringText`. A `"""` later on that line closes the string, so Python's `"""text"""` is one E0012 and can't swallow the file.
 - A line that doesn't start with the closing line's indentation is an E0012 at its indentation. When no line starts with it, the closing `"""` is what is out of place, so that is one E0012, at the closing line, not one per line.
 
@@ -166,14 +166,14 @@ Codes are numbered in the order they are registered, from E0001, skipping the re
 | E0002 | A `;` (statements end at line breaks) | At a line end, delete it (`safe`) | |
 | E0003 | A block comment `/* */` (`r[lex.comment.line]`) | When it covers whole lines, rewrite it as `//` lines (`safe`) | |
 | E0004 | A one-line string, raw, bytes or tagged literal with no closing `"` | Insert `"` at the line end (`needs-review`) | |
-| E0005 | A multi-line string with no closing `"""` line | For a `"""` after text on a line, move it to a line of its own (`needs-review`) | |
+| E0005 | A multi-line string with no closing `"""` line | None | |
 | E0006 | An invalid escape: unknown (`\q`), `\'` in a string, `\}`, a bad `\u{...}`, a bad `\x` or one outside bytes | For `\'` and `\}`, delete the backslash (`safe`) | Q7 for `\u` and `\x` details |
 | E0007 | An interpolation that isn't a name or field path | For spaces inside the braces, delete them (`safe`) | Q2 |
 | E0008 | A malformed number (decision 7) | Remove a suffix (`needs-review`); lowercase an exponent `E` or a base prefix (`safe`) | Q4 |
 | E0009 | An invalid char literal: empty, more than one scalar value, or unclosed | For more than one character, use `"` (`needs-review`) | |
 | E0010 | An unknown literal tag | None. The message lists the tags | |
 | E0011 | A non-ASCII character in a bytes literal | Replace it with the `\x` escapes of its UTF-8 bytes (`safe`) | |
-| E0012 | A multi-line string layout error | None | Q3 |
+| E0012 | A multi-line string layout error | For `"""` after text, move it to a line of its own (`needs-review`) | Q3 |
 | E0013 | A carriage return not followed by a line feed | Outside a literal, replace it with a line feed (`safe`). None inside a one-line literal, which the CR ends (decision 8) | Q1 |
 | E0014 | A file that isn't valid UTF-8 | None | Q1 |
 | E0015 | A control or bidirectional-format character in a literal or comment | In a `"` or `"""` string, replace it with its `\u{...}` escape (`safe`). None in raw and tagged bodies or comments | Q8 |
@@ -269,7 +269,8 @@ All eight are approved: question 1 in its strict form, the other seven as propos
 
 **3. Multi-line strings (layer 6a).** `r[lex.lit.string.multiline]` leaves open what may follow the opening `"""`, where the closing one may sit, and what happens to a line indented less than the closing line. Approved, following Swift:
 - `r[lex.lit.multiline-open]` After the opening `"""`, only spaces and tabs may come before the line break.
-- `r[lex.lit.multiline-close]` The closing `"""` is the first thing on its line after its indentation, and code may follow it on that line (`""")`). Elsewhere, `"`, `""` and `"""` are text. So a content line can't start with `"""`: a `"""` string writes it `\"""`, and an `r"""` string can't hold it.
+- `r[lex.lit.multiline-quotes]` The closing `"""` is the first thing on its line after its indentation, and code may follow it on that line (`""")`). Elsewhere in the string, `"` and `""` are text, but `"""` is a compile error: a `"""` string writes it `\"""`, and an `r"""` string can't hold it.
+  - This replaced `r[lex.lit.multiline-close]`, retired, which made `"""` after text plain text (decided by David, 2026-11-11, in review of layer 6a). Under it, a Java-style close such as `usage"""` was valid, and joined the next string into this one with no error. Allowing that close instead was rejected, since it would give a second way to write the same string. Python, Java and Kotlin also bar `"""` inside the text.
 - `r[lex.lit.multiline-indent]` Every line between must start with exactly the closing line's indentation, the same spaces and tabs, except a line that holds only whitespace, which becomes empty. Otherwise it is a compile error.
 - `r[lex.lit.multiline-value]` The value doesn't include the line break before the closing line, and every line break in it is a line feed, whatever the file uses.
 - `r[lex.lit.multiline-forms]` Only `"""` and `r"""` are multi-line. A `"""` string takes the same escapes as a `"` string. `b"""` and tagged multi-line literals don't exist.
@@ -298,7 +299,7 @@ All eight are approved: question 1 in its strict form, the other seven as propos
 
 ## Risks and trade-offs
 
-- [A multi-line string with no closing line swallows the rest of the file, so the parser reports nothing after it] → E0005 points at the opening `"""`, and fixing it restores everything. When a line holds `"""` after text, the string ends there instead (decision 8), which covers the common slip, also when a later string's closing line would otherwise end this one. A heuristic close (the first line that looks like code) would guess wrong in strings that hold code, which is a common use. Accepted.
+- [A multi-line string with no closing line swallows the rest of the file, so the parser reports nothing after it] → E0005 points at the opening `"""`, and fixing it restores everything. Quotes after text end the string with an E0012 (decision 8), which covers the common slip. A heuristic close (the first line that looks like code) would guess wrong in strings that hold code, which is a common use. Accepted.
 - [An unclosed `/*` swallows the rest of the file in the same way] → E0003 points at it. Quince has no block comments, so this only happens to code written from habit, and the message says to use `//`.
 - [`parse` fixtures pass against a lexer-only backend even when they aren't valid syntax] → Layer 1 puts the rule in the fixture README, review checks it, and the parser layer reruns every fixture.
 - [Acceptance-only fixtures mark a rule covered before its value is tested] → Decision 11 limits what a lexer fixture may cite. Values are unit-tested now, and `run` fixtures cite the same rules from M6. The coverage report can't show the difference. Accepted until a test kind marks partial coverage.
@@ -370,7 +371,7 @@ Rule IDs in brackets are what each task's fixtures cite. Rules added by spec que
 
 **Layer 6a: `m1/lexer-multiline`**
 - [x] Spec: question 3, and a bump.
-- [x] Multi-line and raw multi-line strings, `StringNewline`, `StringIndent`; E0005, E0012. [`lex.lit.string.multiline`, `lex.lit.multiline-open`, `lex.lit.multiline-close`, `lex.lit.multiline-indent`, `lex.lit.multiline-forms`, `lex.lit.string.raw-multiline`]
+- [x] Multi-line and raw multi-line strings, `StringNewline`, `StringIndent`; E0005, E0012. [`lex.lit.string.multiline`, `lex.lit.multiline-open`, `lex.lit.multiline-quotes`, `lex.lit.multiline-indent`, `lex.lit.multiline-forms`, `lex.lit.string.raw-multiline`]
 - [x] `r[lex.lit.multiline-value]` in unit tests, through the README's rule for reading the value from the tokens. A `parse` fixture can't see values.
 
 **Layer 6b: `m1/lexer-literals`**
