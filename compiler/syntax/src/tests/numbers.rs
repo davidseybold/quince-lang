@@ -97,6 +97,9 @@ fn malformed_numbers_keep_their_kind() {
 
 #[test]
 fn suffixes() {
+    // Removing the suffix would glue the number to the `.5` after it, making a float.
+    assert_eq!(errors("1x.5"), ["E0008 1..2"]);
+    assert_eq!(errors("1x.y"), [r#"E0008 1..2 => "1.y""#]);
     assert_eq!(errors("1u8"), [r#"E0008 1..3 => "1""#]);
     assert_eq!(errors("1.5f32"), [r#"E0008 3..6 => "1.5""#]);
     assert_eq!(errors("0xFFu8"), [r#"E0008 4..6 => "0xFF""#]);
@@ -110,7 +113,12 @@ fn suffixes() {
 #[test]
 fn suffix_messages_name_the_type() {
     let example = |text| {
-        let message = lex_str(text).errors[0].message.clone();
+        let errors = lex_str(text).errors;
+        let suffix = errors
+            .iter()
+            .find(|e| e.message.contains(", as in "))
+            .unwrap();
+        let message = &suffix.message;
         message[message.find(", as in ").unwrap() + 8..].to_string()
     };
     assert_eq!(example("200u8"), "`let x: UInt8 = 200`");
@@ -120,6 +128,12 @@ fn suffix_messages_name_the_type() {
     assert_eq!(example("1.5f32"), "`let x: Float32 = 1.5`");
     assert_eq!(example("2.5f64"), "`let x: Float = 2.5`");
     assert_eq!(example("1f32"), "`let x: Float32 = 1.0`");
+    // A number with other problems, or a float type on a non-decimal integer, gets a plain one.
+    assert_eq!(example("0b1f32"), "`let x: Float32 = 1.5`");
+    assert_eq!(example("007f32"), "`let x: Float32 = 1.5`");
+    assert_eq!(example("1_f32"), "`let x: Float32 = 1.5`");
+    assert_eq!(example("007u8"), "`let x: UInt8 = 1`");
+    assert_eq!(example("0b1u8"), "`let x: UInt8 = 0b1`");
     // No Quince type for these, or the wrong kind of number for it.
     assert_eq!(example("10px"), "`let b: UInt8 = 1`");
     assert_eq!(example("1usize"), "`let b: UInt8 = 1`");

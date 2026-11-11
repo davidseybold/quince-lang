@@ -103,6 +103,11 @@ fn semicolon_before_a_line_that_starts_with_a_dot() {
         applicability("a; // x\n\n  // y\r\n\t.b()"),
         Applicability::NeedsReview
     );
+    assert_eq!(
+        applicability("a;\n/* c\n */ .b()"),
+        Applicability::NeedsReview
+    );
+    assert_eq!(applicability("a;\n/* c"), Applicability::Safe);
     assert_eq!(applicability("a;\nb.c()"), Applicability::Safe);
     assert_eq!(applicability("a;\n..b"), Applicability::Safe);
     assert_eq!(applicability("a;"), Applicability::Safe);

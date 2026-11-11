@@ -3,7 +3,8 @@
 /// The value of an `Int` token's text, or `None` when it doesn't fit in a `u128`.
 /// Underscores don't count. For a malformed literal, which the lexer has already reported,
 /// it reads the base's digits up to the first character that isn't one, so `None` still means
-/// only that the value is too big.
+/// only that the value is too big. That reading can differ from the lexer's: a tuple position
+/// has no base prefix, so `t.0x1` is `0` with a suffix, but `int_value("0x1")` is 1.
 pub fn int_value(text: &str) -> Option<u128> {
     let (radix, digits) = match text.get(..2) {
         Some("0x" | "0X") => (16, &text[2..]),

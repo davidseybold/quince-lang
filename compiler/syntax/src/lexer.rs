@@ -384,15 +384,22 @@ fn punctuation(text: &str) -> Option<(SyntaxKind, usize)> {
         .map(|&(punct, kind)| (kind, punct.len()))
 }
 
-/// True when the first line after the one `text` is on, skipping blank and comment lines,
-/// starts with `.`, which continues a statement (`r[lex.continue.more]`).
+/// True when the first token after `text`'s line, skipping whitespace and comments, block
+/// comments included, is a `.`, which continues a statement (`r[lex.continue.more]`).
 fn next_line_starts_with_dot(mut text: &str) -> bool {
     loop {
         text = text.trim_start_matches([' ', '\t', '\n', '\r']);
-        if !text.starts_with("//") {
+        if text.starts_with("//") {
+            text = &text[text.find(['\n', '\r']).unwrap_or(text.len())..];
+        } else if let Some(comment) = text.strip_prefix("/*") {
+            // An unclosed block comment runs to the end of the file.
+            let Some(end) = comment.find("*/") else {
+                return false;
+            };
+            text = &comment[end + 2..];
+        } else {
             return text.starts_with('.') && !text.starts_with("..");
         }
-        text = &text[text.find(['\n', '\r']).unwrap_or(text.len())..];
     }
 }
 

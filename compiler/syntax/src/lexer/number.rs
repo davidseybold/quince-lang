@@ -36,8 +36,15 @@ impl Lexer<'_> {
         let tuple_position = self.tokens.last().map(|t| t.kind) == Some(SyntaxKind::Dot);
         let scan = scan(self.rest(), tuple_position);
         let text = &self.text[start..start + scan.len];
+        let after = &self.text[start + scan.len..];
+        // Removing the suffix of `1x.5` would leave the float `1.5`.
+        let joins_fraction =
+            after.starts_with('.') && after[1..].starts_with(|c: char| c.is_ascii_digit());
         for (range, problem) in &scan.problems {
-            let error = problem_error(text, start, scan.kind, range.clone(), *problem);
+            let mut error = problem_error(text, start, scan.kind, range.clone(), *problem);
+            if *problem == Problem::Suffix && joins_fraction {
+                error.fixes.clear();
+            }
             self.errors.push(error);
         }
         self.bump(scan.kind, scan.len);
@@ -201,17 +208,25 @@ fn problem_error(
     };
     match problem {
         Problem::Suffix => {
+            // The example repeats the number only when nothing else is wrong with it.
             let number = &text[..range.start];
+            let well_formed = scan(number, false).problems.is_empty();
+            let decimal = number.bytes().all(|c| c.is_ascii_digit() || c == b'_');
             let example = match (suffix_type(part), kind) {
-                (Some(ty), SyntaxKind::Int) if ty.starts_with("Float") => {
+                (Some(ty), SyntaxKind::Float) if ty.starts_with("Float") && well_formed => {
+                    format!("`let x: {ty} = {number}`")
+                }
+                // An integer literal doesn't take a float type, so the example adds `.0`.
+                (Some(ty), SyntaxKind::Int)
+                    if ty.starts_with("Float") && well_formed && decimal =>
+                {
                     format!("`let x: {ty} = {number}.0`")
                 }
-                (Some(ty), SyntaxKind::Float) if !ty.starts_with("Float") => {
-                    "`let x: Float32 = 1.5`".to_string()
-                }
-                (Some(ty), _) => format!("`let x: {ty} = {number}`"),
-                (None, SyntaxKind::Float) => "`let x: Float32 = 1.5`".to_string(),
-                (None, _) => "`let b: UInt8 = 1`".to_string(),
+                (Some(ty), _) if ty.starts_with("Float") => format!("`let x: {ty} = 1.5`"),
+                (Some(ty), SyntaxKind::Int) if well_formed => format!("`let x: {ty} = {number}`"),
+                (Some(ty), SyntaxKind::Int) => format!("`let x: {ty} = 1`"),
+                (_, SyntaxKind::Float) => "`let x: Float32 = 1.5`".to_string(),
+                _ => "`let b: UInt8 = 1`".to_string(),
             };
             error(format!(
                 "`{part}` can't follow a number: a numeric literal has no type suffix, and takes \
