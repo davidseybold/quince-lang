@@ -1,0 +1,6 @@
+﻿// rule: bind.let-var
+// mode: parse
+// Self-test: a byte order mark before the header.
+let x = 1 $
+//~^ E0001
+let y = 2 $ //~ E0001

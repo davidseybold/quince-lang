@@ -18,13 +18,16 @@ Header lines of the form `// <word>:`, where the word is lowercase ASCII letters
 - `// rule: <id>` cites the spec rule the fixture tests. At least one is required, each ID once. Every ID must be tagged in a spec chapter listed in `spec/chapters.txt` (or be `grammar.<production>`) and not be retired. An ID listed in `spec/moved-rules.txt` fails with the ID to cite instead.
 - `// mode: <mode>` is set at most once. Modes are an open set: later milestones add more (`fmt` in M1), and an unknown mode is an error that lists the known ones.
   - `check` (the default) runs the whole checker as far as it exists. A check fixture must be a valid program under the whole spec apart from its expected diagnostics, so it keeps passing when later stages arrive. No tool can tell until those stages exist, so review enforces this.
-  - `parse` runs only the parser, even after later stages exist, so a syntax fixture keeps passing when stages such as name resolution or lints add diagnostics (an unused binding, for example).
+  - `parse` runs only the parser, even after later stages exist, so a syntax fixture keeps passing when stages such as name resolution or lints add diagnostics (an unused binding, for example). A parse fixture must be valid syntax apart from its expected diagnostics, so it keeps passing as the parser grows. So a fixture for a bad character puts it where a comment could go (`let x = 1 $`), not where the parser needs a token (`let x = $`, which would also report a missing expression).
   - `run` builds and runs the file. Its program must build without errors, and warnings aren't judged (test those with a check fixture). `// exit: <n>`, set at most once, gives the expected exit code (default 0). Standard output must equal the sibling `<name>.stdout` file, and with no such file it must be empty. Standard error isn't compared yet.
 - `//~ CODE` expects a diagnostic with that code starting on the same line. `//~^ CODE` expects one on the line above, and each extra `^` moves one more line up. Expectations apply only to `check` and `parse` fixtures, and `exit` and a `.stdout` file only to `run` fixtures. Anything else is an error.
   - A comment may list several codes, `//~ E0001 E0001`, and each code expects one diagnostic. Each diagnostic satisfies at most one expectation. Nothing but codes may follow `//~`.
   - A diagnostic at the very end of a file that ends with a newline counts as being on the last line.
   - Every error and warning the compiler reports must be expected.
-- Every fix a backend reports is checked with `Fix::check` (`compiler/diagnostics/README.md`), and a malformed fix fails the fixture.
+- Lines are numbered as diagnostic positions count them (`compiler/diagnostics/README.md`): LF, CR LF and a lone CR each end a line, and a leading byte order mark isn't part of line 1, so it doesn't hide the header.
+- Every fix a backend reports is checked with `Fix::check` and `Fix::check_positions` (`compiler/diagnostics/README.md`), and a malformed fix fails the fixture. Every edit position must exist in the fixture. A fixture is the only file there is, so an edit to any other file must create it, with an insertion at `[1, 1]`.
+
+The runner reads a fixture as bytes and gives the backend those bytes unchanged, so a fixture can hold any line ending, a byte order mark or invalid UTF-8 on purpose (`.gitattributes` keeps them). The header and expectations are read from the bytes decoded as UTF-8, with each invalid sequence replaced by U+FFFD.
 
 A `.stdout` file with no `.qnc` file of the same name is an error, because it's usually left behind by a rename. So is any failure to read a `.stdout` file other than "not found".
 

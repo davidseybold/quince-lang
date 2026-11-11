@@ -6,8 +6,12 @@
 //! directive, so a typo such as `// rules:` or `// Mode:` never silently does nothing. Other
 //! header comments, such as `// Note: ...`, are free text. A directive after the header, in any
 //! case, is an error too.
+//!
+//! Lines are numbered as positions count them (`compiler/diagnostics/README.md`), so a lone CR
+//! ends a line, and a leading byte order mark isn't part of line 1.
 
-use quince_diagnostics::Code;
+use quince_diagnostics::{Code, LineIndex};
+use std::borrow::Cow;
 
 const DIRECTIVES: [&str; 3] = ["rule", "mode", "exit"];
 
@@ -40,18 +44,27 @@ pub struct Fixture {
     /// The contents of the sibling `<name>.stdout`, when there is one. A run fixture without
     /// one expects no output.
     pub stdout: Option<String>,
-    pub source: String,
+    /// The file's bytes, as backends get them.
+    pub source: Vec<u8>,
+    /// The file as text, from [`decode`]. The header and expectations are read from it, and the
+    /// positions in diagnostics and fixes refer to it.
+    pub text: String,
+}
+
+/// The one place fixture bytes become text. Each invalid UTF-8 sequence becomes U+FFFD.
+pub fn decode(source: &[u8]) -> Cow<'_, str> {
+    String::from_utf8_lossy(source)
 }
 
 /// Parses a fixture. Every problem is reported, not just the first.
-pub fn parse(name: &str, source: &str, stdout: Option<String>) -> Result<Fixture, Vec<String>> {
+pub fn parse(name: &str, source: &[u8], stdout: Option<String>) -> Result<Fixture, Vec<String>> {
+    let text = decode(source);
     let mut errors = Vec::new();
     let mut rules: Vec<String> = Vec::new();
     let mut mode = None;
     let mut exit = None;
     let mut in_header = true;
-    for (index, line) in source.lines().enumerate() {
-        let line_no = index + 1;
+    for (line_no, line) in LineIndex::new(&text).lines() {
         let comment = line.trim_start().strip_prefix("//");
         if in_header && comment.is_none() && !line.trim().is_empty() {
             in_header = false;
@@ -129,7 +142,7 @@ pub fn parse(name: &str, source: &str, stdout: Option<String>) -> Result<Fixture
             "{name}.stdout exists, but only `// mode: run` fixtures compare output"
         ));
     }
-    let (expectations, expectation_errors) = expectations(source);
+    let (expectations, expectation_errors) = expectations(&text);
     errors.extend(expectation_errors);
     if mode == Mode::Run && !expectations.is_empty() {
         errors.push(
@@ -147,7 +160,8 @@ pub fn parse(name: &str, source: &str, stdout: Option<String>) -> Result<Fixture
         exit: exit.unwrap_or(0),
         expectations,
         stdout,
-        source: source.to_string(),
+        source: source.to_vec(),
+        text: text.into_owned(),
     })
 }
 
@@ -156,21 +170,23 @@ pub fn parse(name: &str, source: &str, stdout: Option<String>) -> Result<Fixture
 pub fn expectations(source: &str) -> (Vec<Expectation>, Vec<String>) {
     let mut found = Vec::new();
     let mut errors = Vec::new();
-    for (index, line) in source.lines().enumerate() {
-        let line_no = index + 1;
+    for (line_no, line) in LineIndex::new(source).lines() {
         let Some(at) = line.find("//~") else {
             continue;
         };
         let rest = &line[at + 3..];
         let carets = rest.chars().take_while(|&c| c == '^').count();
-        let Some(target) = line_no.checked_sub(carets).filter(|&t| t >= 1) else {
+        let target = u32::try_from(carets)
+            .ok()
+            .and_then(|carets| line_no.checked_sub(carets))
+            .filter(|&t| t >= 1);
+        let Some(target) = target else {
             errors.push(format!(
                 "line {line_no}: `//~{}` points above the first line",
                 "^".repeat(carets)
             ));
             continue;
         };
-        let target = u32::try_from(target).expect("fixture lines fit in u32");
         let codes: Vec<&str> = rest[carets..].split_whitespace().collect();
         if codes.is_empty() {
             errors.push(format!(
@@ -200,6 +216,11 @@ fn directive(comment: &str) -> Option<(&str, &str)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// [`super::parse`] on text, as most tests write fixtures.
+    fn parse(name: &str, source: &str, stdout: Option<String>) -> Result<Fixture, Vec<String>> {
+        super::parse(name, source.as_bytes(), stdout)
+    }
 
     fn lines_and_codes(f: &Fixture) -> Vec<(u32, &str)> {
         f.expectations
@@ -350,5 +371,43 @@ mod tests {
         assert!(errors[1].contains("`e12` is not a diagnostic code"));
         assert!(errors[2].contains("needs at least one code"));
         assert!(errors[3].contains("`because` is not a diagnostic code"));
+    }
+
+    #[test]
+    fn a_byte_order_mark_is_not_part_of_the_header() {
+        let f = parse("x", "\u{FEFF}// rule: a.b\nx //~ E0001\n", None).unwrap();
+        assert_eq!(f.rules, ["a.b"]);
+        assert_eq!(lines_and_codes(&f), [(2, "E0001")]);
+        assert!(f.source.starts_with("\u{FEFF}".as_bytes()));
+    }
+
+    #[test]
+    fn every_line_ending_ends_a_line() {
+        for ending in ["\n", "\r\n", "\r"] {
+            let source = [
+                "// rule: a.b",
+                "// mode: parse",
+                "x",
+                "y //~ E0001",
+                "//~^^ E0002",
+                "",
+            ]
+            .join(ending);
+            let f = parse("x", &source, None).unwrap();
+            assert_eq!(f.rules, ["a.b"], "{ending:?}");
+            assert_eq!(f.mode, Mode::Parse, "{ending:?}");
+            assert_eq!(
+                lines_and_codes(&f),
+                [(4, "E0001"), (3, "E0002")],
+                "{ending:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn invalid_utf8_is_read_as_replacement_characters() {
+        let f = super::parse("x", b"// rule: a.b\n// \xFF\xFE\nx //~ E0001\n", None).unwrap();
+        assert_eq!(f.text, "// rule: a.b\n// \u{FFFD}\u{FFFD}\nx //~ E0001\n");
+        assert_eq!(lines_and_codes(&f), [(3, "E0001")]);
     }
 }

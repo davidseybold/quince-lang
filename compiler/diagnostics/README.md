@@ -17,6 +17,7 @@ The error-code registry, the JSON diagnostic types and their schema, and fix che
 - A line ends at LF, at CR LF (one line ending), or at a CR not followed by LF, as in LSP. Which line endings the lexer accepts is the spec's business. This only fixes how positions count.
 - A UTF-8 byte order mark at the start of a file isn't counted, so the character after it is `[1, 1]`.
 - The end of input is the position after the last character. After a trailing newline, that's `[last line + 1, 1]`.
+- `LineIndex` converts byte offsets to positions and back by these rules. Code that reports or checks positions uses it rather than counting lines itself.
 
 ## Edits and fixes
 
@@ -30,7 +31,7 @@ The error-code registry, the JSON diagnostic types and their schema, and fix che
 
   So the order of texts is never ambiguous, and a tool applies a fix as if all at once.
 - An edit's `start` is never after its `end`. Both positions exist in the original text, except `[1, 1]` in a file the edit creates.
-- `Fix::check` rejects a fix that breaks these rules. The conformance runner runs it on every fix a backend reports, and a malformed fix fails the fixture. Checking that each position exists needs the source text, so that part arrives with M1's backend.
+- `Fix::check` rejects a fix that breaks these rules. Checking that each position exists needs the source text, so that half is `Fix::check_positions`, which takes a `LineIndex` for each file that exists. The conformance runner runs both on every fix a backend reports, and a malformed fix fails the fixture.
 
 ## JSON shape
 

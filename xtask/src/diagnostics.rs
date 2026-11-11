@@ -95,7 +95,9 @@ fn fixture_codes(root: &Path) -> Result<BTreeSet<String>, String> {
     let mut codes = BTreeSet::new();
     let files = quince_conformance::discover(root).map_err(|errors| errors.join("\n"))?;
     for file in files {
-        let (expectations, _) = quince_conformance::fixture::expectations(&file.source);
+        let (expectations, _) = quince_conformance::fixture::expectations(
+            &quince_conformance::fixture::decode(&file.source),
+        );
         codes.extend(expectations.into_iter().map(|e| e.code.to_string()));
     }
     Ok(codes)

@@ -328,10 +328,10 @@ Found while writing this. None of them block the lexer.
 Rule IDs in brackets are what each task's fixtures cite. Rules added by spec questions are cited only once approved.
 
 **Layer 1: `m1/lexer-harness`**
-- [ ] `LineIndex` in `quince_diagnostics`, with the position rules' unit tests.
-- [ ] `Backend` takes `&[u8]`; the runner reads fixture bytes, decodes them with `String::from_utf8_lossy`, strips a BOM before the header, and numbers lines with `LineIndex`.
-- [ ] Fix-position checks in the runner.
-- [ ] Fixture README: `parse` fixtures are valid syntax apart from their expectations.
+- [x] `LineIndex` in `quince_diagnostics`, with the position rules' unit tests.
+- [x] `Backend` takes `&[u8]`; the runner reads fixture bytes, decodes them with `String::from_utf8_lossy`, strips a BOM before the header, and numbers lines with `LineIndex`.
+- [x] Fix-position checks in the runner.
+- [x] Fixture README: `parse` fixtures are valid syntax apart from their expectations.
 
 **Layer 2: `m1/lexer-tokens`**
 - [ ] Spec: the approved wording from questions 1, 4 and 6, the `source` construct, and a minor version bump.

@@ -1,0 +1,1 @@
+// rule: bind.let-var// mode: parse// Self-test: lone CR line endings.let x = 1 $//~^ E0001let y = 2 $ //~ E0001

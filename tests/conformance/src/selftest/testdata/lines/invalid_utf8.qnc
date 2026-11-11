@@ -1,0 +1,5 @@
+// rule: bind.let-var
+// mode: parse
+// Self-test: invalid UTF-8 in this comment: ÿþ.
+let x = 1 Ã $ //~ E0001
+let y = 2 $ //~ E0001
