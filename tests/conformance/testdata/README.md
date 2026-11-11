@@ -15,7 +15,7 @@ fn f() {
 
 Header lines of the form `// <word>:`, where the word is lowercase ASCII letters and hyphens, are directives. The directives are `rule`, `mode` and `exit`. Any other such word before a colon is an error, and so is a case variant such as `// Mode:`. Other comments are free text, including `// Note: ...`. After the first line of code, a comment whose word is `rule`, `mode` or `exit` in any letter case is an error that says to move it into the header.
 
-- `// rule: <id>` cites the spec rule the fixture tests. At least one is required, each ID once. Every ID must be tagged in a spec chapter listed in `spec/chapters.txt` (or be `grammar.<production>`) and not be retired.
+- `// rule: <id>` cites the spec rule the fixture tests. At least one is required, each ID once. Every ID must be tagged in a spec chapter listed in `spec/chapters.txt` (or be `grammar.<production>`) and not be retired. An ID listed in `spec/moved-rules.txt` fails with the ID to cite instead.
 - `// mode: <mode>` is set at most once. Modes are an open set: later milestones add more (`fmt` in M1), and an unknown mode is an error that lists the known ones.
   - `check` (the default) runs the whole checker as far as it exists. A check fixture must be a valid program under the whole spec apart from its expected diagnostics, so it keeps passing when later stages arrive. No tool can tell until those stages exist, so review enforces this.
   - `parse` runs only the parser, even after later stages exist, so a syntax fixture keeps passing when stages such as name resolution or lints add diagnostics (an unused binding, for example).
