@@ -6,7 +6,7 @@ The lexer now, and the parser, CST and formatter later. This file holds the cont
 
 - `decode_source(&[u8])` is the one place source bytes become text. Every caller that reads a file uses it before lexing.
 - Each maximal run of invalid UTF-8 becomes one U+FFFD in `Decoded::text`, and `Decoded::replaced` records where. Each line that holds invalid bytes gets one E0014, at its first run.
-- When `Decoded::is_lossy()` is true, the text isn't the file, so no tool may write it back. Every writer checks it: `fmt`, `fix` and the language server.
+- When `Decoded::is_lossy()` is true, the text isn't the file, so no tool may write it back. Every writer checks it: `fmt`, `fix` and the language server. For the same reason, `lex` gives no error in a lossy text a fix, and the parser must follow the same rule.
 - A file over 4 GiB, more than a `u32` offset can address, is an I/O error, not a diagnostic.
 
 ## Tokens

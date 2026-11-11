@@ -46,10 +46,17 @@ impl Lexed {
 }
 
 /// Lexes decoded source. A U+FFFD that decoding put in place of invalid bytes becomes an
-/// `Error` token with no diagnostic of its own, since decoding reported it.
+/// `Error` token with no diagnostic of its own, since decoding reported it. When the text is
+/// lossy, no error has a fix: the text isn't the file, so an edit to it could write a U+FFFD
+/// over the file's bytes.
 pub fn lex(decoded: &Decoded) -> Lexed {
     let mut lexed = Lexer::new(&decoded.text, &decoded.replaced).run();
     lexed.errors.splice(0..0, decoded.errors.iter().cloned());
+    if decoded.is_lossy() {
+        for error in &mut lexed.errors {
+            error.fixes.clear();
+        }
+    }
     lexed
 }
 
