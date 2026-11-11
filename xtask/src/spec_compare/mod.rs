@@ -5,14 +5,16 @@
 //! restructure is done.
 
 pub mod segment;
+mod tag_format;
 mod targets;
 
 use crate::spec_rules::{load, read};
 use quince_spec::manifest::LEGACY_PREFIX;
 use quince_spec::{README_PATH, grammar};
-use segment::{Kind, Unit, segment};
+use segment::{Form, Kind, Unit, segment};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
+use tag_format::{ConvertedTable, convert_tables, split_labels};
 
 /// The spec as it was before the restructure (81aa5f0), relative to the repo root.
 pub const BASELINE_SPEC: &str = "docs/design/spec-restructure/baseline/quince-spec.md";
@@ -33,6 +35,9 @@ pub const REFS: &str = "docs/design/spec-restructure/refs.tsv";
 pub const REWORDINGS: &str = "docs/design/spec-restructure/rewordings.tsv";
 /// What became of the baseline's headings, relative to the repo root.
 pub const HEADINGS: &str = "docs/design/spec-restructure/headings.tsv";
+/// The baseline's tagged tables that became lists, with the pattern each row became an item
+/// by, relative to the repo root.
+pub const TABLES: &str = "docs/design/spec-restructure/tables.tsv";
 
 /// The Introduction's link to the note that some examples are signature listings: the one
 /// paragraph the restructure adds to a chapter (decision 6), as a file and its text with link
@@ -89,6 +94,8 @@ pub struct Tables {
     /// What became of the baseline's headings, and the headings the restructure adds, from
     /// `headings.tsv`.
     pub headings: Vec<HeadingRow>,
+    /// The baseline tables that became lists, from `tables.tsv`.
+    pub converted: Vec<ConvertedTable>,
 }
 
 /// A row of `headings.tsv`.
@@ -218,7 +225,8 @@ impl Tables {
     ///   link as a path from the repo root. `spec` rows rewrite the baseline. `std` rows are
     ///   undone in `std/API.md` before checking that the units that moved there still hold
     ///   their text; its other text isn't compared.
-    /// - `rewordings.tsv`: a rule ID, the old text and the new text.
+    /// - `rewordings.tsv`: a rule ID, or `L` and the baseline line an untagged unit starts on,
+    ///   the old text and the new text.
     /// - `headings.tsv`: `new`, a file and the heading line the restructure adds there;
     ///   `moved`, a baseline line (`L120`), the heading on it, a file and the heading line it
     ///   became there; or `dropped`, a baseline line and the heading on it.
@@ -257,18 +265,20 @@ impl Tables {
         }
         for (line, columns) in rows(rewordings) {
             let at = format!("{REWORDINGS}:{line}");
-            match columns.as_slice() {
-                [id, old, new] if filled(&columns) && quince_spec::rules::is_valid_id(id) => {
-                    self.rewrites.push(Rewrite {
-                        at,
-                        unit: UnitRef::Rule(id.to_string()),
-                        old: old.to_string(),
-                        new: new.to_string(),
-                        target: String::new(),
-                    })
-                }
+            match (
+                columns.as_slice(),
+                columns.first().and_then(|c| UnitRef::parse(c)),
+            ) {
+                ([_, old, new], Some(unit)) if filled(&columns) => self.rewrites.push(Rewrite {
+                    at,
+                    unit,
+                    old: old.to_string(),
+                    new: new.to_string(),
+                    target: String::new(),
+                }),
                 _ => errors.push(format!(
-                    "{at}: a row is a rule ID, the old text and the new text"
+                    "{at}: a row is a rule ID or a baseline line such as `L120`, the old text and \
+                     the new text"
                 )),
             }
         }
@@ -354,6 +364,8 @@ pub struct Outcome {
     pub rewritten: usize,
     /// Links checked against their final target in `refs.tsv`.
     pub final_targets: usize,
+    /// Baseline table rows rebuilt as list items by `tables.tsv`.
+    pub rows_converted: usize,
 }
 
 pub fn check(root: &Path) -> Result<(), String> {
@@ -364,7 +376,7 @@ pub fn check(root: &Path) -> Result<(), String> {
         .iter()
         .map(|file| Source {
             path: file.path.clone(),
-            units: segment(&file.text),
+            units: segment(&file.text, Form::OwnLine),
             role: if file.prefix == LEGACY_PREFIX {
                 Role::Legacy
             } else {
@@ -374,7 +386,7 @@ pub fn check(root: &Path) -> Result<(), String> {
         .collect();
     sources.push(Source {
         path: README_PATH.to_string(),
-        units: segment(&spec.readme),
+        units: segment(&spec.readme, Form::OwnLine),
         role: Role::Landing,
     });
     let optional = |path: &str| -> Result<String, String> {
@@ -386,13 +398,13 @@ pub fn check(root: &Path) -> Result<(), String> {
     };
     sources.push(Source {
         path: DESIGN_PRINCIPLES.to_string(),
-        units: segment(&optional(DESIGN_PRINCIPLES)?),
+        units: segment(&optional(DESIGN_PRINCIPLES)?, Form::OwnLine),
         role: Role::Landing,
     });
     let (plan_path, plan_heading) = REPO_PLAN;
     sources.push(Source {
         path: plan_path.to_string(),
-        units: section(&segment(&optional(plan_path)?), plan_heading),
+        units: section(&segment(&optional(plan_path)?, Form::OwnLine), plan_heading),
         role: Role::Landing,
     });
     let (mut tables, mut table_errors) = Tables::parse(&optional(ID_MAP)?, &optional(REMOVED)?);
@@ -401,8 +413,11 @@ pub fn check(root: &Path) -> Result<(), String> {
         &optional(REWORDINGS)?,
         &optional(HEADINGS)?,
     ));
+    let (converted, converted_errors) = tag_format::parse_tables(&optional(TABLES)?);
+    tables.converted = converted;
+    table_errors.extend(converted_errors);
     let std_text = optional(STD_API)?;
-    let before = segment(&baseline);
+    let before = segment(&baseline, Form::Inline);
     let mut outcome = compare(&before, &sources, &tables, &std_text);
     outcome.problems.splice(0..0, table_errors);
 
@@ -437,14 +452,15 @@ pub fn check(root: &Path) -> Result<(), String> {
     eprintln!(
         "spec-compare against {BASELINE_SPEC}: rule tags {tags_before} before, {} removed, \
          {tags_after} after; productions {productions_before} before, {productions_after} after; \
-         units {} matched, {} moved, {} to std/API.md, {} added; {} rewrites; {} links at their \
-         final target",
+         units {} matched, {} moved, {} to std/API.md, {} added; {} rewrites; {} table rows \
+         converted to items; {} links at their final target",
         tables.removed_ids.len(),
         outcome.matched,
         outcome.moved,
         outcome.to_std,
         outcome.added,
         outcome.rewritten,
+        outcome.rows_converted,
         outcome.final_targets
     );
     if outcome.problems.is_empty() {
@@ -503,7 +519,8 @@ fn normalize(before: &[Unit], tables: &Tables, std_text: &str, outcome: &mut Out
     for id in listed {
         problems.push(format!("{ID_MAP}: `{id}` is not a rule ID in the baseline"));
     }
-    for unit in segment(std_text) {
+    // The inline segmenter also finds a tag on its own line, as a tag before the text after it.
+    for unit in segment(std_text, Form::Inline) {
         if let Some(id) = &unit.id {
             problems.push(format!(
                 "{STD_API}:{}: rule tag `{id}`; text that leaves the spec loses its tag",
@@ -651,25 +668,36 @@ fn remove_text(unit: &str, text: &str) -> String {
     format!("{head}{tail}").trim().to_string()
 }
 
-/// Matches the baseline's units against the current files'.
+/// Matches the baseline's units against the current files'. The baseline's converted tables
+/// are rebuilt as items after the tables are applied, and labels are split off tagged units on
+/// both sides last.
 pub fn compare(before: &[Unit], after: &[Source], tables: &Tables, std_text: &str) -> Outcome {
     let mut outcome = Outcome::default();
     let before: Vec<Unit> = normalize(before, tables, std_text, &mut outcome)
         .into_iter()
         .map(without_link_targets)
         .collect();
+    let (before, rebuilt) = convert_tables(before, &tables.converted, &mut outcome.problems);
+    outcome.rows_converted = rebuilt
+        .iter()
+        .map(|item| (&item.at, item.line))
+        .collect::<HashSet<_>>()
+        .len();
+    targets::check(&before, after, tables, std_text, &rebuilt, &mut outcome);
+    let before = split_labels(before);
     let before = before.as_slice();
-    targets::check(before, after, tables, std_text, &mut outcome);
     let after: Vec<Source> = after
         .iter()
         .map(|source| Source {
             path: source.path.clone(),
-            units: source
-                .units
-                .iter()
-                .cloned()
-                .map(without_link_targets)
-                .collect(),
+            units: split_labels(
+                source
+                    .units
+                    .iter()
+                    .cloned()
+                    .map(without_link_targets)
+                    .collect(),
+            ),
             role: source.role,
         })
         .collect();
@@ -702,6 +730,13 @@ pub fn compare(before: &[Unit], after: &[Source], tables: &Tables, std_text: &st
             if let Some((path, line)) = seen.insert(id, (&source.path, unit.line)) {
                 problems.push(format!(
                     "{at}: rule `{id}` appears twice; it is also at {path}:{line}"
+                ));
+                continue;
+            }
+            if unit.text.is_empty() {
+                problems.push(format!(
+                    "{at}: rule `{id}` covers no text; a tag line must be directly followed by \
+                     the paragraph or top-level `-` or `*` item it covers"
                 ));
                 continue;
             }
@@ -799,6 +834,30 @@ pub fn compare(before: &[Unit], after: &[Source], tables: &Tables, std_text: &st
                     snippet(&unit.text)
                 )),
             }
+        }
+    }
+    for item in &rebuilt {
+        let in_file = after.iter().filter(|s| s.path == item.path).any(|s| {
+            s.units.iter().any(|u| match &item.id {
+                Some(id) => u.id.as_deref() == Some(id),
+                None => u.id.is_none() && u.kind == Kind::Item && u.text == item.text,
+            })
+        });
+        if !in_file {
+            problems.push(match &item.id {
+                Some(id) => format!(
+                    "{}: the baseline row on line {} becomes rule `{id}`, but {} doesn't hold it",
+                    item.at, item.line, item.path
+                ),
+                None => format!(
+                    "{}: the baseline row on line {} becomes an untagged item, but {} doesn't hold \
+                     it: {}",
+                    item.at,
+                    item.line,
+                    item.path,
+                    snippet(&item.text)
+                ),
+            });
         }
     }
     let mut missing: Vec<(usize, Kind, &str)> = pool
@@ -1017,10 +1076,10 @@ Nov 10 · Draft v0.5
 
 Intro. r[val.a] Values are immutable. r[val.b] Copies are cheap.
 
-| Kind | Rule |
+| Kind | Size |
 | --- | --- |
-| Int | r[val.int] Ints are 64-bit. |
-| Bool | r[val.bool] Bools are one byte. |
+| Int | 64-bit |
+| Bool | One byte |
 
 - r[val.list] Lists are values.
 * Maps are too.
@@ -1049,16 +1108,69 @@ file = { expr }
 ```
 ";
 
+    /// `BASELINE` with its tags on their own lines, as a chapter writes them.
+    const AFTER: &str = "\
+# Spec
+
+Nov 10 · Draft v0.5
+
+## 1. Values
+
+Intro.
+
+r[val.a]
+Values are immutable.
+
+r[val.b]
+Copies are cheap.
+
+| Kind | Size |
+| --- | --- |
+| Int | 64-bit |
+| Bool | One byte |
+
+r[val.list]
+- Lists are values.
+* Maps are too.
+
+```
+fn f() {
+  1
+}
+
+fn g() {
+  2
+}
+```
+
+## Appendix: Expression grammar
+
+```
+expr = term
+term = name
+```
+
+### Declarations, types and patterns
+
+```
+file = { expr }
+```
+";
+
+    fn baseline() -> Vec<Unit> {
+        segment(BASELINE, Form::Inline)
+    }
+
     fn source(path: &str, role: Role, text: &str) -> Source {
         Source {
             path: path.into(),
-            units: segment(text),
+            units: segment(text, Form::OwnLine),
             role,
         }
     }
 
     fn compare_with(after: &[Source]) -> Outcome {
-        compare(&segment(BASELINE), after, &Tables::default(), "")
+        compare(&baseline(), after, &Tables::default(), "")
     }
 
     fn legacy(text: &str) -> Source {
@@ -1067,7 +1179,7 @@ file = { expr }
 
     #[test]
     fn unchanged_spec_passes() {
-        let outcome = compare_with(&[legacy(BASELINE)]);
+        let outcome = compare_with(&[legacy(AFTER)]);
         assert_eq!(outcome.problems, Vec::<String>::new());
         assert_eq!(outcome.moved, 0);
         assert_eq!(outcome.added, 0);
@@ -1077,13 +1189,13 @@ file = { expr }
     fn moves_and_splits_pass() {
         // The version header moves to the README; the table, the code block and the list
         // split across a new chapter; the grammar block gains its info string.
-        let rest = BASELINE
+        let rest = AFTER
             .replace("Nov 10 · Draft v0.5\n", "")
-            .replace("| Bool | r[val.bool] Bools are one byte. |\n", "")
+            .replace("| Bool | One byte |\n", "")
             .replace("fn g() {\n  2\n}\n", "")
             .replace("* Maps are too.\n", "")
             .replace("```\nexpr", "```ebnf\nexpr");
-        let chapter = "# Values\n\n| Kind | Rule |\n| --- | --- |\n| Bool | r[val.bool] Bools are one byte. |\n\n- Maps are too.\n\n```\nfn g() {\n  2\n}\n```\n";
+        let chapter = "# Values\n\n| Kind | Size |\n| --- | --- |\n| Bool | One byte |\n\n- Maps are too.\n\n```\nfn g() {\n  2\n}\n```\n";
         let outcome = compare_with(&[
             legacy(&rest),
             source("spec/reference/values.md", Role::Chapter, chapter),
@@ -1094,16 +1206,15 @@ file = { expr }
             ),
         ]);
         assert_eq!(outcome.problems, Vec::<String>::new());
-        // The rule, the rest of its table row, the list item, the code unit and the version
-        // header moved.
-        assert_eq!(outcome.moved, 5);
+        // The table row, the list item, the code unit and the version header moved.
+        assert_eq!(outcome.moved, 4);
         // The chapter title and the repeated table header.
         assert_eq!(outcome.added, 2);
     }
 
     #[test]
     fn lost_sentence_fails() {
-        let outcome = compare_with(&[legacy(&BASELINE.replace("Intro. ", ""))]);
+        let outcome = compare_with(&[legacy(&AFTER.replace("Intro.\n\n", ""))]);
         assert_eq!(
             outcome.problems,
             [
@@ -1114,18 +1225,18 @@ file = { expr }
 
     #[test]
     fn edited_rule_fails() {
-        let outcome = compare_with(&[legacy(&BASELINE.replace("are cheap", "are free"))]);
+        let outcome = compare_with(&[legacy(&AFTER.replace("are cheap", "are free"))]);
         assert_eq!(
             outcome.problems,
             [
-                "spec/quince-spec.md:7: the text of rule `val.b` changed (baseline line 7):\n  before: Copies are cheap.\n  after:  Copies are free."
+                "spec/quince-spec.md:12: the text of rule `val.b` changed (baseline line 7):\n  before: Copies are cheap.\n  after:  Copies are free."
             ]
         );
     }
 
     #[test]
     fn edited_code_fails() {
-        let outcome = compare_with(&[legacy(&BASELINE.replace("  2\n", "  3\n"))]);
+        let outcome = compare_with(&[legacy(&AFTER.replace("  2\n", "  3\n"))]);
         assert_eq!(outcome.problems.len(), 2, "{:?}", outcome.problems);
         assert!(outcome.problems[0].contains("this code isn't in the baseline: fn g() { …"));
         assert!(outcome.problems[1].contains(":22: this code is missing from the spec: fn g() {"));
@@ -1133,25 +1244,25 @@ file = { expr }
 
     #[test]
     fn duplicated_text_fails() {
-        let doubled = format!("{BASELINE}\n* Maps are too.\n");
+        let doubled = format!("{AFTER}\n* Maps are too.\n");
         let outcome = compare_with(&[legacy(&doubled)]);
         assert_eq!(outcome.problems.len(), 1, "{:?}", outcome.problems);
         assert!(
             outcome.problems[0].contains("this list item isn't in the baseline: Maps are too.")
         );
-        let rule = format!("{BASELINE}\nr[val.a] Values are immutable.\n");
+        let rule = format!("{AFTER}\nr[val.a]\nValues are immutable.\n");
         let outcome = compare_with(&[legacy(&rule)]);
         assert!(
             outcome.problems[0]
-                .contains("rule `val.a` appears twice; it is also at spec/quince-spec.md:7")
+                .contains("rule `val.a` appears twice; it is also at spec/quince-spec.md:9")
         );
     }
 
     #[test]
     fn swapped_rule_texts_fail() {
-        let swapped = BASELINE.replace(
-            "r[val.a] Values are immutable. r[val.b] Copies are cheap.",
-            "r[val.a] Copies are cheap. r[val.b] Values are immutable.",
+        let swapped = AFTER.replace(
+            "r[val.a]\nValues are immutable.\n\nr[val.b]\nCopies are cheap.",
+            "r[val.a]\nCopies are cheap.\n\nr[val.b]\nValues are immutable.",
         );
         let outcome = compare_with(&[legacy(&swapped)]);
         assert_eq!(outcome.problems.len(), 2, "{:?}", outcome.problems);
@@ -1160,7 +1271,7 @@ file = { expr }
 
     #[test]
     fn dropped_or_new_tags_fail() {
-        let untagged = BASELINE.replace("r[val.list] Lists", "Lists");
+        let untagged = AFTER.replace("r[val.list]\n- Lists", "- Lists");
         let outcome = compare_with(&[legacy(&untagged)]);
         assert_eq!(outcome.problems.len(), 2, "{:?}", outcome.problems);
         assert!(outcome.problems[0].contains("rule `val.list` is missing from the spec"));
@@ -1168,7 +1279,7 @@ file = { expr }
             outcome.problems[1].contains("this list item isn't in the baseline: Lists are values.")
         );
 
-        let new_rule = format!("{BASELINE}\nr[val.new] A new rule.\n");
+        let new_rule = format!("{AFTER}\nr[val.new]\nA new rule.\n");
         let outcome = compare_with(&[legacy(&new_rule)]);
         assert!(
             outcome.problems[0].contains("rule `val.new` is tagged, but it isn't in the baseline")
@@ -1177,15 +1288,12 @@ file = { expr }
 
     #[test]
     fn rule_changing_block_kind_fails() {
-        let moved = BASELINE.replace(
-            "- r[val.list] Lists are values.\n",
-            "\nr[val.list] Lists are values.\n",
-        );
+        let moved = AFTER.replace("r[val.list]\n- Lists", "r[val.list]\nLists");
         let outcome = compare_with(&[legacy(&moved)]);
         assert_eq!(
             outcome.problems,
             [
-                "spec/quince-spec.md:15: rule `val.list` was in a list item (baseline line 14) and is now in a paragraph"
+                "spec/quince-spec.md:20: rule `val.list` was in a list item (baseline line 14) and is now in a paragraph"
             ]
         );
     }
@@ -1195,9 +1303,9 @@ file = { expr }
         let readme = source(
             "spec/README.md",
             Role::Landing,
-            "Nov 10 · Draft v0.5\n\nr[val.a] Values are immutable.\n",
+            "Nov 10 · Draft v0.5\n\nr[val.a]\nValues are immutable.\n",
         );
-        let outcome = compare_with(&[legacy(BASELINE), readme]);
+        let outcome = compare_with(&[legacy(AFTER), readme]);
         assert_eq!(
             outcome.problems,
             [
@@ -1208,9 +1316,9 @@ file = { expr }
 
     #[test]
     fn new_headings_and_table_headers_fail() {
-        let changed = BASELINE
+        let changed = AFTER
             .replace("## 1. Values", "## Values")
-            .replace("| Kind | Rule |", "| Kind | Rules |");
+            .replace("| Kind | Size |", "| Kind | Sizes |");
         let outcome = compare_with(&[legacy(&changed)]);
         assert_eq!(outcome.problems.len(), 4, "{:?}", outcome.problems);
     }
@@ -1256,9 +1364,9 @@ file = { expr }
     /// The baseline with the list and the first code declaration moved to std/API.md, the
     /// `val.list` rule removed, and the intro sentence dropped.
     fn library_move() -> (String, Tables, String) {
-        let spec = BASELINE
-            .replace("Intro. ", "")
-            .replace("- r[val.list] Lists are values.\n* Maps are too.\n", "")
+        let spec = AFTER
+            .replace("Intro.\n\n", "")
+            .replace("r[val.list]\n- Lists are values.\n* Maps are too.\n", "")
             .replace("fn f() {\n  1\n}\n\n", "");
         let tables = tables(
             "val.list\tremoved\n",
@@ -1272,7 +1380,7 @@ file = { expr }
     #[test]
     fn library_moves_pass() {
         let (spec, tables, std) = library_move();
-        let outcome = compare(&segment(BASELINE), &[legacy(&spec)], &tables, &std);
+        let outcome = compare(&baseline(), &[legacy(&spec)], &tables, &std);
         assert_eq!(outcome.problems, Vec::<String>::new());
         assert_eq!(outcome.to_std, 3);
     }
@@ -1283,24 +1391,29 @@ file = { expr }
         let lost = std
             .replace("- Maps are too.\n", "")
             .replace("  1\n", "  2\n");
-        let outcome = compare(&segment(BASELINE), &[legacy(&spec)], &tables, &lost);
+        let outcome = compare(&baseline(), &[legacy(&spec)], &tables, &lost);
         assert_eq!(outcome.problems.len(), 2, "{:?}", outcome.problems);
         assert!(outcome.problems[0].contains(":15: this list item left the spec for std/API.md, but std/API.md doesn't hold its text: Maps are too."));
         assert!(outcome.problems[1].contains(":18: this code left the spec"));
 
-        let tagged = std.replace("- Lists", "- r[val.list] Lists");
-        let outcome = compare(&segment(BASELINE), &[legacy(&spec)], &tables, &tagged);
-        assert_eq!(
-            outcome.problems,
-            ["std/API.md:3: rule tag `val.list`; text that leaves the spec loses its tag"]
-        );
+        // Tags in either form.
+        for tagged in [
+            std.replace("- Lists", "- r[val.list] Lists"),
+            std.replace("- Lists", "r[val.list]\n- Lists"),
+        ] {
+            let outcome = compare(&baseline(), &[legacy(&spec)], &tables, &tagged);
+            assert_eq!(
+                outcome.problems,
+                ["std/API.md:3: rule tag `val.list`; text that leaves the spec loses its tag"]
+            );
+        }
     }
 
     #[test]
     fn removed_rules_lose_their_tags_and_ranges_need_them_removed() {
         let (_, tables, std) = library_move();
-        let still_tagged = BASELINE.replace("Intro. ", "");
-        let outcome = compare(&segment(BASELINE), &[legacy(&still_tagged)], &tables, &std);
+        let still_tagged = AFTER.replace("Intro.\n\n", "");
+        let outcome = compare(&baseline(), &[legacy(&still_tagged)], &tables, &std);
         assert!(
             outcome.problems.iter().any(|p| p.contains(
                 "rule `val.list` is tagged, but docs/design/spec-restructure/id-map.tsv removes it"
@@ -1313,7 +1426,7 @@ file = { expr }
             to_std: vec![(14, 14)],
             ..Tables::default()
         };
-        let outcome = compare(&segment(BASELINE), &[legacy(BASELINE)], &unremoved, "");
+        let outcome = compare(&baseline(), &[legacy(AFTER)], &unremoved, "");
         assert!(
             outcome.problems[0].contains(":14: rule `val.list` is in a to-std range"),
             "{:?}",
@@ -1324,7 +1437,7 @@ file = { expr }
     #[test]
     fn stale_table_rows_fail() {
         let stale = tables("val.gone\tremoved\n", "removed\t7\tNot there.\n");
-        let outcome = compare(&segment(BASELINE), &[legacy(BASELINE)], &stale, "");
+        let outcome = compare(&baseline(), &[legacy(AFTER)], &stale, "");
         assert_eq!(
             outcome.problems,
             [
@@ -1337,10 +1450,10 @@ file = { expr }
     #[test]
     fn renamed_ids_map_to_their_new_names() {
         let renamed = tables("val.a\tvalue.a\tmechanical\n", "");
-        let spec = BASELINE.replace("r[val.a]", "r[value.a]");
-        let outcome = compare(&segment(BASELINE), &[legacy(&spec)], &renamed, "");
+        let spec = AFTER.replace("r[val.a]", "r[value.a]");
+        let outcome = compare(&baseline(), &[legacy(&spec)], &renamed, "");
         assert_eq!(outcome.problems, Vec::<String>::new());
-        let outcome = compare(&segment(BASELINE), &[legacy(BASELINE)], &renamed, "");
+        let outcome = compare(&baseline(), &[legacy(AFTER)], &renamed, "");
         assert!(outcome.problems[0].contains("rule `val.a` is tagged, but docs/design/spec-restructure/id-map.tsv renames it to `value.a`"), "{:?}", outcome.problems);
     }
 
@@ -1357,7 +1470,7 @@ file = { expr }
         let errors = tables.parse_rewrites(
             "# where\tunit\told\tnew\ttarget\nspec\tval.a\tx\t[x](a.md)\tspec/a.md\nstd\tL3\ty\t[y](b.md)\tspec/b.md\n\
              spec\tL9\tz\tZ\t\ndoc\tval.a\tx\ty\tz\nspec\tBad\tx\ty\tz\n",
-            "val.b\told\tnew\nval.b\told\n",
+            "val.b\told\tnew\nval.b\told\nL7\tIntro.\tLead.\nBad\tx\ty\n",
             "new\tspec/quince-spec.md\t### Kinds\nnew\tspec/quince-spec.md\tKinds\n\
              moved\tL5\t## 1. Values\tspec/a.md\t# Values\ndropped\tL34\t### Old\n\
              moved\t5\t## 1. Values\tspec/a.md\t# Values\nmoved\tL5\t## 1. Values\tspec/a.md\n\
@@ -1378,6 +1491,13 @@ file = { expr }
                     unit: UnitRef::Rule("val.b".into()),
                     old: "old".into(),
                     new: "new".into(),
+                    target: String::new(),
+                },
+                Rewrite {
+                    at: "docs/design/spec-restructure/rewordings.tsv:3".into(),
+                    unit: UnitRef::Line(7),
+                    old: "Intro.".into(),
+                    new: "Lead.".into(),
                     target: String::new(),
                 },
             ]
@@ -1421,6 +1541,7 @@ file = { expr }
                 "docs/design/spec-restructure/refs.tsv:5",
                 "docs/design/spec-restructure/refs.tsv:6",
                 "docs/design/spec-restructure/rewordings.tsv:2",
+                "docs/design/spec-restructure/rewordings.tsv:4",
                 "docs/design/spec-restructure/headings.tsv:2",
                 "docs/design/spec-restructure/headings.tsv:5",
                 "docs/design/spec-restructure/headings.tsv:6",
@@ -1438,16 +1559,16 @@ file = { expr }
             "val.b\tCopies are cheap.\tCopies cost little.\n",
             "new\tspec/quince-spec.md\t### Kinds\n",
         );
-        let spec = BASELINE
+        let spec = AFTER
             .replace("are immutable.", "are [immutable](reference/values.md).")
             .replace("Copies are cheap.", "Copies cost little.")
             .replace("* Maps are too.", "* Maps are [too](other.md#x).")
-            .replace("| Kind | Rule |", "### Kinds\n\n| Kind | Rule |");
-        let outcome = compare(&segment(BASELINE), &[legacy(&spec)], &tables, "");
+            .replace("| Kind | Size |", "### Kinds\n\n| Kind | Size |");
+        let outcome = compare(&baseline(), &[legacy(&spec)], &tables, "");
         assert_eq!(outcome.problems, Vec::<String>::new());
         assert_eq!((outcome.rewritten, outcome.added), (3, 1));
 
-        let outcome = compare(&segment(BASELINE), &[legacy(&spec)], &Tables::default(), "");
+        let outcome = compare(&baseline(), &[legacy(&spec)], &Tables::default(), "");
         let problems = outcome.problems.join("\n");
         assert!(
             problems.contains("the text of rule `val.a` changed"),
@@ -1455,7 +1576,7 @@ file = { expr }
         );
         assert!(
             problems.contains(
-                "spec/quince-spec.md:9: this heading isn't in the baseline or docs/design/spec-restructure/headings.tsv: ### Kinds"
+                "spec/quince-spec.md:15: this heading isn't in the baseline or docs/design/spec-restructure/headings.tsv: ### Kinds"
             ),
             "{problems}"
         );
@@ -1468,7 +1589,7 @@ file = { expr }
             "",
             "new\tspec/quince-spec.md\t### Gone\n",
         );
-        let outcome = compare(&segment(BASELINE), &[legacy(BASELINE)], &tables, "");
+        let outcome = compare(&baseline(), &[legacy(AFTER)], &tables, "");
         assert_eq!(
             outcome.problems,
             [
@@ -1486,7 +1607,7 @@ file = { expr }
                     [Prelude and special interfaces](prelude.md) says which.";
         let intro = format!("# Introduction\n\n{link}\n");
         let outcome = compare_with(&[
-            legacy(BASELINE),
+            legacy(AFTER),
             source("spec/reference/introduction.md", Role::Chapter, &intro),
         ]);
         assert_eq!(outcome.problems, Vec::<String>::new());
@@ -1494,7 +1615,7 @@ file = { expr }
 
         let elsewhere = format!("# Values\n\n{link}\n");
         let outcome = compare_with(&[
-            legacy(BASELINE),
+            legacy(AFTER),
             source("spec/reference/values.md", Role::Chapter, &elsewhere),
         ]);
         assert_eq!(
@@ -1509,15 +1630,15 @@ file = { expr }
     fn moved_split_and_dropped_headings_pass() {
         // The Values section becomes a chapter whose title and `## Kinds` heading both come
         // from `## 1. Values`, and the second grammar heading goes.
-        let values_at = BASELINE.find("## 1. Values").unwrap();
-        let grammar_at = BASELINE.find("## Appendix").unwrap();
-        let chapter = BASELINE[values_at..grammar_at]
+        let values_at = AFTER.find("## 1. Values").unwrap();
+        let grammar_at = AFTER.find("## Appendix").unwrap();
+        let chapter = AFTER[values_at..grammar_at]
             .replace("## 1. Values", "# Values")
-            .replace("| Kind | Rule |", "## Kinds\n\n| Kind | Rule |");
+            .replace("| Kind | Size |", "## Kinds\n\n| Kind | Size |");
         let rest = format!(
             "{}{}",
-            &BASELINE[..values_at],
-            BASELINE[grammar_at..].replace("### Declarations, types and patterns\n\n", "")
+            &AFTER[..values_at],
+            AFTER[grammar_at..].replace("### Declarations, types and patterns\n\n", "")
         );
         let tables = rewrite_tables(
             "",
@@ -1527,7 +1648,7 @@ file = { expr }
              dropped\tL34\t### Declarations, types and patterns\n",
         );
         let outcome = compare(
-            &segment(BASELINE),
+            &baseline(),
             &[
                 legacy(&rest),
                 source("spec/reference/values.md", Role::Chapter, &chapter),
@@ -1541,7 +1662,7 @@ file = { expr }
 
         // Without the rows, both chapter headings are new and the baseline ones are missing.
         let outcome = compare(
-            &segment(BASELINE),
+            &baseline(),
             &[
                 legacy(&rest),
                 source("spec/reference/values.md", Role::Chapter, &chapter),
@@ -1554,7 +1675,7 @@ file = { expr }
             [
                 "docs/design/spec-restructure/baseline/quince-spec.md:5: heading `## 1. Values` is missing from spec/quince-spec.md; a heading that moved or went needs a row in docs/design/spec-restructure/headings.tsv",
                 "docs/design/spec-restructure/baseline/quince-spec.md:34: heading `### Declarations, types and patterns` is missing from spec/quince-spec.md; a heading that moved or went needs a row in docs/design/spec-restructure/headings.tsv",
-                "spec/reference/values.md:5: this heading isn't in the baseline or docs/design/spec-restructure/headings.tsv: ## Kinds",
+                "spec/reference/values.md:11: this heading isn't in the baseline or docs/design/spec-restructure/headings.tsv: ## Kinds",
             ]
         );
     }
@@ -1568,7 +1689,7 @@ file = { expr }
              dropped\tL5\t## Values\n\
              moved\tL5\t## 1. Values\tspec/quince-spec.md\t## 1. Values\n",
         );
-        let outcome = compare(&segment(BASELINE), &[legacy(BASELINE)], &tables, "");
+        let outcome = compare(&baseline(), &[legacy(AFTER)], &tables, "");
         assert_eq!(
             outcome.problems,
             [
@@ -1589,7 +1710,7 @@ file = { expr }
         );
         let chapter = "# Values\n\n## Kinds\n\n# Late title\n";
         let outcome = compare(
-            &segment(BASELINE),
+            &baseline(),
             &[source("spec/reference/values.md", Role::Chapter, chapter)],
             &tables,
             "",
@@ -1620,12 +1741,7 @@ file = { expr }
         let errors =
             tables_moved.parse_rewrites("std\tL4\ttoo\t[too](../spec/a.md)\tspec/a.md\n", "", "");
         assert_eq!(errors, Vec::<String>::new());
-        let outcome = compare(
-            &segment(BASELINE),
-            &[legacy(&spec)],
-            &tables_moved,
-            &rewritten,
-        );
+        let outcome = compare(&baseline(), &[legacy(&spec)], &tables_moved, &rewritten);
         assert_eq!(outcome.problems, Vec::<String>::new());
 
         let errors = tables_moved.parse_rewrites(
@@ -1639,12 +1755,7 @@ file = { expr }
                 "docs/design/spec-restructure/refs.tsv:2: a `std` row names a line of std/API.md, such as `L120`"
             ]
         );
-        let outcome = compare(
-            &segment(BASELINE),
-            &[legacy(&spec)],
-            &tables_moved,
-            &rewritten,
-        );
+        let outcome = compare(&baseline(), &[legacy(&spec)], &tables_moved, &rewritten);
         assert_eq!(
             outcome.problems,
             [
@@ -1656,15 +1767,15 @@ file = { expr }
     #[test]
     fn links_lead_to_their_final_targets() {
         // The Values section becomes a chapter, and two of its references are links.
-        let values_at = BASELINE.find("## 1. Values").unwrap();
-        let grammar_at = BASELINE.find("## Appendix").unwrap();
+        let values_at = AFTER.find("## 1. Values").unwrap();
+        let grammar_at = AFTER.find("## Appendix").unwrap();
         let chapter = |immutable: &str, too: &str| {
-            BASELINE[values_at..grammar_at]
+            AFTER[values_at..grammar_at]
                 .replace("## 1. Values", "# Values")
                 .replace("are immutable.", &format!("are [immutable]({immutable})."))
                 .replace("are too.", &format!("are [too]({too})."))
         };
-        let rest = format!("{}{}", &BASELINE[..values_at], &BASELINE[grammar_at..]);
+        let rest = format!("{}{}", &AFTER[..values_at], &AFTER[grammar_at..]);
         let refs = "spec\tval.a\timmutable\t[immutable](#values)\tspec/reference/values.md\n\
                     spec\tL15\ttoo\t[too](#kinds)\tspec/reference/types.md#kinds\n\
                     spec\tL7\tIntro.\tIntro.\t-\n";
@@ -1679,7 +1790,7 @@ file = { expr }
                 legacy(&rest),
                 source("spec/reference/values.md", Role::Chapter, &chapter),
             ];
-            let outcome = compare(&segment(BASELINE), &after, &tables, "");
+            let outcome = compare(&baseline(), &after, &tables, "");
             (outcome.problems, outcome.final_targets)
         };
         // A final target without a fragment names the file, so a link may name any of its
@@ -1690,19 +1801,19 @@ file = { expr }
             run("types.md", "types.md#other"),
             (
                 vec![
-                    "docs/design/spec-restructure/refs.tsv:1: the link `types.md` at spec/reference/values.md:3 leads to spec/reference/types.md, but its final target is spec/reference/values.md".to_string(),
-                    "docs/design/spec-restructure/refs.tsv:2: the link `types.md#other` at spec/reference/values.md:11 leads to spec/reference/types.md#other, but its final target is spec/reference/types.md#kinds".to_string(),
+                    "docs/design/spec-restructure/refs.tsv:1: the link `types.md` at spec/reference/values.md:5 leads to spec/reference/types.md, but its final target is spec/reference/values.md".to_string(),
+                    "docs/design/spec-restructure/refs.tsv:2: the link `types.md#other` at spec/reference/values.md:18 leads to spec/reference/types.md#other, but its final target is spec/reference/types.md#kinds".to_string(),
                 ],
                 2
             )
         );
         // A link into the legacy file is interim, and so is any link in it.
         assert_eq!(run("#values", "../quince-spec.md#kinds"), (vec![], 1));
-        let in_legacy = BASELINE
+        let in_legacy = AFTER
             .replace("are immutable.", "are [immutable](reference/x.md).")
             .replace("are too.", "are [too](reference/x.md).");
         let unmoved = rewrite_tables(refs, "", "");
-        let outcome = compare(&segment(BASELINE), &[legacy(&in_legacy)], &unmoved, "");
+        let outcome = compare(&baseline(), &[legacy(&in_legacy)], &unmoved, "");
         assert_eq!((outcome.problems, outcome.final_targets), (vec![], 0));
 
         let miscounted = rewrite_tables(
@@ -1710,8 +1821,8 @@ file = { expr }
             "",
             "",
         );
-        let spec = BASELINE.replace("are immutable.", "are [immutable](reference/x.md).");
-        let outcome = compare(&segment(BASELINE), &[legacy(&spec)], &miscounted, "");
+        let spec = AFTER.replace("are immutable.", "are [immutable](reference/x.md).");
+        let outcome = compare(&baseline(), &[legacy(&spec)], &miscounted, "");
         assert_eq!(
             outcome.problems,
             [
@@ -1721,9 +1832,270 @@ file = { expr }
     }
 
     #[test]
+    fn tag_lines_over_nothing_fail() {
+        let orphan = AFTER.replace("r[val.a]\nValues", "r[val.a]\n\nValues");
+        let outcome = compare_with(&[legacy(&orphan)]);
+        assert_eq!(
+            outcome.problems,
+            [
+                "spec/quince-spec.md:9: rule `val.a` covers no text; a tag line must be directly followed by the paragraph or top-level `-` or `*` item it covers",
+                "spec/quince-spec.md:11: this paragraph isn't in the baseline: Values are immutable.",
+            ]
+        );
+    }
+
+    /// A baseline with a tagged table, labels on both sides of a tag, and a reference in a
+    /// table cell.
+    const TABLE_BASELINE: &str = "\
+# Spec
+
+## 1. Values
+
+| Kind | Rule | Note |
+| --- | --- | --- |
+| `Int` | r[val.int] Ints are 64-bit. r[val.wrap] Wraps on overflow. | Signed, see section 1 |
+| `Bool` | r[val.bool] One byte. | |
+| `a\\|b` | Untagged. | Piped |
+
+- **Copies.** r[val.copy] Values copy. r[val.share] Copies share storage.
+- r[val.list] **Lists.** Lists are values.
+";
+
+    /// `TABLE_BASELINE` as a chapter: the table converted to a list, and the labelled items
+    /// split one rule per item.
+    const TABLE_CHAPTER: &str = "\
+# Values
+
+r[val.int]
+- `Int`: Ints are 64-bit. (Signed, see [Values](#values))
+
+r[val.wrap]
+- An Int wraps on overflow.
+
+r[val.bool]
+- `Bool`: One byte.
+- `a|b`: Untagged. ([Piped](#values))
+
+r[val.copy]
+- **Copies.** Values copy.
+
+r[val.share]
+- Copies share storage.
+
+r[val.list]
+- **Lists.** Lists are values.
+";
+
+    const TABLE_REFS: &str = "spec\tL7\tsection 1\t[Values](#1-values)\tspec/reference/values.md\n\
+                              spec\tL9\tPiped\t[Piped](#1-values)\tspec/reference/values.md\n";
+    const TABLE_REWORDINGS: &str = "val.wrap\tWraps on overflow.\tAn Int wraps on overflow.\n";
+    const TABLE_HEADINGS: &str = "dropped\tL1\t# Spec\n\
+                                  moved\tL3\t## 1. Values\tspec/reference/values.md\t# Values\n";
+    const TABLE_ROW: &str = "spec/reference/values.md\tL5\t{1}: {2}[ ({3})]\n";
+
+    /// Compares `chapter` against `baseline` with the table tables, `tables_tsv` as `tables.tsv`.
+    fn compare_table(baseline: &str, chapter: &str, rewordings: &str, tables_tsv: &str) -> Outcome {
+        let mut tables = rewrite_tables(TABLE_REFS, rewordings, TABLE_HEADINGS);
+        let (converted, errors) = tag_format::parse_tables(tables_tsv);
+        assert_eq!(errors, Vec::<String>::new());
+        tables.converted = converted;
+        let after = [source("spec/reference/values.md", Role::Chapter, chapter)];
+        compare(&segment(baseline, Form::Inline), &after, &tables, "")
+    }
+
+    #[test]
+    fn converted_tables_and_split_labels_pass() {
+        let outcome = compare_table(TABLE_BASELINE, TABLE_CHAPTER, TABLE_REWORDINGS, TABLE_ROW);
+        assert_eq!(outcome.problems, Vec::<String>::new());
+        assert_eq!(outcome.rows_converted, 3);
+        assert_eq!(outcome.final_targets, 2);
+    }
+
+    #[test]
+    fn tables_without_their_row_fail() {
+        let outcome = compare_table(TABLE_BASELINE, TABLE_CHAPTER, TABLE_REWORDINGS, "");
+        let problems = outcome.problems.join("\n");
+        assert!(
+            problems.contains(
+                "spec/reference/values.md:3: rule `val.int` was in a table row (baseline line 7) and is now in a list item"
+            ),
+            "{problems}"
+        );
+        assert!(
+            problems.contains("this table header is missing from the spec"),
+            "{problems}"
+        );
+    }
+
+    #[test]
+    fn converted_rows_must_rebuild_exactly() {
+        // Words the pattern doesn't have.
+        let reworded = TABLE_CHAPTER.replace("- `Int`: Ints", "- `Int` is a kind: Ints");
+        let outcome = compare_table(TABLE_BASELINE, &reworded, TABLE_REWORDINGS, TABLE_ROW);
+        assert_eq!(
+            outcome.problems,
+            [
+                "spec/reference/values.md:3: the text of rule `val.int` changed (baseline line 7):\n  before: `Int`: Ints are 64-bit. (Signed, see [Values]())\n  after:  `Int` is a kind: Ints are 64-bit. (Signed, see [Values]())"
+            ]
+        );
+
+        // A later rule reworded without its row in rewordings.tsv.
+        let outcome = compare_table(TABLE_BASELINE, TABLE_CHAPTER, "", TABLE_ROW);
+        assert_eq!(
+            outcome.problems,
+            [
+                "spec/reference/values.md:6: the text of rule `val.wrap` changed (baseline line 7):\n  before: Wraps on overflow.\n  after:  An Int wraps on overflow."
+            ]
+        );
+
+        // An untagged row that lost a cell.
+        let untagged = TABLE_CHAPTER.replace(" ([Piped](#values))", "");
+        let outcome = compare_table(TABLE_BASELINE, &untagged, TABLE_REWORDINGS, TABLE_ROW);
+        let problems = outcome.problems.join("\n");
+        assert!(
+            problems.contains(
+                "tables.tsv:1: the baseline row on line 9 becomes an untagged item, but spec/reference/values.md doesn't hold it: `a|b`: Untagged. ([Piped]())"
+            ),
+            "{problems}"
+        );
+        assert!(
+            problems.contains(
+                ":9: this list item is missing from the spec: `a|b`: Untagged. ([Piped]())"
+            ),
+            "{problems}"
+        );
+        assert!(
+            problems.contains("this list item isn't in the baseline: `a|b`: Untagged."),
+            "{problems}"
+        );
+    }
+
+    #[test]
+    fn empty_required_columns_and_misshapen_cells_fail() {
+        let required = "spec/reference/values.md\tL5\t{1}: {2} ({3})\n";
+        let outcome = compare_table(TABLE_BASELINE, TABLE_CHAPTER, TABLE_REWORDINGS, required);
+        assert!(
+            outcome.problems.contains(
+                &"docs/design/spec-restructure/tables.tsv:1 (baseline line 8): column 3 is empty, but the pattern needs it; put the piece that holds `{3}` in brackets".to_string()
+            ),
+            "{:?}",
+            outcome.problems
+        );
+
+        let lead =
+            TABLE_BASELINE.replace("| r[val.bool] One byte.", "| Lead r[val.bool] One byte.");
+        let outcome = compare_table(&lead, TABLE_CHAPTER, TABLE_REWORDINGS, TABLE_ROW);
+        assert!(
+            outcome.problems.contains(
+                &"docs/design/spec-restructure/tables.tsv:1 (baseline line 8): column 2 holds untagged text before its first tag; a converted cell is wholly untagged, starts with the row's first rule, or holds only later rules".to_string()
+            ),
+            "{:?}",
+            outcome.problems
+        );
+
+        let wide = "spec/reference/values.md\tL5\t{1}: {4}\n";
+        let outcome = compare_table(TABLE_BASELINE, TABLE_CHAPTER, TABLE_REWORDINGS, wide);
+        assert!(
+            outcome.problems.contains(
+                &"docs/design/spec-restructure/tables.tsv:1: the pattern names column 4, but the table has 3".to_string()
+            ),
+            "{:?}",
+            outcome.problems
+        );
+
+        let no_header = "spec/reference/values.md\tL6\t{1}: {2}\n";
+        let outcome = compare_table(TABLE_BASELINE, TABLE_CHAPTER, TABLE_REWORDINGS, no_header);
+        assert!(
+            outcome.problems.contains(
+                &"docs/design/spec-restructure/tables.tsv:1: no table header row is on baseline line 6".to_string()
+            ),
+            "{:?}",
+            outcome.problems
+        );
+    }
+
+    #[test]
+    fn converted_rows_must_be_in_their_file() {
+        let elsewhere = "spec/reference/other.md\tL5\t{1}: {2}[ ({3})]\n";
+        let outcome = compare_table(TABLE_BASELINE, TABLE_CHAPTER, TABLE_REWORDINGS, elsewhere);
+        assert_eq!(
+            outcome.problems[..2],
+            [
+                "docs/design/spec-restructure/tables.tsv:1: the baseline row on line 7 becomes rule `val.int`, but spec/reference/other.md doesn't hold it",
+                "docs/design/spec-restructure/tables.tsv:1: the baseline row on line 7 becomes rule `val.wrap`, but spec/reference/other.md doesn't hold it",
+            ]
+        );
+    }
+
+    #[test]
+    fn final_targets_follow_converted_rows() {
+        let wrong = TABLE_CHAPTER.replace("see [Values](#values)", "see [Values](types.md)");
+        let outcome = compare_table(TABLE_BASELINE, &wrong, TABLE_REWORDINGS, TABLE_ROW);
+        assert_eq!(
+            outcome.problems,
+            [
+                "docs/design/spec-restructure/refs.tsv:1: the link `types.md` at spec/reference/values.md:3 leads to spec/reference/types.md, but its final target is spec/reference/values.md"
+            ]
+        );
+        let wrong = TABLE_CHAPTER.replace("[Piped](#values)", "[Piped](types.md#piped)");
+        let outcome = compare_table(TABLE_BASELINE, &wrong, TABLE_REWORDINGS, TABLE_ROW);
+        assert_eq!(
+            outcome.problems,
+            [
+                "docs/design/spec-restructure/refs.tsv:2: the link `types.md#piped` at spec/reference/values.md:11 leads to spec/reference/types.md#piped, but its final target is spec/reference/values.md"
+            ]
+        );
+    }
+
+    #[test]
+    fn unresolved_final_targets_fail() {
+        let gone = TABLE_CHAPTER.replace(
+            "r[val.int]\n- `Int`: Ints are 64-bit. (Signed, see [Values](#values))\n\n",
+            "",
+        );
+        let outcome = compare_table(TABLE_BASELINE, &gone, TABLE_REWORDINGS, TABLE_ROW);
+        assert!(
+            outcome.problems.contains(
+                &"docs/design/spec-restructure/refs.tsv:1: no chapter unit holds this row's unit, so the final target of its link can't be checked".to_string()
+            ),
+            "{:?}",
+            outcome.problems
+        );
+        let unlinked = TABLE_CHAPTER.replace("[Piped](#values)", "Piped");
+        let outcome = compare_table(TABLE_BASELINE, &unlinked, TABLE_REWORDINGS, TABLE_ROW);
+        assert!(
+            outcome.problems.contains(
+                &"docs/design/spec-restructure/refs.tsv:2: no chapter unit holds this row's unit, so the final target of its link can't be checked".to_string()
+            ),
+            "{:?}",
+            outcome.problems
+        );
+    }
+
+    #[test]
+    fn labels_split_on_both_sides() {
+        // The label is an untagged unit on both sides, so it may also stand as its own item.
+        let own_item = TABLE_CHAPTER.replace(
+            "r[val.copy]\n- **Copies.** Values",
+            "- **Copies.**\n\nr[val.copy]\n- Values",
+        );
+        let outcome = compare_table(TABLE_BASELINE, &own_item, TABLE_REWORDINGS, TABLE_ROW);
+        assert_eq!(outcome.problems, Vec::<String>::new());
+        let dropped = TABLE_CHAPTER.replace("- **Copies.** Values copy.", "- Values copy.");
+        let outcome = compare_table(TABLE_BASELINE, &dropped, TABLE_REWORDINGS, TABLE_ROW);
+        assert_eq!(
+            outcome.problems,
+            [
+                "docs/design/spec-restructure/baseline/quince-spec.md:11: this list item is missing from the spec: **Copies.**"
+            ]
+        );
+    }
+
+    #[test]
     fn sections_end_at_the_next_heading_of_their_level() {
         let units = segment(
             "# Plan\n\nIntro.\n\n## Pipeline\n\n1. Parse.\n\n### Notes\n\nA note.\n\n## Next\n\nLater.\n",
+            Form::OwnLine,
         );
         let texts: Vec<_> = section(&units, "## Pipeline")
             .into_iter()
@@ -1740,6 +2112,7 @@ file = { expr }
             id: None,
             text: text.into(),
             line: 1,
+            cell: None,
         };
         assert_eq!(
             without_link_targets(unit(Kind::Item, "[a](b.md) and [c](d.md#e), [f] (g) [h](i")).text,
