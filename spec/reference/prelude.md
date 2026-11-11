@@ -13,10 +13,10 @@ The prelude is every name a file can use without an import ([Prelude and special
 | Duration, Timestamp, Url, Regex, Range, Iter | Types of tagged literals and ranges |
 | Some, None, Ok, Err | Variants written bare |
 | Eq, Ord, Ordering, Hash, Hasher, Display, Iterator, From, Encode, Decode, Add, Sub, Mul, Div, Rem, Neg | Interfaces and their helper types (the operator interfaces are in [Operators on user types](#operators-on-user-types)) |
-| TaskScope, FailurePolicy, ScopeFailed | Types the background form names ([Concurrency](../quince-spec.md#long-lived-work-fire-and-forget)) |
+| TaskScope, FailurePolicy, ScopeFailed | Types the background form names ([Concurrency](concurrency.md)) |
 | Never, DecodeError, InvalidFormat | Types the compiler produces or the prelude's own signatures name |
 | assert, todo, unreachable, dbg | Functions |
-| Net, Listen, Fs, Clock, Random, Env, Process, Console, State | Built-in effects ([Effects](../quince-spec.md#built-in-effects)) |
+| Net, Listen, Fs, Clock, Random, Env, Process, Console, State | Built-in effects ([Effects](effects.md)) |
 
 A name is in the prelude only if the language's syntax or the compiler needs it ([Prelude and special interfaces](prelude.md)).
 

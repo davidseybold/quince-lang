@@ -2,3 +2,4 @@
 # rule ID	old text	new text
 prelude.only	lists every one with its signature	lists every one
 prelude.tagged-values	build these values at compile time	build `Duration`, `Timestamp`, `Url` and `Regex` values at compile time
+effect.handler.receiver	The one exception is a handler, which implements	Unlike an interface's impl, a handler implements

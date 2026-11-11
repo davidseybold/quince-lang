@@ -108,18 +108,23 @@ variant_pat  = type_path [ "(" ( pattern { "," pattern } | pfields ) ")" ]
 pfields      = ".." | pfield { "," pfield } [ "," ".." ]
 pfield       = name ":" [ pattern ]
 
-contract     = "requires" expr | "ensures" [ "(" name ")" ] expr
 effect_decl  = "effect" Name ( [ "uses" effects ] "{" { fn_sig NEWLINE } "}" | "=" type_path )
-foreign_decl = "foreign" string [ "uses" effects ] "{" { ( { attribute NEWLINE } ( c_fn | "type" c_name ) ) NEWLINE } "}"
-c_fn         = "fn" c_name "(" [ c_name ":" type { "," c_name ":" type } [ "," ] ] ")" [ "->" type ]
-test_decl    = "test" string [ "forall" "(" params ")" ] [ "uses" effects ] block
 effects      = "*" | effect_ref { "," effect_ref }      // "*" only on main
 effect_ref   = type_path | Name                          // an effect or an effect variable
+
+with_expr    = "with" handler { "," handler } block
+handler      = type_path "=" expr
 
 concurrent   = "concurrent" [ "(" arg { "," arg } ")" ]
                ( "{" spawn { "," spawn } [ "," ] "}" | "for" pattern "in" expr block )
 spawn        = "spawn" expr
+
 background   = "background" "(" name ":" "TaskScope" [ "," arg ] ")" block
+
 select       = "select" "{" { pattern "=" expr "=>" ( block | expr ) "," } "}"
-with_expr    = "with" handler { "," handler } block
-handler      = type_path "=" expr
+
+contract     = "requires" expr | "ensures" [ "(" name ")" ] expr
+
+foreign_decl = "foreign" string [ "uses" effects ] "{" { ( { attribute NEWLINE } ( c_fn | "type" c_name ) ) NEWLINE } "}"
+c_fn         = "fn" c_name "(" [ c_name ":" type { "," c_name ":" type } [ "," ] ] ")" [ "->" type ]
+test_decl    = "test" string [ "forall" "(" params ")" ] [ "uses" effects ] block

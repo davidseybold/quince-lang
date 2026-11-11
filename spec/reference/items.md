@@ -22,9 +22,9 @@ const DEFAULT_CONFIG: Config = Config.parse(DEFAULT_CONFIG_TEXT).expect("built-i
 const_decl   = "const" NAME ":" type "=" expr
 ```
 
-- r[item.const.decl] `const` declares a top-level constant. r[item.const.typed-pure] Its type is always written, and its initializer must be pure ([Effects](../quince-spec.md#5-effects-and-capabilities)).
+- r[item.const.decl] `const` declares a top-level constant. r[item.const.typed-pure] Its type is always written, and its initializer must be pure ([Effects](effects.md)).
 - r[item.const.eval.literal] A literal, including a tagged literal, is evaluated at compile time. r[item.const.eval.lazy] Any other initializer runs once, on first use, and the result is safe to share across tasks. Because initializers are pure, the order in which constants are first used never matters.
-- r[item.const.no-ref] A const's type can't contain a reference type ([Types](types.md)) anywhere inside it, in fields, payloads or closure captures. The compiler derives this the same way it derives whether a type can cross a task boundary, and the error names the field path that holds the reference. State the whole program shares, such as a request counter, a cache or a registry, belongs in an effect handler installed in `main` ([Effects](../quince-spec.md#5-effects-and-capabilities)), so every function that touches it says so in its `uses` clause.
+- r[item.const.no-ref] A const's type can't contain a reference type ([Types](types.md)) anywhere inside it, in fields, payloads or closure captures. The compiler derives this the same way it derives whether a type can cross a task boundary, and the error names the field path that holds the reference. State the whole program shares, such as a request counter, a cache or a registry, belongs in an effect handler installed in `main` ([Effects](effects.md)), so every function that touches it says so in its `uses` clause.
 - r[item.const.panic.site] A panic in an initializer is reported at the first use site. r[item.const.panic.warn] `quince` `check` warns about any initializer that can panic.
 - r[item.const.assoc] A type's own constants are declared in its `impl` block, in the type's package: `impl Int { pub const MAX: Int = 9_223_372_036_854_775_807 }`. They follow every rule above. r[item.const.assoc.qualified] They are always read through the type's name, as `Int.MAX`, `Float.PI` or `Status.OK`, and inside the impl as `Self.MAX`, never as a bare `MAX`. r[item.const.assoc.no-interface] Interfaces can't declare constants in v1.
 
@@ -49,7 +49,7 @@ field_init  = name ":" [ expr ]
 - r[item.struct.init-all] All fields must be initialized at construction. No default constructors, no partially built values. r[item.struct.unit] A struct with no fields is declared without braces, as in `pub struct ChannelClosed`, and its one value is written as its name, `ChannelClosed`.
 - r[item.struct.literal] A struct is built with its name and every field named, in declaration order: `User(id: UserId(1), email:, name: "Ada", created_at: now)`. r[item.struct.shorthand] A field name with nothing after the colon takes the binding of the same name, as in patterns, and `quince` `fmt` rewrites `email: email` to that form. r[item.struct.update] `..base`, written first, copies every field not written after it: `User(..user, name: "New")`. r[item.enum.construct] A variant with a payload is built the same way, shorthand included: `SqliteError.Open(code:)`.
 - r[item.struct.value] Structs are values, like collections: passing or assigning one copies it (see [Mutation](types.md#mutation)). r[item.struct.let-immutable] On a `let` binding a struct never changes, and updates build a new value with `User(..user, name: "New")`. r[item.struct.field-assign] On a `var` binding, `user.name = "New"` assigns one field, which is shorthand for `user = User(..user, name: "New")`.
-- r[item.struct.field-private] Each field is private unless marked `pub`, as in `pub struct Account { pub id: AccountId, balance: Money }`. r[item.struct.literal-visibility] A struct literal or a `Type(..x)` update can be written only where every field is visible, so a type with private fields can only be built through its own functions. Invariants are stated once, with `requires` on the struct ([Contracts](../quince-spec.md#requires-and-ensures)).
+- r[item.struct.field-private] Each field is private unless marked `pub`, as in `pub struct Account { pub id: AccountId, balance: Money }`. r[item.struct.literal-visibility] A struct literal or a `Type(..x)` update can be written only where every field is visible, so a type with private fields can only be built through its own functions. Invariants are stated once, with `requires` on the struct ([Contracts](contracts.md)).
 
 ## Enums (algebraic data types)
 
@@ -131,7 +131,7 @@ bound_arg    = type_arg | Name "=" type   // Item = Int, Output = T
 
 - r[item.generic.bounds] Type parameters with interface bounds: `fn max<T: Ord>(a: T, b: T) -> T`.
 - r[item.generic.multi-bounds] Several bounds are joined with `+`: `fn show_sorted<T: Ord + Display>(xs: List<T>) -> String`. r[item.generic.assoc-binding] A bound can fix an interface's associated type, as in Rust: `fn sum<I: Iterator<Item = Int>>(var it: I) -> Int` or `fn total<T: Add<T, Output = T>>(xs: List<T>) -> T`.
-- r[item.iface.type-params] Interfaces may take type parameters: `interface From<T> { fn from(value: T) -> Self }`, and effect parameters ([Effects](../quince-spec.md#effect-variables)): `interface Iterator<uses E>`.
+- r[item.iface.type-params] Interfaces may take type parameters: `interface From<T> { fn from(value: T) -> Self }`, and effect parameters ([Effects](effects.md)): `interface Iterator<uses E>`.
 - r[item.iface.assoc-types] Interfaces may declare associated types, which each implementation fixes:
 
 ```
@@ -167,8 +167,8 @@ r[item.attr.fixed] Attributes are a fixed set defined by the language. Packages 
 
 | Attribute | Applies to | Meaning |
 | --- | --- | --- |
-| r[item.attr.unchecked] `@unchecked` | Functions | Skip contract checks in release builds ([Contracts](../quince-spec.md#requires-and-ensures)) |
-| r[item.attr.verify] `@verify` | Functions | Attempt static proof of contracts with `quince` `verify` ([Contracts](../quince-spec.md#static-verification-optional)) |
+| r[item.attr.unchecked] `@unchecked` | Functions | Skip contract checks in release builds ([Contracts](contracts.md)) |
+| r[item.attr.verify] `@verify` | Functions | Attempt static proof of contracts with `quince` `verify` ([Contracts](contracts.md)) |
 | r[item.attr.extensible] `@extensible` | Enums | Variants may be added without a major version; callers must include a wildcard arm ([Dependencies and publishing](../quince-spec.md#enforced-semantic-versioning)) |
 | r[item.attr.pinned] `@pinned` | Foreign libraries | Always call from the same OS thread ([Interop with C](../quince-spec.md#calling-c)) |
 | r[item.attr.shareable] `@shareable` | Foreign resource types | The C handle is safe to use from several threads, so its Resource may cross task boundaries. Unverifiable, so it is listed with the package's native dependencies ([Interop with C](../quince-spec.md#trust)) |
@@ -178,6 +178,6 @@ r[item.attr.fixed] Attributes are a fixed set defined by the language. Packages 
 | r[item.attr.opaque] `@opaque` | Structs and enums | No automatic Eq, Hash, debug form, test generator, Encode or Decode, for handle-like types ([Prelude and special interfaces](prelude.md)) |
 | r[item.attr.test] `@test` | Top-level declarations | Compiled only by `quince` `test`; naming it from code that isn't a test is a compile error. Impls of a `@test` type are test-only too, without their own `@test` ([Testing](../quince-spec.md#unit-tests)) |
 | r[item.attr.wire] `@wire("name")`, `@wire(case: camel)`, `@wire(tag: "kind")` | Fields and variants (name); structs and enums (case, tag) | Set the wire name, the naming case, or the enum tag field used by Encode and Decode ([Serialization](prelude.md#serialization)) |
-| r[item.attr.test-default] `@test_default(f)` | Package effects | The handler a test gets when it reaches this effect with no `with` around it; `f` takes no arguments and returns a handler ([Effects](../quince-spec.md#handlers-in-tests-and-production)) |
+| r[item.attr.test-default] `@test_default(f)` | Package effects | The handler a test gets when it reaches this effect with no `with` around it; `f` takes no arguments and returns a handler ([Effects](effects.md)) |
 
 r[item.attr.placement] An attribute goes on its own line directly above the declaration it applies to.

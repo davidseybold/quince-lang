@@ -14,7 +14,7 @@ type_path    = [ name "." ] Name { "." Name } | "Self" { "." Name } | c_name   /
 
 | Type | Description |
 | --- | --- |
-| `Int`, `Int8`...`Int64`, `UInt8`...`UInt64` | r[type.int] Integers; overflow is a panic (see [Errors and failure](../quince-spec.md#panics-bugs)), and checked\_add etc. return Option. r[type.int-alias] Int is another name for Int64, not a separate type. r[type.no-uint] There is no plain UInt; use UInt64 |
+| `Int`, `Int8`...`Int64`, `UInt8`...`UInt64` | r[type.int] Integers; overflow is a panic (see [Errors and failure](errors.md)), and checked\_add etc. return Option. r[type.int-alias] Int is another name for Int64, not a separate type. r[type.no-uint] There is no plain UInt; use UInt64 |
 | `Float`, `Float32` | r[type.float] IEEE 754 floats; Float is another name for Float64. r[type.float.total-order] Arithmetic follows IEEE, but Eq, Ord and Hash use a total order (NaN equals NaN, and -0.0 sorts before 0.0), so floats can be map keys and always sort the same way |
 | `Bool` | r[type.bool] `true` / `false` |
 | `String` | r[type.string] Immutable UTF-8 text. r[type.string.no-index] There is no s\[i\]; .bytes() and .chars() say which unit you mean |
@@ -26,7 +26,7 @@ type_path    = [ name "." ] Name { "." Name } | "Self" { "." Name } | c_name   /
 | `Never` | r[type.never] The type of an expression that never produces a value: return, break, continue, unreachable, todo and Process.exit. It has no values and fits wherever any type is expected (see [Inference rules](#inference-rules)) |
 | Char | r[type.char] One Unicode scalar value; .chars() yields them |
 | Tuples | r[type.tuple] Fixed-size groups such as (Int, String), written (1, "a") and taken apart with let (n, s) = t or match, or read by position with t.0 and t.1 |
-| Function types | r[type.fn] fn(A) -> B, with uses E for effects ([Effects](../quince-spec.md#effect-variables)) |
+| Function types | r[type.fn] fn(A) -> B, with uses E for effects ([Effects](effects.md)) |
 | Duration, Timestamp, Url, Regex | r[type.tagged] The values of the tagged literals dur, ts, url and re ([Lexical structure](lexical.md)) |
 | Range\<T> | r[type.range] The value of a..b or a..=b, over one integer type ([Ranges](expressions.md#ranges)) |
 
@@ -55,7 +55,7 @@ let user = User(id: UserId(1), email:, name: "Ada", created_at: now)
 
 ## Mutation
 
-r[type.mut.value-semantics] All built-in collections and structs have value semantics. r[type.mut.shared-in-ref] Mutable state shared between functions lives only in a reference type (listed under [Reference types](#mutation)), and reading or writing one requires the `State` effect ([Effects](../quince-spec.md#5-effects-and-capabilities)), except where its row in the Reference types table below says otherwise. A signature therefore shows which state a function can reach, through its parameter types, and whether it touches that state, through `uses State`. A constant can't hold a reference type ([Items](items.md)), so there is no global mutable state to reach any other way.
+r[type.mut.value-semantics] All built-in collections and structs have value semantics. r[type.mut.shared-in-ref] Mutable state shared between functions lives only in a reference type (listed under [Reference types](#mutation)), and reading or writing one requires the `State` effect ([Effects](effects.md)), except where its row in the Reference types table below says otherwise. A signature therefore shows which state a function can reach, through its parameter types, and whether it touches that state, through `uses State`. A constant can't hold a reference type ([Items](items.md)), so there is no global mutable state to reach any other way.
 
 **Local mutation.** r[type.mut.local] On a `var` binding, collections and struct fields can be changed in place:
 
@@ -89,7 +89,7 @@ fn record_hit(stats: Ref<Stats>, path: String) -> Stats uses State {
   | r[type.ref.atomic] `Atomic<T>` | One value updated atomically | Every read and write | Yes |
   | r[type.ref.concurrent-map] `ConcurrentMap<K, V>` | A map that tasks can update concurrently | Every read and write | Yes |
   | r[type.ref.channel] `Channel<T>` | A queue between tasks | Every operation | Yes |
-  | r[type.ref.task-scope] `TaskScope` | A scope that owns long-lived tasks ([Concurrency](../quince-spec.md#long-lived-work-fire-and-forget)) | No: `spawn` is not an effect | Yes |
+  | r[type.ref.task-scope] `TaskScope` | A scope that owns long-lived tasks ([Concurrency](concurrency.md)) | No: `spawn` is not an effect | Yes |
   | r[type.ref.resource] `Resource<T>` | C-owned memory with guaranteed cleanup ([Interop with C](../quince-spec.md#memory-across-the-boundary)) | No: close() carries its foreign block's effects, and ptr, keep and is\_closed need none | Only if its foreign type is `@shareable` |
   | r[type.ref.pool] `Pool<T, Err, uses E>` | A bounded set of values, such as connections, that tasks check out one at a time ([Interop with C](../quince-spec.md#memory-across-the-boundary)) | Yes: checking out carries the open function's effects plus State, and waiting is a cancellation point | Yes, even when T can't |
   | r[type.ref.callback] Callback\<F> | A Quince closure that C code may call later ([Interop with C](../quince-spec.md#callbacks)) | No: its calls carry its foreign block's effects | No |
@@ -99,7 +99,7 @@ fn record_hit(stats: Ref<Stats>, path: String) -> Stats uses State {
   r[type.ref.pure-pass] Passing, storing or capturing a reference is pure. r[type.ref.pure-create] So is creating one, as in `Ref.new(0)`, since a fresh reference can't be observed without `uses State`. r[type.ref.state-access] Only reading or writing through it requires `uses State`, so a function with no `uses` clause always returns the same result for the same arguments. r[type.ref.no-merge] Same means equal under `Eq`: two calls that each create a `Ref` return different references, so the compiler never merges such calls. r[type.ref.release-pure] Releasing memory or a `Resource` is not an effect either, wherever the last reference drops: a resource's C cleanup runs without its foreign block's effects being required there ([Interop with C](../quince-spec.md#memory-across-the-boundary)).
 
   r[type.ref.in-fields] Reference types may appear in struct fields, enum payloads and closure captures. r[type.ref.crossing] Whether a type can cross a task boundary is a property the compiler derives: a type can cross unless it contains a `Ref<T>`, `Resource<T>`, `Callback<F>` or `CBuf<T>` (other than a `@shareable` one, or one held inside a `Pool`) anywhere inside it. r[type.ref.crossing.report] The query API reports this property for every type, and a rejected `spawn` names the field path that holds the reference.
-- r[type.ref.no-cross] A `Ref<T>`, or any value that contains one, cannot cross a task boundary ([Concurrency](../quince-spec.md#shared-state)). State shared between tasks uses `Atomic<T>`, `ConcurrentMap<K, V>` or `Channel<T>`.
+- r[type.ref.no-cross] A `Ref<T>`, or any value that contains one, cannot cross a task boundary ([Concurrency](concurrency.md)). State shared between tasks uses `Atomic<T>`, `ConcurrentMap<K, V>` or `Channel<T>`.
 
 ## Inference rules
 

@@ -17,6 +17,10 @@ Part I, the language:
 - [Expressions](reference/expressions.md): blocks, operators, ranges, indexing, `match`, `is`, jumps and closures.
 - [Statements](reference/statements.md): bindings, assignment and loops.
 - [Patterns](reference/patterns.md): what a pattern matches and binds.
+- [Errors and failure](reference/errors.md): `Result` and `Option` for expected failures, the `?` operator, and panics.
+- [Effects](reference/effects.md): the built-in effects, declaring effects, effect variables, handlers and `with`, and the built-in effects' operations.
+- [Concurrency](reference/concurrency.md): `concurrent` blocks, fan-out, background scopes, cancellation and timeouts, shared state, channels and `select`.
+- [Contracts](reference/contracts.md): `requires`, `ensures`, struct invariants and static verification.
 
 Still being split:
 
