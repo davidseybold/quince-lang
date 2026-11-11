@@ -70,3 +70,14 @@ Every normative statement in the spec's chapter files carries an ID that conform
 - a production's derived ID is retired.
 
 Errors give the chapter file and line, because the grammar is fixed in the spec and then regenerated, never edited in the generated file.
+
+## Links
+
+Spec files point at each other with relative Markdown links, never by position, so text can move without breaking them.
+
+- **Which links.** Every relative link in a Markdown file under `spec/` is checked, and so is every link from `std/API.md` whose target is under `spec/`. Inline links, images and link reference definitions count. Links inside code blocks and inline code spans don't. External links (with a URL scheme such as `https:`, or starting with `//`) aren't fetched.
+- **Targets.** A link resolves against the folder of the file that holds it; a leading `/` means the repo root. It must name a file or folder that exists, and may not climb above the repo root.
+- **Fragments.** A `#fragment` on a link to a Markdown file, or on a same-file `#fragment` link, must be the anchor of one of that file's headings. Fragments on links to other files aren't checked.
+- **Anchors** follow GitHub's rules, as github-slugger implements them. Take the heading's text with each link replaced by its text, lowercase it, remove every character that isn't a letter, a digit, a space, `-` or `_`, and turn each space into `-`. ``### The `?` operator`` becomes `the--operator`. When a file has already used that anchor, append `-1`, then `-2`, and so on, skipping any anchor already taken. Only ATX headings (`#` to `######`) outside code blocks count. Emphasis written with `_` and HTML inside a heading aren't supported, because GitHub would drop the markup and this check keeps it.
+
+`cargo xtask spec-links` fails on any link that breaks these rules, naming the file and line, and suggests a near anchor when a fragment is close to one.
