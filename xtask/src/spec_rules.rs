@@ -1,22 +1,27 @@
 //! `cargo xtask spec-rules`: checks the chapter manifest and the rule tags in every chapter
 //! file. `--strip` prints the spec with every tag removed.
 
-use quince_spec::{CHAPTERS_PATH, FileError, README_PATH, RETIRED_PATH, Spec, SpecError};
+use quince_spec::{
+    CHAPTERS_PATH, FileError, MOVED_PATH, README_PATH, RETIRED_PATH, Spec, SpecError,
+};
 use quince_spec::{manifest, rules};
 use std::path::Path;
 
 /// The CI step: the manifest, the README's chapter list, and every tag's format, placement,
-/// chapter, construct and uniqueness. Problems in every file are reported together.
+/// chapter, construct and uniqueness, and the moved-rules list. Problems in every file are
+/// reported together.
 pub fn check(root: &Path) -> Result<(), String> {
     let spec = load(root)?;
     let (retired, retired_errors) = rules::parse_retired(&read(root, RETIRED_PATH)?);
-    let mut problems = report(RETIRED_PATH, &retired_errors);
+    let (moved, moved_errors) = rules::parse_moved(&read(root, MOVED_PATH)?);
+    let mut problems = report(RETIRED_PATH, &retired_errors) + report(MOVED_PATH, &moved_errors);
     problems += report(
         README_PATH,
         &manifest::check_readme(&spec.readme, &spec.files),
     );
     let (found, errors) = rules::check(&spec.files, &retired, &spec.chapters);
     problems += report_located(&errors);
+    problems += report_located(&rules::check_moved(&moved, &found, &retired));
     problems += report(
         CHAPTERS_PATH,
         &rules::unused_constructs(&found, &spec.chapters),

@@ -9,8 +9,8 @@ pub mod fixture;
 
 use fixture::{Fixture, Mode};
 use quince_diagnostics::{Diagnostic, Severity};
-use quince_spec::{GRAMMAR_PATH, README_PATH, RETIRED_PATH, Spec};
-use std::collections::{BTreeMap, HashSet};
+use quince_spec::{GRAMMAR_PATH, MOVED_PATH, README_PATH, RETIRED_PATH, Spec};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
@@ -58,12 +58,14 @@ impl Backend for NoBackend {
 pub type RuleSet = BTreeMap<String, String>;
 
 /// What fixtures are checked against: every live rule ID, the section order, and the retired
-/// IDs, so citing one gets its own message.
+/// and moved IDs, so citing one gets its own message.
 pub struct Rules {
     pub ids: RuleSet,
     /// Chapter titles in manifest order, ending with [`GRAMMAR_SECTION`].
     pub sections: Vec<String>,
     pub retired: HashSet<String>,
+    /// Each ID that moved chapter, with the ID it moved to.
+    pub moved: HashMap<String, String>,
     /// The draft version in the header of `spec/README.md`, such as `0.5`.
     pub spec_version: String,
 }
@@ -93,7 +95,9 @@ pub fn load_rules(root: &Path) -> Result<Rules, Vec<String>> {
     let spec = Spec::load(root)
         .map_err(|errors| errors.iter().map(ToString::to_string).collect::<Vec<_>>())?;
     let (retired, retired_errors) = quince_spec::rules::parse_retired(&read(RETIRED_PATH)?);
+    let (moved, moved_errors) = quince_spec::rules::parse_moved(&read(MOVED_PATH)?);
     let mut errors = located(RETIRED_PATH, retired_errors);
+    errors.extend(located(MOVED_PATH, moved_errors));
     let version = spec_version(&spec.readme).map(str::to_string);
     if version.is_none() {
         errors.push(format!(
@@ -102,6 +106,8 @@ pub fn load_rules(root: &Path) -> Result<Rules, Vec<String>> {
     }
     let (rules, spec_errors) = quince_spec::rules::check(&spec.files, &retired, &spec.chapters);
     errors.extend(spec_errors.iter().map(ToString::to_string));
+    let moved_errors = quince_spec::rules::check_moved(&moved, &rules, &retired);
+    errors.extend(moved_errors.iter().map(ToString::to_string));
     if !errors.is_empty() {
         return Err(errors);
     }
@@ -120,6 +126,10 @@ pub fn load_rules(root: &Path) -> Result<Rules, Vec<String>> {
         ids,
         sections,
         retired,
+        moved: moved
+            .into_iter()
+            .map(|(old, (new, _))| (old, new))
+            .collect(),
         spec_version: version.expect("checked above"),
     })
 }
@@ -260,7 +270,15 @@ pub fn run_fixture(
         .iter()
         .filter(|id| !rules.ids.contains_key(*id))
         .map(|id| {
-            if rules.retired.contains(id) {
+            if let Some(new) = rules.moved.get(id) {
+                if rules.retired.contains(new) {
+                    format!(
+                        "rule `{id}` moved to `{new}`, which is retired ({RETIRED_PATH}); cite the rule that replaced it"
+                    )
+                } else {
+                    format!("rule `{id}` moved: cite `{new}` ({MOVED_PATH})")
+                }
+            } else if rules.retired.contains(id) {
                 format!(
                     "cites retired rule ID `{id}` ({RETIRED_PATH}); cite the rule that replaced it"
                 )
@@ -449,7 +467,11 @@ mod tests {
             .map(|(id, section)| (id.to_string(), section.to_string()))
             .collect(),
             sections: Vec::new(),
-            retired: ["bind.old".to_string()].into(),
+            retired: ["bind.old".to_string(), "type.old".to_string()].into(),
+            moved: [("bind.moved", "main.signature"), ("bind.gone", "type.old")]
+                .into_iter()
+                .map(|(old, new)| (old.to_string(), new.to_string()))
+                .collect(),
             spec_version: "0.5".into(),
         }
     }
@@ -565,6 +587,22 @@ mod tests {
             r.failures,
             [
                 "cites retired rule ID `bind.old` (spec/retired-rules.txt); cite the rule that replaced it"
+            ]
+        );
+    }
+
+    #[test]
+    fn moved_rules_fail_with_the_new_id() {
+        let r = run("// rule: bind.moved\nx\n", None, &fake(vec![]));
+        assert_eq!(
+            r.failures,
+            ["rule `bind.moved` moved: cite `main.signature` (spec/moved-rules.txt)"]
+        );
+        let r = run("// rule: bind.gone\nx\n", None, &fake(vec![]));
+        assert_eq!(
+            r.failures,
+            [
+                "rule `bind.gone` moved to `type.old`, which is retired (spec/retired-rules.txt); cite the rule that replaced it"
             ]
         );
     }

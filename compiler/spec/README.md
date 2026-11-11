@@ -41,8 +41,10 @@ Every normative statement in the spec's chapter files carries an ID that conform
 
 **Stability.**
 - No ID appears in two tags, in the same chapter file or in different ones. An ID is never renamed or reused.
-- **The one-time rename.** When the spec was split into chapters (2026-11-10), every ID merged before then was renamed once, by script, from `topic.rule` to `chapter.topic.rule`, or kept when its topic was its chapter's prefix. `docs/design/spec-restructure/id-map.tsv` maps each old ID to its new one. No ID is renamed again.
+- **The one-time rename.** When the spec was split into chapters (2026-11-10), every ID merged before then was renamed once, by script, from `topic.rule` to `chapter.topic.rule`, or kept when its topic was its chapter's prefix. `docs/design/spec-restructure/id-map.tsv` maps each old ID to its new one. Any later change of ID is a move or a retirement.
 - When a rule's meaning changes, its old ID goes in `spec/retired-rules.txt` and the new text gets a new ID. A retired ID can never be a tag again. The retired list may hold `grammar.*` IDs.
+- **Moved rules.** A rule that moves to another chapter gets a new ID with that chapter's prefix, and `spec/moved-rules.txt` gets the line `<old> <new>`. A moved ID can never be a tag again. The new ID is a tag, or is retired if the rule's meaning later changed. When a rule moves again, its line is updated to the final ID, so no line points at another moved ID. Grammar IDs never move. `retired-rules.txt` keeps one meaning: the rule's meaning changed.
+- A fixture that cites a retired ID fails. One that cites a moved ID fails and names the ID to cite.
 - A wording change that keeps the meaning keeps the ID.
 
 **Grammar productions** have the derived ID `grammar.<production-name>`, with no written tag. A production whose derived ID is retired fails the grammar check.

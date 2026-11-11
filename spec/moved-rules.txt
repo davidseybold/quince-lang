@@ -1,0 +1,7 @@
+# Rule IDs whose rule moved to another chapter (compiler/spec/README.md). Each line gives the old
+# ID, then the ID the rule has now, separated by spaces. A moved ID is never a tag again; the new
+# ID is a tag, or is retired if the rule's meaning later changed. When a rule moves again, update
+# its line to the final ID. A fixture that cites an old ID fails and names the new one.
+#
+# The one-time rename that split the spec into chapters isn't listed here; see
+# docs/design/spec-restructure/id-map.tsv.

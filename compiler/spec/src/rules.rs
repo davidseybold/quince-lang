@@ -7,7 +7,7 @@
 //! CommonMark.
 
 use crate::manifest::{Chapter, LEGACY_PREFIX};
-use crate::{CHAPTERS_PATH, ChapterFile, FileError, SpecError};
+use crate::{CHAPTERS_PATH, ChapterFile, FileError, MOVED_PATH, SpecError};
 use std::collections::{HashMap, HashSet};
 
 /// The prefix reserved for IDs derived from grammar productions, such as `grammar.fn_decl`.
@@ -200,6 +200,96 @@ pub fn parse_retired(text: &str) -> (HashSet<String>, Vec<SpecError>) {
         }
     }
     (ids, errors)
+}
+
+/// Rules that moved chapter, from `spec/moved-rules.txt`: each old ID, with the ID it moved to
+/// and the 1-based line that lists it.
+pub type Moved = HashMap<String, (String, usize)>;
+
+/// Parses `spec/moved-rules.txt`: an old ID and the ID it moved to on each line, separated by
+/// whitespace; blank lines and `#` comments are ignored. Returns the valid lines and an error
+/// for each bad one.
+pub fn parse_moved(text: &str) -> (Moved, Vec<SpecError>) {
+    let mut moved = Moved::new();
+    let mut errors = Vec::new();
+    for (line, entry) in entries(text) {
+        let words: Vec<&str> = entry.split_whitespace().collect();
+        let problem = match words[..] {
+            [old, new] => {
+                if let Some(bad) = [old, new].into_iter().find(|id| !is_valid_id(id)) {
+                    Some(format!("`{bad}` is not a valid rule ID"))
+                } else if [old, new]
+                    .into_iter()
+                    .any(|id| prefix(id) == GRAMMAR_PREFIX)
+                {
+                    Some(
+                        "grammar IDs never move, because they follow their production; list only tagged rules"
+                            .to_string(),
+                    )
+                } else if old == new {
+                    Some(format!(
+                        "`{old}` moves to itself; list a rule only when its ID changed"
+                    ))
+                } else if let Some((_, first)) = moved.get(old) {
+                    Some(format!(
+                        "`{old}` is listed twice; it is first listed on line {first}"
+                    ))
+                } else {
+                    moved.insert(old.to_string(), (new.to_string(), line));
+                    None
+                }
+            }
+            _ => Some(format!(
+                "`{entry}` should be the old rule ID, then the ID it moved to, such as \
+                 `stmt.loop.fanout-sources  conc.fanout.sources`"
+            )),
+        };
+        if let Some(message) = problem {
+            errors.push(SpecError { line, message });
+        }
+    }
+    (moved, errors)
+}
+
+/// Checks `moved` against the spec's tags. A moved ID is never a tag again, and the ID it moved
+/// to is a tag or a retired ID, never one that moved too. A moved ID that is tagged is reported
+/// at the tag; every other problem is on its line of `spec/moved-rules.txt`.
+pub fn check_moved(moved: &Moved, rules: &[SpecRule], retired: &HashSet<String>) -> Vec<FileError> {
+    let tags: HashMap<&str, &SpecRule> =
+        rules.iter().map(|rule| (rule.id.as_str(), rule)).collect();
+    let mut listed: Vec<_> = moved.iter().collect();
+    listed.sort_by_key(|(_, (_, line))| *line);
+    let mut errors = Vec::new();
+    for (old, (new, line)) in listed {
+        if let Some(rule) = tags.get(old.as_str()) {
+            errors.push(FileError {
+                path: rule.path.clone(),
+                line: rule.line,
+                message: format!(
+                    "rule ID `{old}` moved to `{new}` ({MOVED_PATH}) and can't be a tag again; pick a new ID"
+                ),
+            });
+        }
+        let problem = if let Some((newer, _)) = moved.get(new) {
+            Some(format!(
+                "`{old}` moved to `{new}`, which moved again to `{newer}`; point `{old}` at the final ID"
+            ))
+        } else if !tags.contains_key(new.as_str()) && !retired.contains(new) {
+            Some(format!(
+                "`{old}` moved to `{new}`, which is neither a rule tag nor retired; give the rule's current ID"
+            ))
+        } else {
+            None
+        };
+        if let Some(message) = problem {
+            errors.push(FileError {
+                path: MOVED_PATH.to_string(),
+                line: *line,
+                message,
+            });
+        }
+    }
+    errors
 }
 
 /// The non-blank, non-comment lines of a list file, trimmed, with their 1-based line numbers.
@@ -643,6 +733,53 @@ mod tests {
         let (ok, bad) = parse_retired("ok.id\nNot An Id\n");
         assert!(ok.contains("ok.id"));
         assert_eq!(bad[0].line, 2);
+    }
+
+    #[test]
+    fn moved_file() {
+        let (moved, errors) = parse_moved(
+            "# moved\n\nbind.a  type.a\nbind.b type.b extra\nbind.c\nBad.Id type.c\n\
+             grammar.block type.d\nbind.e bind.e\nbind.a type.f\n",
+        );
+        assert_eq!(
+            moved,
+            Moved::from([("bind.a".to_string(), ("type.a".to_string(), 3))])
+        );
+        let errors: Vec<_> = errors.into_iter().map(|e| e.to_string()).collect();
+        assert_eq!(
+            errors,
+            [
+                "line 4: `bind.b type.b extra` should be the old rule ID, then the ID it moved to, such as `stmt.loop.fanout-sources  conc.fanout.sources`",
+                "line 5: `bind.c` should be the old rule ID, then the ID it moved to, such as `stmt.loop.fanout-sources  conc.fanout.sources`",
+                "line 6: `Bad.Id` is not a valid rule ID",
+                "line 7: grammar IDs never move, because they follow their production; list only tagged rules",
+                "line 8: `bind.e` moves to itself; list a rule only when its ID changed",
+                "line 9: `bind.a` is listed twice; it is first listed on line 3",
+            ]
+        );
+    }
+
+    #[test]
+    fn moved_ids_point_at_live_or_retired_rules() {
+        let (moved, errors) = parse_moved(
+            "bind.let  type.let\nbind.old  type.old\nbind.gone  type.gone\nbind.twice  bind.let\n\
+             bind.var  type.var\n",
+        );
+        assert_eq!(errors, Vec::new());
+        let found = rules("r[type.let] a\nr[bind.var] b\nr[type.var] c\n");
+        let retired = HashSet::from(["type.old".to_string()]);
+        let errors: Vec<_> = check_moved(&moved, &found, &retired)
+            .into_iter()
+            .map(|e| e.to_string())
+            .collect();
+        assert_eq!(
+            errors,
+            [
+                "spec/moved-rules.txt:3: `bind.gone` moved to `type.gone`, which is neither a rule tag nor retired; give the rule's current ID",
+                "spec/moved-rules.txt:4: `bind.twice` moved to `bind.let`, which moved again to `type.let`; point `bind.twice` at the final ID",
+                "spec.md:2: rule ID `bind.var` moved to `type.var` (spec/moved-rules.txt) and can't be a tag again; pick a new ID",
+            ]
+        );
     }
 
     #[test]
