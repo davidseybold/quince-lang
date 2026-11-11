@@ -54,19 +54,25 @@ type_arg     = type | "uses" effects   // uses comes last and takes the rest of 
 type_path    = [ name "." ] Name { "." Name } | "Self" { "." Name } | c_name   // a type declared in a foreign block
 
 expr        = jump | logic | range | bits
-jump        = "return" [ expr ] | "break" | "continue"
-            | "spawn" [ "in" postfix ] expr   // a TaskScope value: bg, self.bg
+primary     = literal | path [ type_args ] | type_path [ type_args ] | NAME | "self" | "(" expr ")" | tuple
+            | list_lit | map_lit | struct_lit | closure
+            | if_expr | match_expr | concurrent | background | select | with_expr
+tuple       = "(" ")" | "(" expr "," expr { "," expr } [ "," ] ")"
+list_lit    = "[" [ expr { "," expr } [ "," ] ] "]"
+map_lit     = "{" ":" "}" | "{" entry { "," entry } [ "," ] "}"
+entry       = expr ":" expr
+
+block       = "{" { stmt NEWLINE } [ stmt ] "}"   // a last stmt that is an expr is the value
+if_expr     = "if" expr block [ "else" ( if_expr | block ) ]
 
 logic       = compare { "&&" compare }
             | compare "||" compare { "||" compare }   // never mixed with &&
 compare     = arith [ cmp_op arith | "is" pattern ]    // never chained
 cmp_op      = "==" | "!=" | "<" | "<=" | ">" | ">="
-range       = arith ( ".." | "..=" ) arith
 bits        = prefix "&" prefix { "&" prefix }
             | prefix "|" prefix { "|" prefix }
             | prefix "^" prefix { "^" prefix }
             | prefix ( "<<" | ">>" ) prefix
-
 arith       = term { ( "+" | "-" ) term }
 term        = prefix { ( "*" | "/" | "%" ) prefix }
 prefix      = ( "-" | "!" | "~" ) prefix | postfix
@@ -75,20 +81,17 @@ postfix     = primary { "." ( name | NAME ) [ type_args ] [ args ] | "." int | a
 args        = "(" [ arg { "," arg } [ "," ] ] ")"
 arg         = expr | name ":" [ expr ]   // name: alone passes the binding name
 
-primary     = literal | path [ type_args ] | type_path [ type_args ] | NAME | "self" | "(" expr ")" | tuple
-            | list_lit | map_lit | struct_lit | closure
-            | if_expr | match_expr | concurrent | background | select | with_expr
-tuple       = "(" ")" | "(" expr "," expr { "," expr } [ "," ] ")"
-list_lit    = "[" [ expr { "," expr } [ "," ] ] "]"
-map_lit     = "{" ":" "}" | "{" entry { "," entry } [ "," ] "}"
-entry       = expr ":" expr
-closure     = "fn" "(" [ cparam { "," cparam } [ "," ] ] ")" [ "->" type ] [ "uses" effects ] block
-cparam      = ( name | "_" ) [ ":" type ]
-if_expr     = "if" expr block [ "else" ( if_expr | block ) ]
+range       = arith ( ".." | "..=" ) arith
+
 match_expr  = "match" expr "{" { arm "," } "}"
 arm         = pattern [ "if" expr ] "=>" ( block | expr )
 
-block       = "{" { stmt NEWLINE } [ stmt ] "}"   // a last stmt that is an expr is the value
+jump        = "return" [ expr ] | "break" | "continue"
+            | "spawn" [ "in" postfix ] expr   // a TaskScope value: bg, self.bg
+
+closure     = "fn" "(" [ cparam { "," cparam } [ "," ] ] ")" [ "->" type ] [ "uses" effects ] block
+cparam      = ( name | "_" ) [ ":" type ]
+
 stmt        = "let" pattern [ ":" type ] "=" expr
             | "var" name [ ":" type ] "=" expr
             | place assign_op expr
@@ -98,6 +101,13 @@ stmt        = "let" pattern [ ":" type ] "=" expr
 place       = ( name | "self" ) { "." name | "[" expr "]" }   // self only under var self
 assign_op   = "=" | "+=" | "-=" | "*=" | "/=" | "%="
 
+pattern      = alt { "|" alt }
+alt          = "_" | [ "-" ] literal [ ( ".." | "..=" ) [ "-" ] literal ] | name | NAME | type_path "." NAME | tuple_pat | variant_pat
+tuple_pat    = "(" pattern "," pattern { "," pattern } [ "," ] ")"
+variant_pat  = type_path [ "(" ( pattern { "," pattern } | pfields ) ")" ]
+pfields      = ".." | pfield { "," pfield } [ "," ".." ]
+pfield       = name ":" [ pattern ]
+
 contract     = "requires" expr | "ensures" [ "(" name ")" ] expr
 effect_decl  = "effect" Name ( [ "uses" effects ] "{" { fn_sig NEWLINE } "}" | "=" type_path )
 foreign_decl = "foreign" string [ "uses" effects ] "{" { ( { attribute NEWLINE } ( c_fn | "type" c_name ) ) NEWLINE } "}"
@@ -105,13 +115,6 @@ c_fn         = "fn" c_name "(" [ c_name ":" type { "," c_name ":" type } [ "," ]
 test_decl    = "test" string [ "forall" "(" params ")" ] [ "uses" effects ] block
 effects      = "*" | effect_ref { "," effect_ref }      // "*" only on main
 effect_ref   = type_path | Name                          // an effect or an effect variable
-
-pattern      = alt { "|" alt }
-alt          = "_" | [ "-" ] literal [ ( ".." | "..=" ) [ "-" ] literal ] | name | NAME | type_path "." NAME | tuple_pat | variant_pat
-tuple_pat    = "(" pattern "," pattern { "," pattern } [ "," ] ")"
-variant_pat  = type_path [ "(" ( pattern { "," pattern } | pfields ) ")" ]
-pfields      = ".." | pfield { "," pfield } [ "," ".." ]
-pfield       = name ":" [ pattern ]
 
 concurrent   = "concurrent" [ "(" arg { "," arg } ")" ]
                ( "{" spawn { "," spawn } [ "," ] "}" | "for" pattern "in" expr block )

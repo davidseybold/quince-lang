@@ -778,7 +778,7 @@ let x = 1 //~ E0100
                 .ids
                 .get("stmt.bind.shadow.same-scope")
                 .map(String::as_str),
-            Some("Quince Language Spec (being split)")
+            Some("Statements")
         );
         assert_eq!(
             rules.sections.last().map(String::as_str),

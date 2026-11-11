@@ -10,13 +10,20 @@ moved	L26	### Deliberately excluded	spec/reference/introduction.md	## Deliberate
 moved	L42	## 2. Lexical structure and syntax	spec/reference/lexical.md	# Lexical structure
 moved	L42	## 2. Lexical structure and syntax	spec/quince-spec.md	## 2. Lexical structure and syntax
 moved	L50	### Keywords	spec/reference/lexical.md	## Keywords
-moved	L50	### Keywords	spec/quince-spec.md	### Keywords
+moved	L50	### Keywords	spec/reference/expressions.md	## `return`, `break` and `continue`
+moved	L50	### Keywords	spec/reference/statements.md	## Loops
+moved	L60	### Bindings	spec/reference/statements.md	## Bindings
 moved	L66	### Constants	spec/reference/items.md	## Constants
 moved	L80	### Literals	spec/reference/lexical.md	## Literals
 moved	L93	### Naming	spec/reference/lexical.md	## Naming
 moved	L98	### Arguments	spec/reference/items.md	## Arguments
 moved	L111	### Type arguments and construction	spec/reference/types.md	## Type arguments and construction
-moved	L111	### Type arguments and construction	spec/quince-spec.md	### Type arguments and construction
+moved	L126	### Operators and precedence	spec/reference/expressions.md	## Operators and precedence
+moved	L165	### Ranges	spec/reference/expressions.md	## Ranges
+moved	L176	### Blocks, statements and expressions	spec/reference/expressions.md	## Blocks, statements and expressions
+moved	L176	### Blocks, statements and expressions	spec/reference/expressions.md	## Closures and function values
+moved	L176	### Blocks, statements and expressions	spec/reference/statements.md	## Assignment
+moved	L176	### Blocks, statements and expressions	spec/reference/statements.md	## Loops
 moved	L199	### Comments	spec/reference/lexical.md	## Comments
 moved	L204	### Attributes	spec/reference/items.md	## Attributes
 moved	L225	## 3. Type system	spec/reference/types.md	# Types
@@ -26,14 +33,19 @@ moved	L251	### Structs	spec/reference/items.md	## Structs
 moved	L267	### Enums (algebraic data types)	spec/reference/items.md	## Enums (algebraic data types)
 moved	L281	### Newtypes	spec/reference/items.md	## Newtypes
 moved	L287	### Mutation	spec/reference/types.md	## Mutation
-moved	L287	### Mutation	spec/quince-spec.md	### Mutation
+moved	L287	### Mutation	spec/reference/expressions.md	## Closures and function values
 moved	L336	### Generics	spec/reference/items.md	## Generics
-moved	L336	### Generics	spec/quince-spec.md	### Generics
 moved	L355	### Interfaces	spec/reference/items.md	## Interfaces
 moved	L355	### Interfaces	spec/quince-spec.md	### Interfaces
+moved	L378	### Operators on user types	spec/reference/prelude.md	## Operators on user types
+moved	L406	### Automatic equality and hashing	spec/reference/prelude.md	## Automatic equality and hashing
+moved	L415	### Serialization	spec/reference/prelude.md	## Serialization
 moved	L449	### Methods	spec/reference/items.md	## Methods
 moved	L449	### Methods	spec/quince-spec.md	### Methods
 moved	L455	### Inference rules	spec/reference/types.md	## Inference rules
+moved	L487	### Exhaustive `match`	spec/reference/expressions.md	## Exhaustive `match`
+moved	L494	### Patterns	spec/reference/patterns.md	# Patterns
+moved	L503	### Pattern tests with `is`	spec/reference/expressions.md	## Pattern tests with `is`
 moved	L732	## 7. Modules, packages, and versioning	spec/reference/packages.md	# Packages and modules
 moved	L732	## 7. Modules, packages, and versioning	spec/quince-spec.md	## 7. Modules, packages, and versioning
 moved	L736	### Modules and imports	spec/reference/packages.md	## Modules and imports
@@ -41,7 +53,17 @@ moved	L736	### Modules and imports	spec/quince-spec.md	### Modules and imports
 moved	L756	### Packages	spec/reference/packages.md	## Packages
 moved	L756	### Packages	spec/quince-spec.md	### Packages
 moved	L833	### Editions	spec/reference/packages.md	## Editions
+moved	L1385	## Appendix: Prelude	spec/reference/prelude.md	# Prelude and special interfaces
+moved	L1385	## Appendix: Prelude	spec/quince-spec.md	## Appendix: Prelude
+moved	L1405	### Interfaces	spec/reference/prelude.md	## Interfaces
+moved	L1438	### Functions	spec/reference/prelude.md	## Functions
+moved	L1620	### List	spec/reference/expressions.md	## Indexing and slicing
 moved	L1748	### Map and Set	spec/reference/types.md	## Map and Set
+moved	L1830	### Duration, Timestamp, Url and Regex	spec/reference/prelude.md	## Duration, Timestamp, Url and Regex
 new	spec/reference/introduction.md	## Grammar notation
 new	spec/reference/lexical.md	## Tokens and identifiers
 new	spec/reference/items.md	# Items
+new	spec/reference/prelude.md	## Prelude names
+new	spec/reference/prelude.md	## Iterators
+new	spec/reference/expressions.md	# Expressions
+new	spec/reference/statements.md	# Statements

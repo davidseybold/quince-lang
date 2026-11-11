@@ -202,7 +202,7 @@ Hex and base64 live in `std.encoding`.
 | `fn map<U, uses E>(self, f: fn(T) -> U uses E) -> List<U> uses E` | Applies `f` to each item, in order | O(n) |  |
 | `List.filled(value: T, count: Int) -> List<T>` | `count` copies of `value` | O(count) | `requires count >= 0` |
 | `fn len(self) -> Int` | Also `is_empty` | O(1) |  |
-| `fn get(self, index: Int) -> Option<T>` | `xs[i]` panics instead ([Expressions](../spec/quince-spec.md#list)) | O(1) |  |
+| `fn get(self, index: Int) -> Option<T>` | `xs[i]` panics instead ([Expressions](../spec/reference/expressions.md)) | O(1) |  |
 | `fn first(self) -> Option<T>` | Also `last` | O(1) |  |
 | `fn set(var self, index: Int, value: T)` | Replaces one item | O(1) when unique | `requires 0 <= index && index < self.len()` |
 | `fn push(var self, item: T)` | Appends | O(1) amortized when unique |  |
@@ -278,7 +278,7 @@ There is no `unwrap()` ([Option and Result](#option-and-result)). `expect` state
 
 | Signature | What | Notes |
 | --- | --- | --- |
-| `fn is_some(self) -> Bool` | Also `is_none`. For one case with a binding, prefer `if x is Some(v)` ([Pattern tests with `is`](../spec/quince-spec.md#pattern-tests-with-is)) |  |
+| `fn is_some(self) -> Bool` | Also `is_none`. For one case with a binding, prefer `if x is Some(v)` ([Pattern tests with `is`](../spec/reference/expressions.md#pattern-tests-with-is)) |  |
 | `fn expect(self, reason: String) -> T` | The value | Panics: `None`, with `reason` in the message |
 | `fn unwrap_or(self, default: T) -> T` | The value, or `default` |  |
 | `fn unwrap_or_else<uses E>(self, f: fn() -> T uses E) -> T uses E` | The value, or `f()`, called only on `None` |  |
@@ -304,7 +304,7 @@ There is no `unwrap()` ([Option and Result](#option-and-result)). `expect` state
 
 ### Ordering
 
-`enum Ordering { Less, Equal, Greater }` is what `Ord.compare` returns. It is a prelude name, and these are its only methods ([Prelude and special interfaces](../spec/quince-spec.md#interfaces-1)).
+`enum Ordering { Less, Equal, Greater }` is what `Ord.compare` returns. It is a prelude name, and these are its only methods ([Prelude and special interfaces](../spec/reference/prelude.md)).
 
 | Signature | What |
 | --- | --- |
@@ -348,7 +348,7 @@ Adapters are lazy and O(1) to build; nothing runs until a consumer or a `for` lo
 | `fn sum(self) -> Int uses E` on `Iter<Int>`, `fn sum(self) -> Float uses E` on `Iter<Float>` |  | O(n) | Consumer. Panics: integer overflow |
 | `fn join(self, separator: String) -> String uses E` on strings |  | O(total) | Consumer |
 
-There is no `for_each`: a `for` loop does that. A range such as `0..n` is a `Range<Int>` ([Ranges](../spec/quince-spec.md#ranges)), which implements `Iterator` and has `.iter()`.
+There is no `for_each`: a `for` loop does that. A range such as `0..n` is a `Range<Int>` ([Ranges](../spec/reference/expressions.md#ranges)), which implements `Iterator` and has `.iter()`.
 
 ### Duration and Timestamp
 
@@ -409,9 +409,9 @@ pub interface Encode { fn encode(self) -> encoding.Data }
 pub interface Decode { fn decode(data: encoding.Data) -> Result<Self, DecodeError> }
 ```
 
-The operator interfaces `Add`, `Sub`, `Mul`, `Div`, `Rem` and `Neg` ([Operators on user types](../spec/quince-spec.md#operators-on-user-types)) are prelude names too, because the compiler maps `+`, `-`, `*`, `/`, `%` and unary `-` onto them. That makes 14 prelude interfaces. Their signatures are in [Operators on user types](../spec/quince-spec.md#operators-on-user-types). `Duration` and `Timestamp` implement `Add` and `Sub` (see their section).
+The operator interfaces `Add`, `Sub`, `Mul`, `Div`, `Rem` and `Neg` ([Operators on user types](../spec/reference/prelude.md#operators-on-user-types)) are prelude names too, because the compiler maps `+`, `-`, `*`, `/`, `%` and unary `-` onto them. That makes 14 prelude interfaces. Their signatures are in [Operators on user types](../spec/reference/prelude.md#operators-on-user-types). `Duration` and `Timestamp` implement `Add` and `Sub` (see their section).
 
-- `Eq`, `Hash`, `Encode` and `Decode` are automatic for most types ([Automatic equality and hashing](../spec/quince-spec.md#automatic-equality-and-hashing)), so an impl is written only to replace the automatic one. `Ord` and `Display` are always written by hand for your own types. Built in: every number type, `Bool`, `Char`, `String`, `Bytes`, `Duration` and `Timestamp` implement `Eq`, `Ord` and `Hash`; `List` and tuples implement them when their elements do, and order element by element ([Prelude and special interfaces](../spec/quince-spec.md#interfaces-1)).
+- `Eq`, `Hash`, `Encode` and `Decode` are automatic for most types ([Automatic equality and hashing](../spec/reference/prelude.md#automatic-equality-and-hashing)), so an impl is written only to replace the automatic one. `Ord` and `Display` are always written by hand for your own types. Built in: every number type, `Bool`, `Char`, `String`, `Bytes`, `Duration` and `Timestamp` implement `Eq`, `Ord` and `Hash`; `List` and tuples implement them when their elements do, and order element by element ([Prelude and special interfaces](../spec/reference/prelude.md)).
 - `Hash` threads a `Hasher` value through, because a `var` parameter is the callee's own copy ([Items](../spec/reference/items.md)). `Hasher` has two methods, `fn add<T: Hash>(self, value: T) -> Hasher` and `fn add_bytes(self, bytes: Bytes) -> Hasher` (`hasher.add(self.id)`), and is otherwise opaque. Hash seeds are fixed per build, and `Map` order never depends on them (decision 4).
 - `From` is what `?` uses to convert errors ([The `?` operator](../spec/quince-spec.md#the--operator)). Write one impl per source error type.
 - `Encode` and `Decode` go through the data model in `std.encoding`; formats such as `std.json` sit on top. Most code never names `Data`.
@@ -424,7 +424,7 @@ The operator interfaces `Add`, `Sub`, `Mul`, `Div`, `Rem` and `Neg` ([Operators 
 | `fn assert(condition: Bool, message: String = "")` | Panics when `condition` is false | A failed `assert(a == b)` prints both sides ([Testing](../spec/quince-spec.md#unit-tests)), so there is no `assert_eq` |
 | `fn todo(reason: String) -> Never` | Marks unfinished code | Panics. `quince publish` refuses a library that contains `todo` or `dbg` ([Dependencies and publishing](../spec/quince-spec.md#enforced-semantic-versioning)) |
 | `fn unreachable(reason: String) -> Never` | Marks a case the author has proved can't happen | Panics |
-| `fn dbg<T>(value: T) -> T` | Prints the debug form and source location to standard error, returns `value` | Not an effect; rejected in release builds ([Prelude and special interfaces](../spec/quince-spec.md#functions)) |
+| `fn dbg<T>(value: T) -> T` | Prints the debug form and source location to standard error, returns `value` | Not an effect; rejected in release builds ([Prelude and special interfaces](../spec/reference/prelude.md)) |
 | `fn with_timeout<T, uses E>(limit: Duration, body: fn() -> T uses E) -> Result<T, TimedOut> uses E, Clock` | Cancels `body` after `limit` ([Cancellation](../spec/quince-spec.md#cancellation)) | Waits. Needs `Clock` because it reads a timer |
 | `fn with_resource<T, R, uses E>(resource: Resource<T>, body: fn(Resource<T>) -> R uses E) -> R uses E` | Lends an open resource to `body`, then cleans it up, even on panic or cancellation ([Interop with C](../spec/quince-spec.md#memory-across-the-boundary)) |  |
 
@@ -770,7 +770,7 @@ fn main() -> Result<Unit, AppError> uses * {
 
 ## Data and formats
 
-Every format has the same three functions, so learning one teaches all of them. Encoding is pure and never fails, except that a NaN or infinite `Float` panics ([Serialization](../spec/quince-spec.md#serialization)). Decoding takes a `String` (`decode_bytes` takes `Bytes`), checks shapes and every `requires` invariant, and reports a `DecodeError` with a path such as `$.items[3].price`. Malformed text is a `DecodeError` too, with the path where parsing stopped, so one error type covers both.
+Every format has the same three functions, so learning one teaches all of them. Encoding is pure and never fails, except that a NaN or infinite `Float` panics ([Serialization](../spec/reference/prelude.md#serialization)). Decoding takes a `String` (`decode_bytes` takes `Bytes`), checks shapes and every `requires` invariant, and reports a `DecodeError` with a path such as `$.items[3].price`. Malformed text is a `DecodeError` too, with the path where parsing stopped, so one error type covers both.
 
 | Package | `encode<T: Encode>(value: T) -> String` | `decode<T: Decode>(text: String) -> Result<T, DecodeError>` | Also |
 | --- | --- | --- | --- |
@@ -803,7 +803,7 @@ The data model every format shares, and the byte encodings.
 
 | Signature | What | Cost | Notes |
 | --- | --- | --- | --- |
-| `enum Data { Null, Bool(value: Bool), Int(value: Int), Float(value: Float), String(value: String), Bytes(value: Bytes), List(items: List<Data>), Record(fields: List<(String, Data)>), Variant(name: String, fields: List<(String, Data)>) }` | What `Encode` produces and `Decode` reads |  | Wire names, tags and `Option` rules ([Serialization](../spec/quince-spec.md#serialization)) are already applied |
+| `enum Data { Null, Bool(value: Bool), Int(value: Int), Float(value: Float), String(value: String), Bytes(value: Bytes), List(items: List<Data>), Record(fields: List<(String, Data)>), Variant(name: String, fields: List<(String, Data)>) }` | What `Encode` produces and `Decode` reads |  | Wire names, tags and `Option` rules ([Serialization](../spec/reference/prelude.md#serialization)) are already applied |
 | `pub interface Encoder { fn write(self, data: Data) -> String }` | What a format implements to encode |  |  |
 | `pub interface Decoder { fn read(self, text: String) -> Result<Data, DecodeError> }` | What a format implements to decode |  |  |
 | `fn base64_encode(data: Bytes, url_safe: Bool = false) -> String` | Standard alphabet with padding, or URL-safe without | O(n) |  |
@@ -1021,7 +1021,7 @@ David approved the recommendations for 1 to 3 on 2026-11-10, and the doc is writ
 3. **Iterator adapters.** The spec ([Items](../spec/reference/items.md)) forbids default method bodies that call other methods, so `map`, `filter` and `take` can't be methods on every `Iterator`. Recommended: a concrete prelude type `Iter<T, uses E>` that carries the adapters as ordinary methods, reached by `xs.iter()` or `Iter.from(it)`, so chains read the way they do in Rust and TypeScript: `xs.iter().filter(...).map(...).to_list()`. The alternative is free functions in `std.iter` (`iter.map(it, f)`), which keeps the rule with no new type but breaks chaining.
 4. **Map and Set order.** Default: iteration follows insertion order, as in Python and JavaScript. Order is then the same on every run, whatever the hash seed, which deterministic tests ([Testing](../spec/quince-spec.md#deterministic-testing)) need. Lookups stay O(1) on average.
 5. **Number formatting.** Interpolation takes only names ([Lexical structure](../spec/reference/lexical.md)), so `{price}` can't say "two decimals". Done as prelude methods `f.to_fixed(2)` and `s.pad_start(8, fill: ' ')`, used through a binding.
-6. **Prelude gaps.** Superseded by the spec. The prelude rule (2026-11-10) keeps only what the syntax or compiler needs: `From`, `DecodeError` and `ScopeFailed` are prelude; the reference types, `ChannelClosed`, `TimedOut` and `Resource` are imported from `std.sync`, `std.time` and `std.ffi`; `Generate` is in `std.testing`; `Encoder` and `Decoder` are in `std.encoding`. The spec's [table of prelude names](../spec/quince-spec.md#prelude-names) lists the prelude.
+6. **Prelude gaps.** Superseded by the spec. The prelude rule (2026-11-10) keeps only what the syntax or compiler needs: `From`, `DecodeError` and `ScopeFailed` are prelude; the reference types, `ChannelClosed`, `TimedOut` and `Resource` are imported from `std.sync`, `std.time` and `std.ffi`; `Generate` is in `std.testing`; `Encoder` and `Decoder` are in `std.encoding`. The spec's [table of prelude names](../spec/reference/prelude.md#prelude-names) lists the prelude.
 7. **`config.load` in [Effects](../spec/quince-spec.md#5-effects-and-capabilities).** Default: it is the program's own code, three lines over `toml.decode`, not a std function.
 8. **Out of v1.** Database drivers, templating, compression, XML and YAML stay out (see the package map). Say if any of them should be in.
 
@@ -1142,7 +1142,7 @@ impl Char {
 
 ### Ranges
 
-`a..b` and `a..=b` build a `Range<T>` over one integer type ([Ranges](../spec/quince-spec.md#ranges)).
+`a..b` and `a..=b` build a `Range<T>` over one integer type ([Ranges](../spec/reference/expressions.md#ranges)).
 
 ```
 impl<T> Range<T> {                       // T is an integer type

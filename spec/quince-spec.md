@@ -21,87 +21,6 @@ Quince is built for services and tools: web servers and APIs, command-line tools
 
 ## 2. Lexical structure and syntax
 
-### Keywords
-
-r[stmt.loop.forms] There is exactly one loop over collections (`for x in xs`) and one conditional loop (`while`). No `do-while`, no C-style `for`, no `loop`. r[stmt.loop.no-labels] There are no loop labels: to leave nested loops at once, move them into a function and `return`.
-
-r[expr.ret.value] `return expr` ends the function with `expr`. r[expr.ret.bare] A bare `return` is allowed only in a function that returns `Unit`, where it means `return ()`.
-
-### Bindings
-
-- r[stmt.bind.let-var] `let` declares an immutable binding; `var` declares a mutable one.
-- r[stmt.bind.shadow.same-scope] Shadowing a binding in the same scope is a compile error. That rules out let x = x?, so the suggested fix gives the unwrapped value its own name (let user = user\_result?). r[stmt.bind.shadow.nested] Shadowing in a nested scope is allowed but flagged by the linter.
-- r[stmt.bind.var-param] A parameter can be marked `var`, as in `fn sum<I: Iterator<Item = Int>>(var it: I)` `-> Int`. The function gets its own mutable copy, and the caller's value never changes. This is not an inout parameter, and it avoids `var it = it`, which the shadowing rule forbids.
-
-### Type arguments and construction
-
-- r[expr.op.compare.no-chain] Comparison operators don't chain: `a < b > c` is a syntax error, and the suggested fix is `a < b && b < c`. So `json.decode<Order>(body)` has only one reading.
-
-### Operators and precedence
-
-r[expr.op.levels] Operators bind in seven levels, tightest first. r[expr.op.parens-required] Where a row says an expression must be parenthesized, it can't be an operand of a different operator without parentheses, and the compiler's fix adds the parentheses that give the usual reading. So every expression that compiles reads one way.
-
-| Level | Operators | Grouping | Notes |
-| --- | --- | --- | --- |
-| 1 Postfix | `.name  .method()  f()  xs[i]  ?` | Left to right | `-x?` is `-(x?)` |
-| 2 Prefix | `-  !  ~` | Right to left | `-x.abs()` is `-(x.abs())` |
-| 3 Multiplicative | `*  /  %` | Left to right |  |
-| 4 Additive | `+  -` | Left to right |  |
-| 5 Range | `..  ..=` | r[expr.op.range.no-chain] Doesn't chain | r[expr.op.range.parens] Must be parenthesized as an operand (see [Ranges](#ranges)) |
-| 6 Comparison | `==  !=  <  <=  >  >=  is` | Doesn't chain | r[expr.op.is-pattern] `is` takes a pattern on its right ([Patterns](#patterns)) |
-| 7 Logical | `&&  \|\|` | r[expr.op.logic.short-circuit] Left to right, short-circuit | r[expr.op.logic.no-mix] The two can't be mixed without parentheses |
-| Apart | `&  \|  ^  <<  >>` | r[expr.op.bits.chain] `&`, `\|` and `^` chain only with themselves | r[expr.op.bits.parens] No level: must be parenthesized as an operand of any other operator, and its own operands are prefix or postfix expressions |
-
-```
-flags & MASK == 0        // error: write (flags & MASK) == 0
-a || b && c              // error: write a || (b && c)
-0 <= i < n               // error: write 0 <= i && i < n
-1 << n - 1               // error: write 1 << (n - 1)
-```
-
-r[expr.op.keyword-forms] `return`, `break`, `continue` and `spawn` are keyword forms, not operators; `return expr` and `spawn expr` take everything to their right.
-
-Operand types. r[expr.op.no-conversion] No operator converts its operands, so `Int + Float` and `Int32 + Int64` are errors whose fix names the conversion method ([Types](reference/types.md)). User types take part only through the interfaces in [Operators on user types](#operators-on-user-types).
-
-| Operators | Built-in operands | Failure |
-| --- | --- | --- |
-| `+  -  *  /  %` | r[expr.op.arith.operands] Two values of the same integer or float type | r[expr.op.arith.panic] Integers panic on overflow, on division by zero and on Int.MIN / -1, and / rounds toward zero. r[expr.op.arith.float] Floats follow IEEE |
-| Prefix `-` | r[expr.op.neg.operands] Signed integers and floats, not unsigned ones | r[expr.op.neg.panic] -Int.MIN panics |
-| `==  !=  <  <=  >  >=` | r[expr.op.compare.operands] Two values of the same type, with Eq or Ord | Never fails |
-| `&&  \|\|  !` | r[expr.op.logic.operands] Bool only | Never fails |
-| `&  \|  ^  ~` | r[expr.op.bits.operands] Values of the same integer type | Never fails |
-| `<<  >>` | r[expr.op.shift.operands] An integer, shifted by a count of any integer type | r[expr.op.shift.panic] Panics when the count is negative or not below the bit width. r[expr.op.shift.semantics] Bits shifted out are dropped, and >> keeps the sign of a signed value |
-
-r[expr.op.plus-numeric] `+` is numeric only. r[expr.op.plus-suggest] Strings join with interpolation (`"{first}{last}"`) and lists with `.concat()`, and the compiler suggests both. r[expr.op.float-total-order] Because comparisons use `Eq` and `Ord`, floats compare in their total order ([Types](reference/types.md)): `NaN == NaN` is true and `-0.0 == 0.0` is false. r[expr.op.float-eq-warn] `quince` `check` warns when a float is compared with `==` against a literal.
-
-r[expr.op.excluded] Not in Quince: the ternary `c ? a : b` (use `if`), `++` and `--` (`+= 1`), `**` (`x.pow(n)`), `??` and `?.` (`unwrap_or`, `?`, `map`), a pipe operator, and casts with `as`.
-
-### Ranges
-
-r[expr.range.semantics] `a..b` runs from `a` up to but not including `b`, and `a..=b` includes `b`. r[expr.range.type] Both are values of the prelude type `Range<T>`, where `T` is one integer type for both ends.
-
-- r[expr.range.empty] When `a >= b` (or `a > b` for `..=`), the range is empty; it never panics. r[expr.range.no-overflow] `0..=Int.MAX` iterates to the end without overflowing.
-- Ranges drive loops (`for i in 0..n`) and are passed as values, as in `xs.slice(1..3)`. Their methods are listed in [the standard library API](../std/API.md#ranges).
-- r[expr.range.pattern] Both forms are patterns too: `1..=9 => "digit"`. r[expr.range.pattern.char] A pattern range may also be over `Char`, as in `'a'..='z' => ...`, and exhaustiveness counts its scalar values; a `Range<T>` value is always over an integer type. r[expr.range.pattern.exhaustive] Exhaustiveness is checked over integer ranges, so `0..=127` and `128..=255` cover a `UInt8`.
-- r[expr.range.no-open] There are no open ranges (`a..`, `..b`, `..`), because `..` already means the remaining fields in a pattern and the copied fields in `User(..user, name: "New")`.
-- r[expr.index.int] `xs[i]` takes only an `Int`; another integer type is converted first, as in `xs[n.to_int64()]`. r[expr.index.slice] A slice is the method call `xs.slice(r)`, so `[]` has one meaning.
-- r[expr.range.precedence] `0..n + 1` is `0..(n + 1)`, and a range must be parenthesized as an operand: `r == (0..3)`.
-
-### Blocks, statements and expressions
-
-r[expr.block.expr-stmt] `if`, `match`, closures and the keyword forms (`concurrent`, `background`, `select`, `with`) are expressions. Declarations, loops and assignments are statements.
-
-- r[expr.block.value] A block's value is its last line when that line is an expression, and `()` otherwise. r[expr.block.last-newline] The last statement needs no newline before `}`, so a one-line block may hold a single statement: `Some(m) => { total = total + m },`. r[expr.block.fn-value] A function returns its body's value, as `word_counts` does in [Mutation](reference/types.md#mutation).
-- r[expr.if.type] `if` with an `else` has its branches' common type. r[expr.if.no-else] Without an `else`, its type is `Unit` and its branch must be `Unit`: `let sign = if n < 0 { -1 } else { 1 }`. r[expr.block.unit-context] Where the expected type is `Unit` (an `if` without `else`, a loop body, the body of a function that returns `Unit`, or an `if` or `match` used as a statement), a last expression is a statement: its value is discarded under the unused-value rules ([Errors and failure](#expected-failures-result-and-option)). So `if ok { seen.insert(x) }` compiles, an unused `Result` is still an error, and the arms of a `match` used as a statement need not share a type.
-- r[expr.match.arm-syntax] A `match` arm is `pattern => expr,` or `pattern => { block },`. r[expr.match.arm-block] In an arm, `{` starts a block. r[expr.match.arm-comma] Every arm ends with a comma, a block arm included.
-- r[expr.block.no-bare] There are no bare blocks. r[expr.block.brace-map] Anywhere else, `{` where an expression is expected starts a map literal. r[expr.block.positions] Blocks appear only as the bodies of functions, closures, `if`, `else`, match arms, `for`, `while`, `test` and the keyword forms. r[expr.block.keyword-bodies] The bodies of `with` and `background`, like `select` arms, are ordinary blocks of the enclosing function: `return`, `?`, `break` and `continue` leave them, and a `background` block first cancels its tasks and waits for them. r[expr.block.concurrent-tasks] A `concurrent` block's spawned expressions are tasks, not blocks of the function.
-
-* r[stmt.loop.stmt] `for` and `while` are statements, and `break` takes no value. r[stmt.loop.for-sources] `for` iterates any `Iterator`, and a `List`, `Set` or `Map` directly (a map's entries as `(key, value)` pairs). r[stmt.loop.for-string] A `String` or `Bytes` value needs `.chars()`, `.bytes()` or `.iter()`, so the unit is always written. r[stmt.loop.fanout-sources] `concurrent(limit:) for` takes the same things.
-* r[expr.jump.expr] `return`, `break` and `continue` are expressions, so they can stand in a match arm (`None => return,`).
-* r[stmt.assign.stmt] Assignment is a statement: `place = expr`, or `place op= expr` with `+=` `-=` `*=` `/=` `%=`, meaning `place = place op expr`. r[stmt.assign.place] A place is a `var` binding, a field path from one, or an index into one (`xs[i] = v`). r[stmt.assign.no-chain] There is no `x = y = z`, no assignment inside a condition, and no `++` or `--`.
-* r[expr.closure.syntax] A closure is `fn(params) -> T uses E { body }`. r[expr.closure.infer] Parameter types, the return type and `uses` can be left out when the expected type gives them: `fn(n) { n + 1 }`. r[expr.closure.no-expected] With no expected type, the parameter types are written, and the return type and the effects are inferred from the body: `Callback.local(fn(sent: CInt, total: CInt) { done.set(sent.to_int64()) })` needs no `uses`. r[expr.closure.underscore] An unused parameter of a closure or function may be named `_`.
-* r[expr.fn-value.named] A named function, or an associated function such as `Url.parse`, can be passed where a function type is expected: `lines.map(parse_user)`. Its type carries its effects. r[expr.fn-value.no-method] A method is passed through a closure, `fn(u) { u.display() }`, so a function value never hides which receiver it holds. r[expr.fn-value.variant] An enum variant with a payload is a function from its fields, in declaration order, so `map_err(AppError.Serve)` passes the variant as a function.
-
 ### Formatting rules (enforced by `quince` `fmt`)
 
 - r[tool.fmt.one-per-line] One declaration, statement, or match arm per line.
@@ -112,88 +31,9 @@ r[expr.block.expr-stmt] `if`, `match`, closures and the keyword forms (`concurre
 
 ## 3. Type system
 
-### Mutation
-
-- r[expr.closure.capture-value] Closures capture values, never `var` bindings by reference. So a closure can't call a `var self` method on a value it captured; it copies the value into a local `var` first. r[expr.closure.no-assign-capture] Assigning to a captured binding is a compile error too, and the suggested fix uses `fold` or a `for` loop.
-
-### Generics
-
-- r[prelude.iter.next-var-self] `next` takes `var self`, so it advances the iterator it is called on (see [Mutation](reference/types.md#mutation)). r[prelude.iter.for-copy] `for x in it` iterates over a copy of `it`, so `it` doesn't need to be `var` and is unchanged after the loop. That holds when the iterator's source is a value, such as a list or a range. r[prelude.iter.shared-source] An iterator over an effect or a reference type, such as `Fs.read_lines` or `Channel.iter()`, shares its source, so every copy pulls from the same stream.
-
 ### Interfaces
 
 - r[effect.handler.receiver] The one exception is a handler, which implements each operation of an `effect` as a method with a `self` receiver. r[effect.handler.uses] That method's `uses` may name the effects the effect is built on ([Effects](#declaring-and-inferring)), `State`, and the effect it handles. r[effect.handler.outer-call] A call to that effect from inside the handler goes to the handler that was in effect where the `with` installed it, never back to the handler itself. So a narrowing handler such as `net.only` passes allowed calls through, and a fake such as `fixed_clock` keeps its time in a reference type. r[effect.handler.uses-subset] It may name fewer of them, down to none.
-
-### Operators on user types
-
-r[prelude.user-op.interfaces] Arithmetic operators on user types come from six prelude interfaces, and each operator always calls the same one: `+` calls `Add`, `-` calls `Sub`, `*` calls `Mul`, `/` calls `Div`, `%` calls `Rem`, and unary `-` calls `Neg`. r[prelude.user-op.builtin-impls] The built-in numeric types implement them, and a user type opts in with an ordinary `impl`:
-
-```
-pub interface Sub<R> {
-  type Output
-  fn sub(self, rhs: R) -> Self.Output
-}
-
-impl Sub<Money> for Money {
-  type Output = Money
-  fn sub(self, rhs: Money) -> Money { ... }
-}
-
-impl Mul<Int> for Money {
-  type Output = Money
-  fn mul(self, rhs: Int) -> Money { ... }
-}
-```
-
-- **Pure.** r[prelude.user-op.pure] The operator interfaces take no effect parameter, like `Eq` and `Ord`, so an operator can't do I/O or touch shared state. It can still panic, as `Int` overflow does.
-- **Comparison.** r[prelude.user-op.compare] `==` and `!=` always come from `Eq`, and `<`, `<=`, `>` and `>=` from `Ord`. r[prelude.user-op.ne] There are no separate comparison interfaces, and `a != b` always means `!(a == b)`.
-- **The left operand picks the impl.** r[prelude.user-op.left-picks] `R` is the right operand's type, so `impl Mul<Int> for Money` allows `amount * 3` and nothing else. r[prelude.user-op.swap-fix] `3 * amount` and `amount * amount` are compile errors, and for the first one the suggested fix swaps the operands. r[prelude.user-op.output] `Output` lets an operator return another type, as `Timestamp - Timestamp` returns `Duration`.
-- **A fixed set.** r[prelude.user-op.fixed] No other operator can be overloaded. `&&`, `||`, `!`, `?`, the bitwise operators, ranges, field access and calls keep their built-in meaning, and a program can't define new operators.
-- **Compound assignment.** r[prelude.user-op.compound] `a += b` always means `a = a + b`, and the same holds for every other operator, so there is nothing more to implement.
-- **Tooling.** r[prelude.user-op.query] The query API reports which impl an operator expression calls, so a tool can go from `a - b` straight to its body.
-
-### Automatic equality and hashing
-
-- r[prelude.auto.eq-hash] Every struct and enum implements `Eq` and `Hash` automatically, field by field, when all of its fields do. r[prelude.auto.builtin-eq-hash] The built-in `List`, `Map`, `Set`, `Option`, `Result` and tuples have `Eq` and `Hash` whenever their element types do. r[prelude.auto.ref-no-eq] Reference types have neither, so a struct that holds one has no automatic `Eq` or `Hash`. There is nothing to write and nothing to forget. r[prelude.auto.manual-eq] Writing `impl Eq` by hand turns off the automatic `Hash`, because the two must agree for maps and sets to work: the type has no `Hash` until it writes one, and the error on a missing `Hash` says why.
-- r[prelude.auto.encode] Every struct and enum whose fields are all `pub` also implements `Encode` and `Decode` automatically, when all of its field types do (see [Serialization](#serialization)).
-- r[prelude.auto.debug] Every value also has a built-in debug form, which assertions, panic messages and `quince` `test` print. It is not `Display` and can't be overridden.
-- r[prelude.dbg.behavior] `dbg(x)` writes `x`'s debug form and its source location to standard error and returns `x`, so it can wrap any expression. r[prelude.dbg.pure] It is not an effect and is allowed in any function, pure ones included, so adding a print while debugging never changes a signature. r[prelude.dbg.release] `quince` `check` rejects `dbg` in release builds, and `quince` `publish` refuses a package that contains one.
-- r[prelude.auto.no-ord-display] `Ord` and `Display` are never automatic, because field order and formatting are real choices. Write an `impl` for them.
-- r[prelude.auto.opaque] `@opaque` turns off the automatic `Eq`, `Hash`, debug form, test generator, `Encode` and `Decode`, for types whose fields shouldn't be compared or shown, such as handles and secrets.
-
-### Serialization
-
-A struct or enum whose fields are all `pub` implements the std interfaces `Encode` and `Decode` automatically when all of its field types do, the same way it gets `Eq` and `Hash`. r[prelude.wire.field-visibility] Only the fields' visibility counts, not the type's own, so a private struct whose fields are all `pub` gets them too. r[prelude.wire.data-model] The std formats (`json`, `toml`, `form`) all read and write through one format-neutral data model, so a type that encodes to one of them encodes to all of them. There is no derive to write and no hand-written codec to drift out of date.
-
-```
-@wire(case: camel)
-pub struct Order {
-  @wire("type")
-  pub kind: OrderKind,
-  pub customer_id: CustomerId,
-  pub items: List<Item>,
-  pub note: Option<String>,
-}
-
-@wire(tag: "kind")
-pub enum OrderKind {
-  Pickup,
-  Delivery(address: Address),
-}
-
-let order = json.decode<Order>(body)?   // an Order: decode returns Result<Order, DecodeError>, and ? unwraps it
-let text = json.encode(order)           // String
-```
-
-- **Wire names.** r[prelude.wire.name.default] A field or variant appears on the wire under its Quince name. r[prelude.wire.name.explicit] `@wire("name")` on a field or variant sets its wire name exactly, which is also how keyword names such as `type`, `in` and `match` are written. r[prelude.wire.case] `@wire(case: camel)` on a type renames every field and variant that has no `@wire` of its own; the cases are `camel`, `snake`, `kebab`, `pascal` and `upper_snake`.
-- **Shapes.** r[prelude.wire.shape.struct] A struct is an object. r[prelude.wire.shape.collections] `List` and `Set` are arrays, tuples are fixed-length arrays, and `Bytes` is a base64 string. r[prelude.wire.shape.map] A `Map` is an object when its key is `String` or a newtype over `String`, and an array of `[key, value]` pairs otherwise. r[prelude.wire.shape.newtype] Newtypes are transparent: `UserId(Int)` is a plain number.
-- **Optional fields.** r[prelude.wire.option] An `Option` field decodes to `None` when it is missing or `null`, and `None` is left out on encode. r[prelude.wire.required] Every other field must be present.
-- **Enums.** r[prelude.wire.enum.unit] An enum whose variants carry no data is a string. r[prelude.wire.enum.tagged] Any other enum is an object with a `"type"` tag naming the variant, with the variant's fields beside it; `@wire(tag: "kind")` renames the tag. r[prelude.wire.enum.tag-clash] A variant field with the same wire name as the tag is a compile error.
-- **Numbers.** r[prelude.wire.number.int] `Int` decodes only from a whole number within the `Int64` range. r[prelude.wire.number.float] `Float` decodes from any number. r[prelude.wire.number.nan] Encoding a `NaN` or infinite `Float` panics, because JSON can't represent it.
-- **Decoding is checked.** r[prelude.wire.unknown-fields] Unknown fields are ignored. r[prelude.wire.invariants] Every `requires` invariant on a decoded struct is checked. r[prelude.wire.decode-error] A failure is a `DecodeError(path:, expected:, found:)`, where the path points into the input, as in `$.items[3].price: expected Int, found "12"`.
-- **Writing your own.** r[prelude.wire.custom] An `impl Encode` or `impl Decode` replaces the automatic one, for example to write a `Timestamp` as an RFC 3339 string. r[prelude.wire.private-fields] A type with private fields gets no automatic impl, because decoding would build it without going through its own functions; its package writes an `impl Decode` that calls its constructor. r[prelude.wire.opaque] `@opaque` turns both off. r[prelude.wire.formats] Other formats implement std's `Encoder` and `Decoder` interfaces against the same data model. r[prelude.wire.pure] Encoding and decoding are pure.
-- **Dynamic data.** `json.Value` holds JSON whose shape isn't known ahead of time.
-- **Tooling.** r[prelude.wire.query] `quince` `query wire <Type>` prints the type's wire shape. r[prelude.wire.semver] `quince` `publish` treats any change to the wire shape of a public type as breaking ([Dependencies and publishing](#enforced-semantic-versioning)), and when the change is a renamed field, its suggested fix adds `@wire("old_name")` to keep the old wire name.
 
 ### Methods
 
@@ -217,41 +57,13 @@ pub enum ParseError {
 }
 ```
 
-- r[err.unused-result] An unused `Result` is a compile error. r[err.discard] To discard one deliberately, write `let _ = save(file)`. r[err.unused-value] An unused value of any other type except `Unit` is a warning, which `let _ =` also silences. r[err.var-self-value] A value returned by a `var self` method, such as the `Option` from `Map.insert`, raises no warning. r[stmt.bind.underscore] \_ is not a binding, so it can be written any number of times in one scope.
+- r[err.unused-result] An unused `Result` is a compile error. r[err.discard] To discard one deliberately, write `let _ = save(file)`. r[err.unused-value] An unused value of any other type except `Unit` is a warning, which `let _ =` also silences. r[err.var-self-value] A value returned by a `var self` method, such as the `Option` from `Map.insert`, raises no warning.
 
 ### The `?` operator
 
 - r[err.try.unwrap] `expr?` unwraps `Ok`/`Some` or returns early with the `Err`/`None`.
 - r[err.try.from] The error must convert to the enclosing function's error type through an explicit `impl From<A> for B`. There is no automatic widening, so every error path can be traced by searching for its `From` impl.
 - `.map_err(f)` and `.ok_or(err)` cover cases with no `From` impl. r[err.try.same-type] When the error type already equals the function's error type, `?` needs no `From` impl. r[err.try.closure] Inside a closure, `?` returns from the closure, not from the enclosing function. r[err.try.option] `?` on an `Option` works only in a function that returns `Option`; in one that returns `Result`, the suggested fix is `.ok_or(e)?`.
-
-### Exhaustive `match`
-
-- r[expr.match.exhaustive] Every `match` must cover every variant. A missing case is a compile error that lists the missing variants.
-- r[expr.match.wildcard-foreign] A wildcard arm (`_`) on a non-extensible enum from another package triggers a warning, because a later major version could add variants, and the wildcard would silently swallow them when you upgrade.
-- r[expr.match.guard] Guards are allowed: `n if n > 0 => ...`. r[expr.match.guard-exhaustive] Arms with guards don't count toward exhaustiveness.
-- r[expr.match.empty-type] A case whose type has no values needs no arm. A `Result<T, Never>` can't be `Err`, so matching it needs only `Ok(v)`, and code generic over an error type can be given `Never` to say it can't fail.
-
-### Patterns
-
-- r[pat.variant-fields] A variant's named fields are matched by name: `Shape.Rect(width: w, height: h)`. r[pat.shorthand] A field name with nothing after the colon binds a variable of the same name: `Shape.Rect(width:, height:)`.
-- r[pat.rest] `..` matches the remaining fields: `Shape.Rect(width:, ..)`. r[pat.all-fields] Every field is either named or covered by `..`.
-- r[pat.forms] Literals (`0`, `"GET"`), nested patterns (`Ok(Some(x))`) and alternatives (`Shape.Circle(..) | Shape.Point`) are allowed. r[pat.alt-names] Every alternative binds the same names. r[pat.negative] A numeric literal pattern or range bound may start with `-`, as in `-5 => ...`.
-- r[pat.const] A constant is a pattern too. A `NAME`, such as `MINZ_BUF_ERROR`, or a type constant, such as `Status.OK`, matches a value equal to it under `Eq`. r[pat.const-exhaustive] Constants count like literals for exhaustiveness, and a lowercase `name` always binds a new variable.
-- r[pat.qualified-variant] A variant is always written with its enum's name, in patterns and in expressions alike: `Shape.Rect`, `LoadError.Orders`, `Command.Stop`. r[pat.bare-variants] The prelude's `Some`, `None`, `Ok` and `Err` are the only bare variant names.
-- r[pat.struct] A struct is matched the way a variant is, by its type name and named fields: `User(name:, ..)`. Every rule above applies to it.
-
-### Pattern tests with `is`
-
-r[expr.is.bool] `expr is Pattern` evaluates to `Bool` and can be used anywhere an expression can. r[expr.is.scope] Inside an `if` condition, variables bound by the pattern are in scope in the true branch, in the right side of a following && and in the body of a while the test heads (never through || or !):
-
-```
-if response is Ok(page) {
-  render(page)
-}
-```
-
-`is` complements `match`: use it to check or extract one case, and `match` when every case needs handling.
 
 ### Panics (bugs)
 
@@ -339,7 +151,7 @@ pub fn retry<T, Err, uses E>(attempts: Int, f: fn() -> Result<T, Err> uses E)
 - r[effect.effvar.combine] **Combining.** A `uses` clause can mix variables and named effects (`uses E, Clock`). Two closure parameters can share one variable or take one each (`<uses E1, uses E2>` and `uses E1, E2`). An effect variable stands for a set of effects; there is no syntax for subtracting effects from one.
 - r[effect.effvar.subsumption] Subsumption. A closure whose effects are a subset of the expected ones is accepted, so a pure closure fits wherever an effectful one is expected. r[effect.effvar.union] When several closures meet in one type, inference takes the union of their effects: a list holding a route that uses `Db` and one that uses `Net` has type `List<Route<uses Db, Net>>`.
 - r[effect.effvar.types] **Structs and enums** that store a closure take effect parameters the same way: `struct Route<uses E> { path: String, handler: fn(Request) -> Response uses E }`. So does `serve`: `pub fn serve<uses E>(port: Int, handler: fn(Request) -> Response uses E) -> Result<Unit, ServeError> uses Listen, E`. This is abridged: std.http's `serve` also takes `host:` and `max_body:`, which have defaults.
-- r[effect.effvar.iface] **Interfaces** may take effect parameters, like `Iterator<uses E>` in [Prelude and special interfaces](#interfaces-1), so `impl Iterator<uses Fs> for FileLines` can read a file one line at a time. r[effect.effvar.default-pure] Leaving out an effect argument means no effects: a `T: Iterator` bound accepts only pure iterators. r[effect.effvar.pure-ifaces] `Eq`, `Ord`, `Hash` and `Display` take no effect parameter, and neither do the operator interfaces ([Prelude and special interfaces](#operators-on-user-types)), so comparing, hashing, printing and arithmetic never have effects.
+- r[effect.effvar.iface] **Interfaces** may take effect parameters, like `Iterator<uses E>` in [Prelude and special interfaces](reference/prelude.md), so `impl Iterator<uses Fs> for FileLines` can read a file one line at a time. r[effect.effvar.default-pure] Leaving out an effect argument means no effects: a `T: Iterator` bound accepts only pure iterators. r[effect.effvar.pure-ifaces] `Eq`, `Ord`, `Hash` and `Display` take no effect parameter, and neither do the operator interfaces ([Prelude and special interfaces](reference/prelude.md)), so comparing, hashing, printing and arithmetic never have effects.
 - r[effect.effvar.contracts] **Contracts** must be pure, so a `requires` or `ensures` can't call a closure whose type includes an effect variable.
 - r[effect.effvar.diagnostic] **Diagnostics.** When a closure is rejected because its parameter type has no `uses`, the error names the closure's effects and the call in it that brings in each one. If the function is in the caller's own package, the suggested fix adds an effect variable to it.
 
@@ -469,7 +281,6 @@ r[contract.verify.opt-in] `quince` `verify` attempts to prove contracts with an 
 
 ### Modules and imports
 
-- r[prelude.only] The prelude is the only set of names a file can use without importing them, and the [table of prelude names](#prelude-names) lists every one. r[prelude.contents] It holds `Option`, `Result` and their variants, the number, text, time and collection types, the core and operator interfaces, the built-in effects, `TaskScope`, `FailurePolicy`, `ScopeFailed`, `assert`, `todo`, `unreachable` and `dbg`. r[prelude.not-ref-types] The other reference types of [Types](reference/types.md) are not in it: `Ref`, `Atomic`, `ConcurrentMap`, `Channel` and `Pool` are imported from std.sync, and `Resource`, `Callback` and the C types from std.ffi. r[prelude.fixed] The language fixes the prelude, and it changes only in an edition. r[prelude.criterion] A name is in the prelude only if the language's syntax or the compiler needs it, so any name that isn't imported is a language name. Everything else, including test helpers such as `fixed_clock` from std.testing, is imported.
 - r[diag.query.signature-location] Since an import doesn't name a file, `quince` `query signature <name>` and the language server return the file and line where any name is defined.
 
 ### Packages
@@ -967,53 +778,6 @@ Only the name remains open. Every design question raised in the v0.1 and v0.2 re
 
 ## Appendix: Expression grammar
 
-```ebnf
-expr        = jump | logic | range | bits
-jump        = "return" [ expr ] | "break" | "continue"
-            | "spawn" [ "in" postfix ] expr   // a TaskScope value: bg, self.bg
-
-logic       = compare { "&&" compare }
-            | compare "||" compare { "||" compare }   // never mixed with &&
-compare     = arith [ cmp_op arith | "is" pattern ]    // never chained
-cmp_op      = "==" | "!=" | "<" | "<=" | ">" | ">="
-range       = arith ( ".." | "..=" ) arith
-bits        = prefix "&" prefix { "&" prefix }
-            | prefix "|" prefix { "|" prefix }
-            | prefix "^" prefix { "^" prefix }
-            | prefix ( "<<" | ">>" ) prefix
-
-arith       = term { ( "+" | "-" ) term }
-term        = prefix { ( "*" | "/" | "%" ) prefix }
-prefix      = ( "-" | "!" | "~" ) prefix | postfix
-postfix     = primary { "." ( name | NAME ) [ type_args ] [ args ] | "." int | args | "[" expr "]" | "?" }
-// type_path covers None, ChannelClosed, Int.MAX's Int and PgDb.new's PgDb; type_path args builds a newtype or a prelude variant: UserId(1), Some(x)
-args        = "(" [ arg { "," arg } [ "," ] ] ")"
-arg         = expr | name ":" [ expr ]   // name: alone passes the binding name
-
-primary     = literal | path [ type_args ] | type_path [ type_args ] | NAME | "self" | "(" expr ")" | tuple
-            | list_lit | map_lit | struct_lit | closure
-            | if_expr | match_expr | concurrent | background | select | with_expr
-tuple       = "(" ")" | "(" expr "," expr { "," expr } [ "," ] ")"
-list_lit    = "[" [ expr { "," expr } [ "," ] ] "]"
-map_lit     = "{" ":" "}" | "{" entry { "," entry } [ "," ] "}"
-entry       = expr ":" expr
-closure     = "fn" "(" [ cparam { "," cparam } [ "," ] ] ")" [ "->" type ] [ "uses" effects ] block
-cparam      = ( name | "_" ) [ ":" type ]
-if_expr     = "if" expr block [ "else" ( if_expr | block ) ]
-match_expr  = "match" expr "{" { arm "," } "}"
-arm         = pattern [ "if" expr ] "=>" ( block | expr )
-
-block       = "{" { stmt NEWLINE } [ stmt ] "}"   // a last stmt that is an expr is the value
-stmt        = "let" pattern [ ":" type ] "=" expr
-            | "var" name [ ":" type ] "=" expr
-            | place assign_op expr
-            | "for" pattern "in" expr block
-            | "while" expr block
-            | expr
-place       = ( name | "self" ) { "." name | "[" expr "]" }   // self only under var self
-assign_op   = "=" | "+=" | "-=" | "*=" | "/=" | "%="
-```
-
 ### Declarations, types and patterns
 
 ```ebnf
@@ -1024,13 +788,6 @@ c_fn         = "fn" c_name "(" [ c_name ":" type { "," c_name ":" type } [ "," ]
 test_decl    = "test" string [ "forall" "(" params ")" ] [ "uses" effects ] block
 effects      = "*" | effect_ref { "," effect_ref }      // "*" only on main
 effect_ref   = type_path | Name                          // an effect or an effect variable
-
-pattern      = alt { "|" alt }
-alt          = "_" | [ "-" ] literal [ ( ".." | "..=" ) [ "-" ] literal ] | name | NAME | type_path "." NAME | tuple_pat | variant_pat
-tuple_pat    = "(" pattern "," pattern { "," pattern } [ "," ] ")"
-variant_pat  = type_path [ "(" ( pattern { "," pattern } | pfields ) ")" ]
-pfields      = ".." | pfield { "," pfield } [ "," ".." ]
-pfield       = name ":" [ pattern ]
 
 concurrent   = "concurrent" [ "(" arg { "," arg } ")" ]
                ( "{" spawn { "," spawn } [ "," ] "}" | "for" pattern "in" expr block )
@@ -1043,75 +800,9 @@ handler      = type_path "=" expr
 
 ## Appendix: Prelude
 
-The prelude is every name a file can use without an import ([Prelude and special interfaces](#modules-and-imports)). Signatures are written the way `quince` `query signature` prints them. r[prelude.hash-eq] A type parameter written `T: Hash` on a key type also requires `Eq`, which every type with `Hash` has. r[prelude.ord-eq] Likewise `T: Ord` implies `T: Eq`, and a type can implement `Ord` only when it has `Eq`. A `fn` with no body, a `{ ... }` body, or a one-line `{ fn ... }` interface or impl, here and in examples elsewhere in the spec, is a signature listing, not compilable code.
-
 ### Prelude names
 
-| Name | Kind |
-| --- | --- |
-| Int, Int8…Int64, UInt8…UInt64, Float, Float32, Bool, Char, String, Bytes, Unit | Built-in types |
-| List, Map, Set, Option, Result, tuples, function types | Built-in types |
-| Duration, Timestamp, Url, Regex, Range, Iter | Types of tagged literals and ranges |
-| Some, None, Ok, Err | Variants written bare |
-| Eq, Ord, Ordering, Hash, Hasher, Display, Iterator, From, Encode, Decode, Add, Sub, Mul, Div, Rem, Neg | Interfaces and their helper types (the operator interfaces are in [Operators on user types](#operators-on-user-types)) |
-| TaskScope, FailurePolicy, ScopeFailed | Types the background form names ([Concurrency](#long-lived-work-fire-and-forget)) |
-| Never, DecodeError, InvalidFormat | Types the compiler produces or the prelude's own signatures name |
-| assert, todo, unreachable, dbg | Functions |
-| Net, Listen, Fs, Clock, Random, Env, Process, Console, State | Built-in effects ([Effects](#built-in-effects)) |
-
-A name is in the prelude only if the language's syntax or the compiler needs it ([Prelude and special interfaces](#modules-and-imports)). r[effect.builtin-ops-no-import] Calling a built-in effect's operations never needs an import.
-
-### Interfaces
-
-```
-pub interface Eq { fn eq(self, other: Self) -> Bool }
-pub interface Ord { fn compare(self, other: Self) -> Ordering }
-pub enum Ordering { Less, Equal, Greater }
-impl Ordering {
-  fn reversed(self) -> Ordering                 // for descending sorts
-  fn then(self, next: Ordering) -> Ordering     // self unless Equal, for sorting by several keys
-}
-pub interface Hash { fn hash(self, hasher: Hasher) -> Hasher }
-pub interface Display { fn display(self) -> String }
-pub interface From<T> { fn from(value: T) -> Self }
-pub interface Encode { fn encode(self) -> encoding.Data }
-pub interface Decode { fn decode(data: encoding.Data) -> Result<Self, DecodeError> }
-pub interface Iterator<uses E> {
-  type Item
-  fn next(var self) -> Option<Self.Item> uses E
-}
-
-impl Hasher {
-  fn add<T: Hash>(self, value: T) -> Hasher
-  fn add_bytes(self, bytes: Bytes) -> Hasher
-}
-
-pub struct DecodeError { pub path: String, pub expected: String, pub found: String }
-```
-
-- `Eq`, `Hash`, `Encode` and `Decode` are usually automatic ([Automatic equality and hashing](#automatic-equality-and-hashing)). `Ord` and `Display` are always written by hand.
-- r[prelude.encode-data] `Encode` and `Decode` write to encoding.Data, the format-neutral data model in std.encoding. Code calls a format (`json.encode(x)`) rather than these methods, and implements them only for a custom wire form.
-- r[prelude.display-impls] `String`, every number type, `Bool`, `Char`, `Duration`, `Timestamp` and `Url` implement `Display`, which string interpolation calls.
-- r[prelude.eq-ord-impls] Every number type, `Bool`, `Char`, `String`, `Bytes`, `Duration` and `Timestamp` implement `Eq`, `Ord` and `Hash`; floats use their total order ([Types](reference/types.md)). r[prelude.unit-url-eq] `Unit` and `Url` implement `Eq` and `Hash`. r[prelude.collection-eq] `List`, `Map`, `Set`, `Option`, `Result` and tuples implement `Eq` and `Hash` when their element types do, and `List` and tuples implement `Ord` too, comparing element by element. r[prelude.no-other-ord] No other built-in type implements `Ord`.
-
-### Functions
-
-```
-pub fn assert(condition: Bool, message: String = "")
-pub fn todo(reason: String) -> Never
-pub fn unreachable(reason: String) -> Never
-pub fn dbg<T>(value: T) -> T
-```
-
-- r[prelude.assert] When the condition passed to `assert` is a comparison, a failure prints both sides.
-
-### List
-
-- r[expr.index.list] `xs[i]` is `xs.get(i)` that panics when `i` is out of range ([Errors and failure](#panics-bugs)).
-
-### Duration, Timestamp, Url and Regex
-
-- r[prelude.tagged-values] The tagged literals `dur"30s"`, `ts"..."`, `url"..."` and `re"..."` build `Duration`, `Timestamp`, `Url` and `Regex` values at compile time. `parse` and `Regex.new` build them from text at runtime.
+r[effect.builtin-ops-no-import] Calling a built-in effect's operations never needs an import.
 
 ### Reference types and concurrency (std.sync)
 
