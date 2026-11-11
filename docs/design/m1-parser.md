@@ -12,7 +12,7 @@ The tree matters more than the parser code. The formatter, `fix`, `query`, name 
 
 - **Code:** `quince_syntax` gets `parser`, `cst` and `validate` modules, and its README gets the CST contract. `SyntaxBackend::parse` runs the parser. `cargo xtask conformance` gets a coverage ratchet (decision 12).
 - **Dependencies (decided by David, 2026-11-11):**
-  - **A. The CST:** the `rowan` crate (decision 2). Layer 0 pins its version, after checking its dependencies and minimum Rust version against `rust-toolchain.toml`.
+  - **A. The CST:** the `rowan` crate (decision 2). Layer 0 pinned `=0.17.0` (decided by David, 2026-11-11): the newest stable release, on the line rust-analyzer follows. The 0.16 line this doc was reviewed against ended in a yanked release, and 0.18 is a prerelease that moves trivia onto tokens. 0.17 depends on `countme`, `hashbrown`, `memoffset` (which builds with `autocfg`), `rustc-hash` and `text-size`, declares no minimum Rust version, and builds on 1.99.1.
   - **B. Snapshots:** none. Unit tests compare hand-written tree dumps (decision 11). Layer 0 corrects the repo plan's step 3, which asks for snapshot tests.
   - **C. The fuzzer:** a `cargo-fuzz` target, outside the workspace and outside CI (decision 11). It adds `libfuzzer-sys` to the fuzz crate only, and needs nightly Rust wherever it runs.
 - **Spec (decided by David, 2026-11-11):** Spec questions, below, has fourteen questions, each with its approved wording. Each rule lands in the layer whose code enforces it, and each such layer bumps the spec's minor version.
@@ -70,7 +70,7 @@ The parser is the `parser` module of `quince_syntax`, with a submodule for each 
 
 The tree is a `rowan` tree (decided by David, 2026-11-11). `rowan` is the tree rust-analyzer runs on, and it fixes nothing about the language: the kinds and the shape are Quince's. It has two layers:
 - An immutable green tree: each node holds a kind, a text length and its children, and each token holds a kind and its text. Green nodes can be shared.
-- A red layer over it, built on demand, that gives each node its parent and its offset. Consumers walk the red layer, and later use its token-at-offset lookups and tree editing (M5).
+- A red layer over it, built on demand, that gives each node its parent and its offset. Consumers walk the red layer, and later use its token-at-offset lookups and tree editing (M5). Since 0.17, `rowan` edits only by building new green trees (`replace_with`, `splice_children`), as rust-analyzer now does: it has no in-place mutable trees.
 
 Node kinds join tokens in `SyntaxKind`. Every lexer token appears in the tree, in order and with its text, trivia included, so the tree's text is the input exactly. The one exception is the joins: two CST tokens each hold two lexer tokens (decision 5). No node or token is empty, except the root of an empty file.
 
@@ -475,10 +475,10 @@ Rule IDs in brackets are what each task's fixtures cite. Grammar productions are
 - [x] The coverage ratchet and `cargo xtask conformance --write`; `AGENTS.md`.
 
 **Layer 0: `m1/parser-cst`**
-- [ ] Add `rowan`, pinned after checking its dependencies and minimum Rust version.
-- [ ] `SyntaxError` replaces `LexError`; split `codes::ALL` so the lexer's mutation test requires the lexer's codes.
-- [ ] Events, the tree builder and the CST; trivia placement (decision 3); the tree dumps, with and without trivia; tests on hand-built events.
-- [ ] Correct the repo plan's step 3 to match decision 11.
+- [x] Add `rowan`, pinned after checking its dependencies and minimum Rust version: `=0.17.0`.
+- [x] `SyntaxError` replaces `LexError`; split `codes::ALL` so the lexer's mutation test requires the lexer's codes: `codes::LEXER`, `codes::PARSER` and `codes::all()`.
+- [x] Events, the tree builder and the CST; trivia placement (decision 3); the tree dumps, with and without trivia; tests on hand-built events. The README starts its CST section with the builder's rules.
+- [x] Correct the repo plan's step 3 to match decision 11.
 
 **Layer 1: `m1/parser-core`**
 - [ ] Spec: question 2, and a bump.

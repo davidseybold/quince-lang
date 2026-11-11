@@ -1,6 +1,6 @@
 //! The lexer: source text to a lossless token stream (`README.md` has the contract).
 
-use crate::{Decoded, LexError, SyntaxKind, codes};
+use crate::{Decoded, SyntaxError, SyntaxKind, codes};
 use control::ControlIn;
 use quince_diagnostics::{Applicability, Diagnostic, LineIndex};
 use std::ops::Range;
@@ -24,7 +24,7 @@ pub struct Token {
 pub struct Lexed {
     pub tokens: Vec<Token>,
     /// Decoding errors, then lexing errors, each in order of position.
-    pub errors: Vec<LexError>,
+    pub errors: Vec<SyntaxError>,
 }
 
 impl Lexed {
@@ -76,7 +76,7 @@ struct Lexer<'a> {
     /// Where a one-line literal with no closing quote stopped: a line ending.
     unclosed_literal_end: Option<usize>,
     tokens: Vec<Token>,
-    errors: Vec<LexError>,
+    errors: Vec<SyntaxError>,
 }
 
 impl<'a> Lexer<'a> {
@@ -192,7 +192,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn lone_carriage_return(&mut self, at: usize) {
-        let error = LexError::new(
+        let error = SyntaxError::new(
             at..at + 1,
             codes::LONE_CARRIAGE_RETURN,
             "a carriage return must be followed by a line feed: a line ends at LF or CR LF"
@@ -218,7 +218,7 @@ impl<'a> Lexer<'a> {
         let end = close.map_or(self.text.len(), |close| start + 2 + close + 2);
         let error = match close {
             Some(_) => {
-                let error = LexError::new(
+                let error = SyntaxError::new(
                     start..end,
                     codes::BLOCK_COMMENT,
                     "Quince has no block comments; use `//` line comments".to_string(),
@@ -232,7 +232,7 @@ impl<'a> Lexer<'a> {
                     None => error,
                 }
             }
-            None => LexError::new(
+            None => SyntaxError::new(
                 start..start + 2,
                 codes::BLOCK_COMMENT,
                 "Quince has no block comments, and this one is never closed, so it runs to the \
@@ -298,7 +298,7 @@ impl<'a> Lexer<'a> {
         let joins_slashes = self.text[..start].ends_with('/') && self.rest()[1..].starts_with('/');
         let delete = vec![(start..start + 1, String::new())];
         let error = if at_line_end {
-            let error = LexError::new(
+            let error = SyntaxError::new(
                 start..start + 1,
                 codes::SEMICOLON,
                 "a statement ends at the line break, so it needs no `;`".to_string(),
@@ -316,7 +316,7 @@ impl<'a> Lexer<'a> {
                 error.with_fix("delete the `;`", Applicability::Safe, delete)
             }
         } else {
-            LexError::new(
+            SyntaxError::new(
                 start..start + 1,
                 codes::SEMICOLON,
                 "statements end at line breaks, not at `;`: put the next statement on a line of its own".to_string(),
@@ -342,7 +342,7 @@ impl<'a> Lexer<'a> {
             len += c.len_utf8();
         }
         let run = &self.text[start..start + len];
-        let mut error = LexError::new(
+        let mut error = SyntaxError::new(
             start..start + len,
             codes::UNKNOWN_CHARACTER,
             unknown_message(run),

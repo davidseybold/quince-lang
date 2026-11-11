@@ -77,11 +77,11 @@ v0.4 rules the layout has to respect:
 The parser lives in `compiler/syntax` (`quince_syntax`). It has no dependencies on the rest of the compiler and no LLVM, so it builds in seconds.
 
 1. Assemble the spec's grammar into `spec/grammar.ebnf`, and add a CI check that the file matches the spec text.
-2. Write a hand-written recursive-descent parser that produces a lossless CST, in the style of `rowan`. Agent tools need comments and spacing preserved: `fmt`, `fix` and the LSP all rewrite source, and error recovery depends on it too.
+2. Write a hand-written recursive-descent parser that produces a lossless CST, a `rowan` tree ([parser doc](design/m1-parser.md), decision 2). Agent tools need comments and spacing preserved: `fmt`, `fix` and the LSP all rewrite source, and error recovery depends on it too.
 3. Tests:
    - One conformance test per grammar production, tagged with its rule ID.
-   - Snapshot tests of the CST and of parse errors.
-   - A fuzzer that checks the parser never panics, and that printing the CST gives back the exact input.
+   - Unit tests that compare tree dumps with hand-written expected text, with no snapshot crate. Parse errors are checked by `parse` fixtures, and error recovery by unit tests.
+   - A `cargo-fuzz` target that checks the parser never panics, and that printing the CST gives back the exact input. It runs outside CI, on nightly Rust, as a bug hunt with no set length. Every crash it finds becomes a CI test.
 4. Next, `quince fmt`, since the formatter only needs the CST. After that, name resolution.
 
 ## Pipeline

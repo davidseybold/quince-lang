@@ -4,7 +4,7 @@ use super::Lexer;
 use super::control::{ControlIn, is_control};
 use super::string::{EscapeIn, escape_error, opens_unicode};
 use crate::literal::{char_body_len, char_escape};
-use crate::{LexError, SyntaxKind, codes};
+use crate::{SyntaxError, SyntaxKind, codes};
 use quince_diagnostics::Applicability;
 use std::ops::Range;
 
@@ -63,7 +63,7 @@ impl Lexer<'_> {
             // The CR is what is wrong, and E0013 reports it alone.
             let lone_cr = text[end..].starts_with('\r') && !text[end..].starts_with("\r\n");
             if !lone_cr {
-                let error = LexError::new(
+                let error = SyntaxError::new(
                     open..open + 1,
                     codes::INVALID_CHAR,
                     "this char literal has no closing `'` on its line: a char literal is one \
@@ -73,7 +73,7 @@ impl Lexer<'_> {
                 self.errors.insert(first_error, error);
             }
         } else if chars == 0 {
-            let error = LexError::new(
+            let error = SyntaxError::new(
                 open..end,
                 codes::INVALID_CHAR,
                 "`''` is empty: a char literal holds exactly one Unicode scalar value".to_string(),
@@ -92,8 +92,8 @@ impl Lexer<'_> {
 /// character, which `valid` is false for, since the fix for those errors comes first, or the
 /// `"` would join what comes before it: a name character, which would make it a literal's
 /// prefix, or a `"`.
-fn too_many_error(text: &str, range: Range<usize>, body: &str, valid: bool) -> LexError {
-    let error = LexError::new(
+fn too_many_error(text: &str, range: Range<usize>, body: &str, valid: bool) -> SyntaxError {
+    let error = SyntaxError::new(
         range.clone(),
         codes::INVALID_CHAR,
         "a char literal holds exactly one Unicode scalar value: text goes in a `\"` string"

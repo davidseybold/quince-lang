@@ -1,7 +1,7 @@
 //! Lexer errors and their fixes, and decoding.
 
 use super::check_invariants;
-use crate::{LexError, Lexed, SyntaxKind, decode_source, lex, lex_str};
+use crate::{Lexed, SyntaxError, SyntaxKind, decode_source, lex, lex_str};
 use quince_diagnostics::{Applicability, Code, Position, lookup};
 
 /// Each error as `code start..end`, then its fixed text when it has one fix.
@@ -24,7 +24,7 @@ pub(super) fn check_error_ranges(text: &str, lexed: &Lexed) {
     }
 }
 
-fn describe(text: &str, e: &LexError) -> String {
+fn describe(text: &str, e: &SyntaxError) -> String {
     let mut out = format!("{} {:?}", e.code, e.range);
     if let [fix] = e.fixes.as_slice() {
         let mut fixed = text.to_string();
@@ -206,7 +206,7 @@ fn diagnostics_have_positions_and_fixes() {
 
 #[test]
 fn every_code_is_registered() {
-    for code in crate::codes::ALL {
+    for code in crate::codes::all() {
         let code = Code::parse(code).unwrap();
         assert!(lookup(&code).is_some(), "{code} isn't registered");
     }

@@ -1,7 +1,7 @@
 //! Control and bidirectional-format characters in literals and comments (E0015).
 
 use super::Lexer;
-use crate::{LexError, codes};
+use crate::{SyntaxError, codes};
 use quince_diagnostics::Applicability;
 use std::ops::Range;
 
@@ -66,7 +66,7 @@ impl Lexer<'_> {
 
 /// The E0015 for the characters `run`, at `range`, in a literal or comment of the kind
 /// `within`.
-fn control_error(run: &str, range: Range<usize>, within: ControlIn) -> LexError {
+fn control_error(run: &str, range: Range<usize>, within: ControlIn) -> SyntaxError {
     let first = run.chars().next().expect("a run isn't empty");
     let shown = match run.chars().count() {
         1 => code_point(first),
@@ -105,7 +105,7 @@ fn control_error(run: &str, range: Range<usize>, within: ControlIn) -> LexError 
         }
         ControlIn::Comment => format!("{shown} can't appear in a comment, which can't hold {what}"),
     };
-    let error = LexError::new(range.clone(), codes::CONTROL_CHARACTER, message);
+    let error = SyntaxError::new(range.clone(), codes::CONTROL_CHARACTER, message);
     let escapes: String = match within {
         ControlIn::String | ControlIn::Char => (run.chars())
             .map(|c| format!("\\u{{{:X}}}", u32::from(c)))
