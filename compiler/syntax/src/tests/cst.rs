@@ -146,25 +146,10 @@ fn the_root_holds_trivia_before_and_after_everything() {
 /// of a line belongs to the node that holds the line.
 #[test]
 fn trivia_goes_outside_nodes() {
-    let events = vec![
-        s(File),
-        s(FnDecl),
-        T,
-        s(Name),
-        T,
-        F,
-        T,
-        T,
-        s(Block),
-        T,
-        s(Name),
-        T,
-        F,
-        T,
-        F,
-        F,
-        F,
-    ];
+    let block = [s(Block), T, s(Name), T, F, T, F];
+    let mut events = vec![s(File), s(FnDecl), T, s(Name), T, F, T, T];
+    events.extend(block);
+    events.extend([F, F]);
     let root = tree("fn f() {\n  a // c\n}", events);
     assert_eq!(
         dump_tree(&root),
