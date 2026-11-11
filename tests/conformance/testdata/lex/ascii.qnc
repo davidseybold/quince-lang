@@ -1,0 +1,8 @@
+// rule: lex.source.ascii
+// mode: parse
+// Names are ASCII. Comments and literals may hold any character: café, 😀.
+fn f() {
+  let café = 1 //~ E0001
+  let s = "café 😀"
+  let c = 'é'
+}

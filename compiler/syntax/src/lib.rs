@@ -1,12 +1,125 @@
 //! Lexer, parser, lossless CST and formatter for Quince source.
 //!
-//! The token contract the parser builds on is in this crate's `README.md`.
+//! The token contract and the error contract the parser builds on are in this crate's
+//! `README.md`.
 
 mod kind;
 mod lexer;
+mod source;
 
 pub use kind::SyntaxKind;
-pub use lexer::{Lexed, Token, lex_str};
+pub use lexer::{Lexed, Token, lex, lex_str};
+pub use source::{Decoded, decode_source};
+
+use quince_diagnostics::{Applicability, Code, Diagnostic, Edit, Fix, LineIndex, Span};
+use std::ops::Range;
+
+/// The codes this crate reports. Each has a row in `quince_diagnostics`'s registry.
+pub mod codes {
+    pub const UNKNOWN_CHARACTER: &str = "E0001";
+    pub const SEMICOLON: &str = "E0002";
+    pub const BLOCK_COMMENT: &str = "E0003";
+    pub const LONE_CARRIAGE_RETURN: &str = "E0013";
+    pub const INVALID_UTF8: &str = "E0014";
+    pub const ALL: [&str; 5] = [
+        UNKNOWN_CHARACTER,
+        SEMICOLON,
+        BLOCK_COMMENT,
+        LONE_CARRIAGE_RETURN,
+        INVALID_UTF8,
+    ];
+}
+
+/// A problem found while decoding or lexing, in byte offsets of the decoded text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LexError {
+    pub range: Range<u32>,
+    /// One of [`codes`].
+    pub code: &'static str,
+    pub message: String,
+    pub fixes: Vec<LexFix>,
+}
+
+/// A fix whose edits replace byte ranges of the decoded text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LexFix {
+    pub description: String,
+    pub applicability: Applicability,
+    pub edits: Vec<(Range<u32>, String)>,
+}
+
+impl LexError {
+    fn new(range: Range<usize>, code: &'static str, message: String) -> LexError {
+        LexError {
+            range: offset(range.start)..offset(range.end),
+            code,
+            message,
+            fixes: Vec::new(),
+        }
+    }
+
+    fn with_fix(
+        mut self,
+        description: &str,
+        applicability: Applicability,
+        edits: Vec<(Range<usize>, String)>,
+    ) -> LexError {
+        let edits = edits
+            .into_iter()
+            .map(|(range, text)| (offset(range.start)..offset(range.end), text))
+            .collect();
+        self.fixes.push(LexFix {
+            description: description.to_string(),
+            applicability,
+            edits,
+        });
+        self
+    }
+
+    /// This error as a diagnostic in `file`, with positions from `index`, the index of the
+    /// decoded text.
+    pub fn to_diagnostic(&self, file: &str, index: &LineIndex) -> Diagnostic {
+        let code = Code::parse(self.code).expect("lexer codes are well formed");
+        let span = |range: &Range<u32>| Span {
+            file: file.to_string(),
+            start: index.position(range.start as usize),
+            end: index.position(range.end as usize),
+        };
+        let mut diagnostic = Diagnostic::new(
+            code.clone(),
+            code.default_severity(),
+            self.message.clone(),
+            span(&self.range),
+        );
+        diagnostic.fixes = self
+            .fixes
+            .iter()
+            .map(|fix| Fix {
+                description: fix.description.clone(),
+                applicability: fix.applicability,
+                edits: fix
+                    .edits
+                    .iter()
+                    .map(|(range, text)| {
+                        let span = span(range);
+                        Edit {
+                            file: None,
+                            start: span.start,
+                            end: span.end,
+                            text: text.clone(),
+                        }
+                    })
+                    .collect(),
+            })
+            .collect();
+        diagnostic
+    }
+}
+
+/// Source text is at most 4 GiB ([`decode_source`]), so every offset fits.
+fn offset(n: usize) -> u32 {
+    u32::try_from(n).expect("source offsets fit in u32")
+}
 
 #[cfg(test)]
 mod tests;

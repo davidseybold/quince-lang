@@ -1,7 +1,7 @@
 //! `cargo xtask conformance`: runs every fixture and writes the coverage report to
 //! `target/conformance/coverage.json`.
 
-use quince_conformance::{NoBackend, coverage, discover, load_rules, run_file};
+use quince_conformance::{SyntaxBackend, coverage, discover, load_rules, run_file};
 use std::path::Path;
 
 pub const REPORT_PATH: &str = "target/conformance/coverage.json";
@@ -9,10 +9,10 @@ pub const REPORT_PATH: &str = "target/conformance/coverage.json";
 pub fn check(root: &Path) -> Result<(), String> {
     let rules = load_rules(root).map_err(|errors| report("can't load rule IDs", &errors))?;
     let files = discover(root).map_err(|errors| report("can't read the fixtures", &errors))?;
-    // M1 replaces NoBackend with the parser, so check fixtures start passing.
+    // Only `parse` is wired so far: `check` fixtures fail until M2, and `run` until M6.
     let results: Vec<_> = files
         .iter()
-        .map(|file| run_file(file, &rules, &NoBackend))
+        .map(|file| run_file(file, &rules, &SyntaxBackend))
         .collect();
     let failed: Vec<_> = results.iter().filter(|r| !r.passed()).collect();
     for result in &failed {

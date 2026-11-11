@@ -39,7 +39,7 @@ A spec change that adds normative text tags it in the same PR. No check can tell
 | `spec/` | The language spec. The source of truth for what Quince means. Don't edit it without David's approval. |
 | `compiler/<name>/` | One crate per compiler stage, named `quince_<name>`. Each crate's `lib.rs` says what it holds, and its `README.md`, when it has one, holds the formats and rules it enforces. |
 | `compiler/cli/` | The single `quince` binary. |
-| `compiler/syntax/` | `quince_syntax`: the lexer, then the parser and formatter. Its `README.md` holds the token contract. |
+| `compiler/syntax/` | `quince_syntax`: source decoding and the lexer, then the parser and formatter. Its `README.md` holds the token contract and the errors the lexer owns. |
 | `compiler/spec/` | `quince_spec`: reads the spec (chapter manifest, rule tags, `ebnf` grammar blocks) for xtask and the conformance runner. |
 | `runtime/` | The runtime, built as a static library linked into every Quince binary. |
 | `std/` | The standard library in Quince (from M6), and `std/API.md`, its API doc. For a std signature, read `std/API.md`; once `quince query` works (M5), use it instead. |

@@ -1,0 +1,6 @@
+﻿// rule: lex.source.bom
+// mode: parse
+// A byte order mark at the start is ignored. Anywhere else it is a stray character.
+fn f() {
+  let a = 1 ﻿ //~ E0001
+}
