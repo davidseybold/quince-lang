@@ -195,7 +195,7 @@ fn keywords_and_punctuation() {
     }
 }
 
-/// A keyword or punctuation token continues a line exactly when it is in [`CONTINUES_LINE`].
+/// A kind continues a line exactly when it is a keyword or punctuation in [`CONTINUES_LINE`].
 #[test]
 fn continues_line() {
     for text in CONTINUES_LINE {
@@ -210,6 +210,9 @@ fn continues_line() {
             CONTINUES_LINE.contains(&text),
             "{text}"
         );
+    }
+    for kind in SyntaxKind::TOKENS {
+        assert!(!kind.continues_line(), "{kind:?} must not continue a line");
     }
 }
 
