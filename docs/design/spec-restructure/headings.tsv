@@ -52,7 +52,6 @@ moved	L756	### Packages	spec/reference/packages.md	## Packages
 moved	L756	### Packages	spec/quince-spec.md	### Packages
 moved	L833	### Editions	spec/reference/packages.md	## Editions
 moved	L1385	## Appendix: Prelude	spec/reference/prelude.md	# Prelude and special interfaces
-moved	L1385	## Appendix: Prelude	spec/quince-spec.md	## Appendix: Prelude
 moved	L1405	### Interfaces	spec/reference/prelude.md	## Interfaces
 moved	L1438	### Functions	spec/reference/prelude.md	## Functions
 moved	L1620	### List	spec/reference/expressions.md	## Indexing and slicing
@@ -70,18 +69,15 @@ moved	L466	### Expected failures: `Result` and `Option`	spec/reference/errors.md
 moved	L481	### The `?` operator	spec/reference/errors.md	## The `?` operator
 moved	L515	### Panics (bugs)	spec/reference/errors.md	## Panics (bugs)
 moved	L531	## 5. Effects and capabilities	spec/reference/effects.md	# Effects
-moved	L531	## 5. Effects and capabilities	spec/quince-spec.md	## 5. Effects and capabilities
 moved	L535	### Built-in effects	spec/reference/effects.md	## Built-in effects
 moved	L575	### Declaring and inferring	spec/reference/effects.md	## Declaring and inferring
 moved	L587	### Effect variables	spec/reference/effects.md	## Effect variables
 moved	L628	### Handlers in tests and production	spec/reference/effects.md	## Handlers in tests and production
-moved	L628	### Handlers in tests and production	spec/quince-spec.md	### Handlers in tests and production
 moved	L661	## 6. Contracts and testing	spec/reference/contracts.md	# Contracts
 moved	L661	## 6. Contracts and testing	spec/quince-spec.md	## 6. Contracts and testing
 moved	L665	### `requires` and `ensures`	spec/reference/contracts.md	## `requires` and `ensures`
 moved	L728	### Static verification (optional)	spec/reference/contracts.md	## Static verification (optional)
 moved	L911	## 9. Concurrency	spec/reference/concurrency.md	# Concurrency
-moved	L911	## 9. Concurrency	spec/quince-spec.md	## 9. Concurrency
 moved	L915	### Concurrent blocks	spec/reference/concurrency.md	## Concurrent blocks
 moved	L936	### Fan-out over a collection	spec/reference/concurrency.md	## Fan-out over a collection
 moved	L955	### Long-lived work (fire and forget)	spec/reference/concurrency.md	## Long-lived work (fire and forget)
@@ -90,4 +86,26 @@ moved	L995	### Shared state	spec/reference/concurrency.md	## Shared state
 moved	L1003	### Waiting on several channels	spec/reference/concurrency.md	## Waiting on several channels
 moved	L1899	### Reference types and concurrency (std.sync)	spec/reference/concurrency.md	## Failure, timeout and channel types
 moved	L1962	### Built-in effect operations	spec/reference/effects.md	## Built-in effect operations
-moved	L1962	### Built-in effect operations	spec/quince-spec.md	### Built-in effect operations
+moved	L610	### Capabilities at runtime	spec/reference/execution.md	## Capabilities at runtime
+moved	L661	## 6. Contracts and testing	spec/reference/testing.md	# Testing
+moved	L661	## 6. Contracts and testing	spec/quince-spec.md	## 6. Contracts and testing
+moved	L685	### Executable examples in doc comments	spec/reference/testing.md	## Executable examples in doc comments
+moved	L698	### Unit tests	spec/reference/testing.md	## Unit tests
+moved	L698	### Unit tests	spec/quince-spec.md	### Unit tests
+moved	L707	### Integration tests	spec/reference/testing.md	## Integration tests
+moved	L715	### Property tests	spec/reference/testing.md	## Property tests
+moved	L1033	### Deterministic testing	spec/reference/testing.md	## Deterministic testing
+moved	L1037	### Calling C	spec/reference/interop.md	## Calling C
+moved	L1062	### Memory management	spec/reference/memory.md	# Memory
+moved	L1099	## 11. Interop	spec/reference/interop.md	# Interop with C
+moved	L1103	### Generated bindings	spec/reference/interop.md	## Generated bindings
+moved	L1149	### C types	spec/reference/interop.md	## C types
+moved	L1177	### Trust	spec/reference/interop.md	## Trust
+moved	L1188	### Linking	spec/reference/interop.md	## Linking
+moved	L1203	### Memory across the boundary	spec/reference/interop.md	## Memory across the boundary
+moved	L1229	### Callbacks	spec/reference/interop.md	## Callbacks
+moved	L1257	### Testing foreign code	spec/reference/interop.md	## Testing foreign code
+dropped	L1267	## Appendix: Expression grammar
+dropped	L1320	### Declarations, types and patterns
+new	spec/reference/execution.md	# Program execution
+new	spec/reference/execution.md	## The `main` function and process exit

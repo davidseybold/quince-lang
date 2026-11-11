@@ -26,7 +26,7 @@ effect_ref   = type_path | Name                          // an effect or an effe
 
 r[effect.decl] Packages declare their own effects with `effect`, naming the built-in effects each one is built on and listing its operations. r[effect.handler.def] A handler is any value whose type implements the operations with `impl Db for T`, and only those bodies may perform the underlying effects. r[effect.handler.crossing] A handler's type must be able to cross task boundaries ([Types](types.md)), since tasks inherit handlers ([Concurrency](concurrency.md)); that's why `PgDb` holds a `Pool` rather than a single connection:
 
-`pg`, `PgConn` and `PgError`, here and in [Interop with C](../quince-spec.md#11-interop), stand for a hypothetical third-party Postgres package. They are not part of std.
+`pg`, `PgConn` and `PgError`, here and in [Interop with C](interop.md), stand for a hypothetical third-party Postgres package. They are not part of std.
 
 ```
 pub effect Db uses Net, State {
@@ -201,5 +201,5 @@ pub enum NetError { Refused, TimedOut, Reset, NameNotFound(host: String), Permis
 ```
 
 - r[effect.state-no-ops] `State` has no operations. It is the permission for the reference-type methods in [std.sync](../../std/API.md#reference-types-and-concurrency-stdsync).
-- A manifest limit that refuses an operation returns `FsError.PermissionDenied` or `NetError.PermissionDenied` ([Program execution](../quince-spec.md#capabilities-at-runtime)).
+- A manifest limit that refuses an operation returns `FsError.PermissionDenied` or `NetError.PermissionDenied` ([Program execution](execution.md)).
 - Sleeping, accepting and receiving are cancellation points like every effectful call ([Cancellation](concurrency.md#cancellation)).

@@ -21,6 +21,10 @@ Part I, the language:
 - [Effects](reference/effects.md): the built-in effects, declaring effects, effect variables, handlers and `with`, and the built-in effects' operations.
 - [Concurrency](reference/concurrency.md): `concurrent` blocks, fan-out, background scopes, cancellation and timeouts, shared state, channels and `select`.
 - [Contracts](reference/contracts.md): `requires`, `ensures`, struct invariants and static verification.
+- [Testing](reference/testing.md): doc examples, unit and integration tests, effect fakes, property tests and deterministic scheduling.
+- [Memory](reference/memory.md): reference counting, sharing across tasks, and the cycle collector.
+- [Program execution](reference/execution.md): the capabilities behind effects, and how `main` starts and ends a program.
+- [Interop with C](reference/interop.md): foreign blocks and generated bindings, C types, trust, linking, C memory, pools, callbacks and foreign calls.
 
 Still being split:
 

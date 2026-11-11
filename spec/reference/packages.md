@@ -29,13 +29,13 @@ name_ref     = "self" | name | Name | NAME
 
 ## Packages
 
-r[mod.pkg.project] A project is a folder with a `quince``.toml` manifest at its root, naming the project, its edition, its dependencies, the capability limits of its programs ([Program execution](../quince-spec.md#capabilities-at-runtime)), and the native libraries it links ([Interop with C](../quince-spec.md#linking)). Its format is under [The manifest](../quince-spec.md#the-manifest). r[mod.pkg.one-manifest] One manifest and one lockfile cover every package in the project, so all of them build with the same edition and the same dependency versions.
+r[mod.pkg.project] A project is a folder with a `quince``.toml` manifest at its root, naming the project, its edition, its dependencies, the capability limits of its programs ([Program execution](execution.md)), and the native libraries it links ([Interop with C](interop.md)). Its format is under [The manifest](../quince-spec.md#the-manifest). r[mod.pkg.one-manifest] One manifest and one lockfile cover every package in the project, so all of them build with the same edition and the same dependency versions.
 
 - **Library.** r[mod.pkg.library-files] Every source file in the project except those under `cmd/`, `tests/` and folders whose names start with a dot, and except any `testdata/` folder, whose files are never compiled, so a tool can keep `.qnc` fixtures there. r[mod.pkg.library-name] Its import name is the `name` in `quince``.toml`. r[mod.pkg.program-import] A program imports it by that name, `import <name>.{...}`, and a program folder may share the library's name, since folders are not namespaces. r[mod.pkg.one-library] A project has at most one library, and it has none when every file is in a program.
 
 * **Programs.** Each `cmd/<name>/` ([Modules and imports](#modules-and-imports)). r[mod.pkg.program-visibility] A program sees only the library's `pub` names, exactly as a dependent does. r[mod.pkg.program-no-import] Nothing imports a program, and programs never import each other, so code that two programs share goes in the library.
 
-- **Test packages.** r[mod.pkg.test-packages] Each file directly in `tests/`, and each folder `tests/<name>/`, is one test package ([Testing](../quince-spec.md#integration-tests)). A folder lets several test files share helpers. r[mod.pkg.test-visibility] A test package sees only the library's `pub` names.
+- **Test packages.** r[mod.pkg.test-packages] Each file directly in `tests/`, and each folder `tests/<name>/`, is one test package ([Testing](testing.md)). A folder lets several test files share helpers. r[mod.pkg.test-visibility] A test package sees only the library's `pub` names.
 
 * r[mod.pkg.dependents] **Dependents** import only the library. Programs and test packages are never part of a project's public API, and `quince` `publish` compares only the library's.
 

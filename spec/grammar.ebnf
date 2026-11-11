@@ -125,6 +125,7 @@ select       = "select" "{" { pattern "=" expr "=>" ( block | expr ) "," } "}"
 
 contract     = "requires" expr | "ensures" [ "(" name ")" ] expr
 
+test_decl    = "test" string [ "forall" "(" params ")" ] [ "uses" effects ] block
+
 foreign_decl = "foreign" string [ "uses" effects ] "{" { ( { attribute NEWLINE } ( c_fn | "type" c_name ) ) NEWLINE } "}"
 c_fn         = "fn" c_name "(" [ c_name ":" type { "," c_name ":" type } [ "," ] ] ")" [ "->" type ]
-test_decl    = "test" string [ "forall" "(" params ")" ] [ "uses" effects ] block
