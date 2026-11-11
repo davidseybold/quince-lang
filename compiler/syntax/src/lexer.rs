@@ -4,6 +4,8 @@ use crate::{Decoded, LexError, SyntaxKind, codes};
 use quince_diagnostics::{Applicability, Diagnostic, LineIndex};
 use std::ops::Range;
 
+mod number;
+
 /// A token is its kind and its length in bytes. It starts where the previous token ends.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Token {
@@ -158,12 +160,7 @@ impl<'a> Lexer<'a> {
                 };
                 self.bump(kind, len);
             }
-            // Until numbers have their own rules: a digit and the letters, digits and
-            // underscores after it.
-            '0'..='9' => self.bump(
-                SyntaxKind::Int,
-                self.run_of(|c| c.is_ascii_alphanumeric() || c == '_'),
-            ),
+            '0'..='9' => self.number(),
             '"' => self.string(),
             '\'' => self.char_literal(),
             ';' => self.semicolon(),
@@ -303,18 +300,27 @@ impl<'a> Lexer<'a> {
         let after = self.rest()[1..].trim_start_matches([' ', '\t']);
         let at_line_end =
             after.is_empty() || after.starts_with(['\n', '\r']) || after.starts_with("//");
+        // Deleting a `;` between `/` and `/` would make a doc comment.
         let joins_slashes = self.text[..start].ends_with('/') && self.rest()[1..].starts_with('/');
-        let error = if at_line_end && !joins_slashes {
-            LexError::new(
+        let delete = vec![(start..start + 1, String::new())];
+        let error = if at_line_end {
+            let error = LexError::new(
                 start..start + 1,
                 codes::SEMICOLON,
                 "a statement ends at the line break, so it needs no `;`".to_string(),
-            )
-            .with_fix(
-                "delete the `;`",
-                Applicability::Safe,
-                vec![(start..start + 1, String::new())],
-            )
+            );
+            if joins_slashes {
+                error
+            } else if next_line_starts_with_dot(after) {
+                // `a;` then `.b()` is two statements, and `a` then `.b()` is one.
+                error.with_fix(
+                    "delete the `;`, which joins the next line, starting with `.`, to this statement",
+                    Applicability::NeedsReview,
+                    delete,
+                )
+            } else {
+                error.with_fix("delete the `;`", Applicability::Safe, delete)
+            }
         } else {
             LexError::new(
                 start..start + 1,
@@ -348,6 +354,8 @@ impl<'a> Lexer<'a> {
             && self.text[..start].ends_with('r')
             && self.tokens.last().is_some_and(|t| t.len == 1)
             && self.text[start + len..].starts_with('"');
+        // A `#` glued to a closing quote, as in `"x"# note`, gets the hint too. A comment
+        // written from habit has a space before its `#`, so this is nearly always a raw string.
         let raw_hashes = run.starts_with('#') && (opens || previous == Some(SyntaxKind::StringEnd));
         let mut error = LexError::new(
             start..start + len,
@@ -374,6 +382,25 @@ fn punctuation(text: &str) -> Option<(SyntaxKind, usize)> {
         .filter(|(punct, _)| text.starts_with(punct))
         .max_by_key(|(punct, _)| punct.len())
         .map(|&(punct, kind)| (kind, punct.len()))
+}
+
+/// True when the first token after `text`'s line, skipping whitespace and comments, block
+/// comments included, is a `.`, which continues a statement (`r[lex.continue.more]`).
+fn next_line_starts_with_dot(mut text: &str) -> bool {
+    loop {
+        text = text.trim_start_matches([' ', '\t', '\n', '\r']);
+        if text.starts_with("//") {
+            text = &text[text.find(['\n', '\r']).unwrap_or(text.len())..];
+        } else if let Some(comment) = text.strip_prefix("/*") {
+            // An unclosed block comment runs to the end of the file.
+            let Some(end) = comment.find("*/") else {
+                return false;
+            };
+            text = &comment[end + 2..];
+        } else {
+            return text.starts_with('.') && !text.starts_with("..");
+        }
+    }
 }
 
 /// True when `c`, at the start of `text`, starts a token other than an `Error`.

@@ -1,0 +1,10 @@
+// rule: lex.lit.int.prefix
+// mode: parse
+// Base prefixes are lowercase. Hex digits may be either case.
+fn f() {
+  let a = 0xff
+  let b = 0xAbC
+  let c = 0XFF //~ E0008
+  let d = 0B1 //~ E0008
+  let e = 0O7 //~ E0008
+}

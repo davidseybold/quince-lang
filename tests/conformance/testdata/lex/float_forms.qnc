@@ -1,0 +1,9 @@
+// rule: lex.lit.float.forms
+// mode: parse
+// Floats are written with a point, an exponent, or both.
+fn f() {
+  let a = 3.14
+  let b = 1e-9
+  let c = 2.5e10
+  let d = 0.5
+}

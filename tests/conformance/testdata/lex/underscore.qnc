@@ -1,0 +1,16 @@
+// rule: lex.lit.underscore
+// mode: parse
+// An underscore in a number sits between two digits, in the integer part, the fraction
+// and the exponent alike. (`_1` is a name, not a number.)
+fn f() {
+  let a = 1_000
+  let b = 1_000.5
+  let c = 0xFF_FF
+  let d = 1.000_5e1_0
+  let g = 1_ //~ E0008
+  let h = 1__0 //~ E0008
+  let i = 0x_FF //~ E0008
+  let j = 1_.5 //~ E0008
+  let k = 1e_5 //~ E0008
+  let l = 2.5_ //~ E0008
+}

@@ -24,27 +24,29 @@ The lexer now, and the parser, CST and formatter later. This file holds the cont
 - `Newline` is one line ending: LF, CR LF, or a lone CR. A lone CR is an error, but it ends a line here as it does in `LineIndex`, so the parser's line ends agree with the line numbers in diagnostics. Each line ending is its own token.
 - `DocComment` is `///` up to the line ending, but not `////`. Whether the parser treats it as trivia is the parser's call.
 - An identifier is `Ident` whatever its case. Each keyword has its own kind (`FnKw`, `SelfTypeKw` for `Self`). Nothing else is special: `main`, `TaskScope` and the tag names are identifiers. `_` alone is `Underscore`.
+- A number is an `Int` or a `Float`. A `.` is part of a float only with a digit after it, so `1..10` and `3.14.to_fixed(2)` lex as you'd expect. Right after a `.` token, with no trivia between, a number is a tuple position: a decimal integer with no point or exponent, so `pair.0.1` is `pair` `.` `0` `.` `1`. A minus sign is always its own token. Tokens don't hold values: `literal::int_value` and `literal::float_value` compute them from the text.
 - Punctuation is the longest match, except that `>` is always a token of its own. The parser forms `>>` and `>=` from a `>` and the token right after it, when no trivia sits between them.
 - The lexer doesn't decide which line breaks end a statement. `SyntaxKind::continues_line()` is true for the kinds after which a line always continues: a comma, an opening bracket, `=`, a compound assignment, `=>`, `->`, and every binary operator but `>` and `*`. The parser decides `>`, `*` and the rest.
 
-**Literals not lexed yet.** Strings, chars and numbers get their own rules in later layers of the lexer stack. Until then:
+**Literals not lexed yet.** Strings and chars get their own rules in later layers of the lexer stack. Until then:
 - Everything from a `"` to the next `"` on its line is `StringStart`, `StringText` and `StringEnd`, with no escapes or interpolation. A string with no closing `"` on its line has no `StringEnd`, and the parser accepts it without one. A prefix such as `re` is a separate `Ident`.
 - Everything from a `'` to the next `'` on its line is one `Char`.
-- A digit and the letters, digits and underscores after it are one `Int`.
 
 ## Errors the lexer owns
 
 The lexer reports each lexical problem once, and the parser must not report it again:
 - An `Error` token is trivia. A fixture or a fix that adds a bad character puts it where trivia may go.
-- A `;` is a `Semicolon` token, reported as E0002. The parser reads it as a line break that ends a statement, so `a; b` is two statements with only the E0002.
+- A `;` is a `Semicolon` token, reported as E0002. The parser reads it as a line break that ends a statement, so `a; b` is two statements with only the E0002. It ends the statement outright: `a;` followed by a line that starts with `.` is two statements, not a method chain.
 - A `BlockComment`, reported as E0003, is a comment to the parser.
+- A malformed number, reported as E0008, keeps its `Int` or `Float` kind, glued letters included (`1u8` is one `Int`), so the parser accepts it as a literal.
 
 | Code | Reported for | Fix |
 | --- | --- | --- |
 | E0001 | A run of characters that start no token, outside literals and comments | For a run of whitespace other than spaces and tabs, replace each with a space (`safe`) |
-| E0002 | A `;` | At a line end, delete it (`safe`) |
+| E0002 | A `;` | At a line end, delete it: `safe`, or `needs-review` when the next line starts with `.`, which the deletion joins to the statement |
 | E0003 | A block comment | When it covers whole lines, rewrite it as `//` lines (`safe`) |
+| E0008 | A malformed number: a misplaced underscore, an uppercase prefix or `E`, a prefix or exponent with no digits, a digit outside its base, a leading zero, or a suffix. Each problem is its own E0008, at most one of each kind per digit group | Lowercase a prefix or `E` (`safe`); remove a suffix (`needs-review`), unless a `.` and a digit follow it, as in `1x.5`, which would become a float |
 | E0013 | A CR not followed by LF, also inside a block comment | Replace it with LF (`safe`), unless it ends an unclosed literal |
 | E0014 | A line with invalid UTF-8, from `decode_source` | None |
 
-Messages are written for the habits agents bring from other languages: E0001 on `#` says comments start with `//`, after `r` it says raw text that holds quotes is `r"""`, and on a backtick it says strings use `"` and interpolate with `{name}`.
+Messages are written for the habits agents bring from other languages: E0001 on `#` says comments start with `//`, on `r#` before a quote, or on `#`s after a closing quote, it says raw text that holds quotes is `r"""`, and on a backtick it says strings use `"` and interpolate with `{name}`.

@@ -1,6 +1,6 @@
 # Quince Language Spec
 
-Nov 11, 2026 · @David · Draft v0.7
+Nov 11, 2026 · @David · Draft v0.8
 
 The spec says what Quince programs mean, and what the tools guarantee about them. On 2026-11-10 it was split from one file into chapters, and its rule IDs were renamed once to name their chapter ([design](../docs/design/spec-restructure.md)); [`id-map.tsv`](../docs/design/spec-restructure/id-map.tsv) maps each old ID to its new one. No meaning changed.
 

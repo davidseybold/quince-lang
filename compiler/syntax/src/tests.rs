@@ -4,6 +4,7 @@ use crate::{Lexed, SyntaxKind, lex_str};
 use std::path::Path;
 
 mod errors;
+mod numbers;
 
 /// `Kind "text"`, one token per line, after checking the invariants.
 fn dump(text: &str) -> String {
@@ -139,10 +140,6 @@ fn literal_fallbacks() {
     assert_eq!(
         dump("'a' 'b\n"),
         "Char \"'a'\"\nWhitespace \" \"\nChar \"'b\"\nNewline \"\\n\"\n"
-    );
-    assert_eq!(
-        dump("1_000 0xFF 2u8"),
-        "Int \"1_000\"\nWhitespace \" \"\nInt \"0xFF\"\nWhitespace \" \"\nInt \"2u8\"\n"
     );
 }
 

@@ -31,6 +31,11 @@ pub const REGISTRY: &[CodeInfo] = &[
         include_str!("../explain/E0003.md"),
     ),
     error(
+        "E0008",
+        "malformed number",
+        include_str!("../explain/E0008.md"),
+    ),
+    error(
         "E0013",
         "carriage return without a line feed",
         include_str!("../explain/E0013.md"),
