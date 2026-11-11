@@ -9,8 +9,9 @@ use std::ops::Range;
 
 impl Lexer<'_> {
     /// A char literal, at its `'`: one `Char` token, up to and including its closing `'`, or up
-    /// to its line ending when it has none. It holds one Unicode scalar value, written as itself or as one escape
-    /// (`r[lex.lit.char]`, `r[lex.lit.char.escapes]`), and anything else is an E0009.
+    /// to its line ending when it has none. It holds one Unicode scalar value, written as itself
+    /// or as one escape (`r[lex.lit.char]`, `r[lex.lit.char.escapes]`), and anything else is an
+    /// E0009.
     pub(super) fn char_literal(&mut self) {
         let text = self.text;
         let open = self.pos;
