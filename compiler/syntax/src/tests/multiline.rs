@@ -210,6 +210,7 @@ fn text_on_the_opening_line() {
          Whitespace:  Int:1 RParen:)"
     );
     assert_eq!(errors("\"\"\"ab\"\"\""), ["E0012 3..5"]);
+    assert_eq!(errors("\"\"\"ab \t\"\"\""), ["E0012 3..5"]);
     assert_eq!(errors("\"\"\"\"\"\""), ["E0012 3..6"]);
     assert_eq!(errors("\"\"\"  \"\"\""), ["E0012 5..8"]);
     assert!(message("\"\"\"ab\n\"\"\"").ends_with("move this text to the next line"));

@@ -121,8 +121,9 @@ impl Lexer<'_> {
                              its own, between the `r\"\"\"` and `\"\"\"` lines"
                 .to_string(),
         };
-        let range = match content.len() {
-            0 => start..start + QUOTES.len(),
+        // The text without its trailing spaces, or the closing quotes when there is none.
+        let range = match content.trim_end_matches([' ', '\t']).len() {
+            0 => start + close..start + close + QUOTES.len(),
             len => start..start + len,
         };
         self.errors.push(LexError::new(
@@ -307,8 +308,8 @@ fn closing_error(range: Range<usize>, indent: &str, leads: &[&str]) -> LexError 
             ),
         };
         format!(
-            "the closing `\"\"\"` is indented more than every line of the string, and each line \
-             starts with the closing line's indentation: {fix}"
+            "the closing `\"\"\"` is indented more than every line of the string, but each line \
+             must start with the closing line's indentation: {fix}"
         )
     } else {
         format!(
