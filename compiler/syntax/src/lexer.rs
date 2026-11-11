@@ -27,7 +27,7 @@ impl Lexed {
     }
 }
 
-/// Lexes source text.
+/// Lexes source text, which is at most 4 GiB so that every offset fits in a `u32`.
 pub fn lex_str(text: &str) -> Lexed {
     Lexer::new(text).run()
 }
