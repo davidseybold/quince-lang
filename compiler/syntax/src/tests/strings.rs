@@ -1,8 +1,8 @@
-//! One-line strings: their tokens, the fallback for forms not lexed yet, and E0004, E0006 and
-//! E0007. Multi-line strings are in `multiline.rs`.
+//! One-line strings: their tokens, and E0004, E0006 and E0007. Multi-line strings are in
+//! `multiline.rs`, and raw, bytes and tagged literals in `prefixed.rs`.
 
 use super::errors::errors;
-use crate::literal::string_value;
+use crate::literal::{bytes_value, string_value};
 use crate::{SyntaxKind, lex_str};
 use quince_diagnostics::Applicability;
 
@@ -21,12 +21,13 @@ pub(super) fn message(text: &str) -> String {
     lexed.errors[0].message.clone()
 }
 
-/// Every text of up to four characters from those that matter to strings keeps the
-/// invariants, never puts two errors on one span, and decodes. A safe E0006 or E0007 fix
-/// removes its error and adds none.
+/// Every text of up to four characters from those that matter to literals keeps the
+/// invariants, reports its errors in order, never puts two errors on one span, and decodes.
+/// A safe E0006, E0007 or E0011 fix removes its error, leaves the others as they were, moved
+/// by its edits, and keeps the bytes of every bytes literal.
 #[test]
 fn every_short_text() {
-    let alphabet: Vec<char> = "\"{}\\ux.0ar '\n\r".chars().collect();
+    let alphabet: Vec<char> = "\"{}\\ux.0arb# '\u{e9}\n\r".chars().collect();
     let mut texts = vec![String::new()];
     for _ in 0..4 {
         let longer: Vec<String> = texts
@@ -37,6 +38,8 @@ fn every_short_text() {
             errors(text);
             let lexed = lex_str(text);
             let mut spans: Vec<_> = lexed.errors.iter().map(|e| e.range.clone()).collect();
+            let starts: Vec<_> = spans.iter().map(|r| r.start).collect();
+            assert!(starts.is_sorted(), "{text:?}: {:?}", lexed.errors);
             spans.sort_by_key(|r| (r.start, r.end));
             spans.dedup();
             assert_eq!(
@@ -50,8 +53,8 @@ fn every_short_text() {
                     string_value(&text[range]);
                 }
             }
-            for error in &lexed.errors {
-                let string_code = ["E0006", "E0007"].contains(&error.code);
+            for (i, error) in lexed.errors.iter().enumerate() {
+                let string_code = ["E0006", "E0007", "E0011"].contains(&error.code);
                 let Some(fix) = error.fixes.first().filter(|_| string_code) else {
                     continue;
                 };
@@ -60,15 +63,54 @@ fn every_short_text() {
                 for (range, with) in fix.edits.iter().rev() {
                     fixed.replace_range(range.start as usize..range.end as usize, with);
                 }
+                // Where an offset after the edits was before them.
+                let moved = |at: u32| {
+                    let shift: i64 = (fix.edits.iter())
+                        .filter(|(range, _)| range.end <= at)
+                        .map(|(range, with)| with.len() as i64 - i64::from(range.end - range.start))
+                        .sum();
+                    (i64::from(at) + shift) as u32
+                };
+                let others: Vec<_> = (lexed.errors.iter().enumerate())
+                    .filter(|&(j, _)| j != i)
+                    .map(|(_, e)| (e.code, moved(e.range.start)..moved(e.range.end)))
+                    .collect();
+                let after: Vec<_> = (lex_str(&fixed).errors.iter())
+                    .map(|e| (e.code, e.range.clone()))
+                    .collect();
+                assert_eq!(after, others, "{text:?} fixed to {fixed:?}");
                 assert_eq!(
-                    lex_str(&fixed).errors.len(),
-                    lexed.errors.len() - 1,
+                    all_bytes(&fixed),
+                    all_bytes(text),
                     "{text:?} fixed to {fixed:?}"
                 );
             }
         }
         texts = longer;
     }
+}
+
+/// The values of the bytes literals in `text`, each its `StringText` decoded.
+fn all_bytes(text: &str) -> Vec<Vec<u8>> {
+    let mut values = Vec::new();
+    let mut in_bytes = false;
+    for (kind, range) in lex_str(text).ranges() {
+        match kind {
+            SyntaxKind::StringStart => {
+                in_bytes = text[range].starts_with('b');
+                if in_bytes {
+                    values.push(Vec::new());
+                }
+            }
+            SyntaxKind::StringText if in_bytes => {
+                let value = bytes_value(&text[range]);
+                values.last_mut().expect("after its start").extend(value);
+            }
+            SyntaxKind::StringText => {}
+            _ => in_bytes = false,
+        }
+    }
+    values
 }
 
 #[test]
@@ -145,15 +187,18 @@ fn escapes() {
     assert_eq!(errors(r#""\u0041 \u""#), ["E0006 1..7", "E0006 8..10"]);
     // One error with no fix: deleting the backslash would make a valid escape, changing the value.
     assert_eq!(errors(r#""\u{ab\}""#), ["E0006 1..8"]);
-    // Only hex digits merge with a `\}`, so the `\'` fix can't regroup the escape.
-    let text = r#""\u{AB\'\}""#;
-    let lexed = lex_str(text);
-    assert_eq!(lexed.errors.len(), 3);
-    let quote = lexed.errors.iter().find(|e| e.range == (6..8)).unwrap();
-    let mut fixed = text.to_string();
-    fixed.replace_range(6..7, "");
-    assert_eq!(quote.fixes[0].edits[0].0, 6..7);
-    assert_eq!(lex_str(&fixed).errors.len(), 2, "{fixed}");
+    // Right after a `\u` with no closing `}`, deleting a backslash would join the two escapes
+    // into one, so that escape has no fix. The `\}` after the `\'` keeps its fix.
+    assert_eq!(
+        errors(r#""\u{AB\'\}""#),
+        [
+            "E0006 1..6",
+            "E0006 6..8",
+            r#"E0006 8..10 => "\"\\u{AB\\'}\"""#
+        ]
+    );
+    assert_eq!(errors(r#""\u{4\'1}""#), ["E0006 1..5", "E0006 5..7"]);
+    assert_eq!(errors(r#""\u\}""#), ["E0006 1..3", "E0006 3..5"]);
     assert_eq!(
         lex_str(r#""\'""#).errors[0].fixes[0].applicability,
         Applicability::Safe
@@ -292,21 +337,6 @@ fn interpolation_messages() {
     );
     assert!(message(r#""{""#).starts_with("`{` opens an interpolation, which needs a name"));
     assert!(message(r#""{a + b""#).starts_with("this `{` is never closed, and only a path"));
-}
-
-/// Raw, bytes and tagged strings keep the fallback until their own layer, so `"` rules don't
-/// report false errors in them.
-#[test]
-fn forms_not_lexed_yet_are_not_checked() {
-    for text in ["r\"C:\\path\"", "re\"a{2}\"", "b\"\\x00\""] {
-        assert_eq!(errors(text), Vec::<String>::new(), "{text:?}");
-    }
-    assert_eq!(
-        tokens("b\"\"\"x"),
-        r#"Ident:b StringStart:" StringEnd:" StringStart:" StringText:x"#
-    );
-    // A keyword is never a prefix, so its string is checked.
-    assert_eq!(errors("test\"\\q\""), ["E0006 5..7"]);
 }
 
 /// A test's name doesn't interpolate, so `{` is text in it, but its escapes are checked.

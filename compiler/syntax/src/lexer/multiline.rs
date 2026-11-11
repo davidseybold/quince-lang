@@ -11,12 +11,13 @@ use std::ops::Range;
 const QUOTES: &str = "\"\"\"";
 
 impl Lexer<'_> {
-    /// A multi-line string, at its `"""`, or at the `r` of `r"""` when it is `raw`. A `"""`
-    /// string `interpolates` unless it is a test's name.
-    pub(super) fn multiline_string(&mut self, raw: bool, interpolates: bool) {
+    /// A multi-line string, at its `"""`, or at its prefix of `prefix_len` bytes, as the `r`
+    /// of `r"""` when it is `raw`. Any other prefix is an error the caller reports, and its
+    /// string is lexed as raw. A `"""` string `interpolates` unless it is a test's name.
+    pub(super) fn multiline_string(&mut self, prefix_len: usize, raw: bool, interpolates: bool) {
         let open = self.pos;
         let first_error = self.errors.len();
-        let open_len = usize::from(raw) + QUOTES.len();
+        let open_len = prefix_len + QUOTES.len();
         self.bump(SyntaxKind::StringStart, open_len);
         if self.opening_line(raw) {
             return;

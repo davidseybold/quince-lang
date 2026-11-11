@@ -1,0 +1,13 @@
+// rule: lex.lit.raw-string
+// mode: parse
+// A raw string has no escapes and no interpolation, so a backslash and braces are text,
+// and a backslash before its closing quote doesn't escape it. It can't contain a quote,
+// so a raw string with no closing quote on its line is an error, as a " string is.
+fn f() -> List<String> {
+  let path = r"C:\path\to\{file}\q"
+  let dir = r"C:\dir\"
+  let braces = r"{ a + b } and }"
+  let open = r"never closed
+  //~^ E0004
+  [path, dir, braces]
+}

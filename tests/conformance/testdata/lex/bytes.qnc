@@ -1,0 +1,17 @@
+// rule: lex.lit.bytes
+// mode: parse
+// A bytes literal holds ASCII characters, \x escapes and the escapes \n \r \t \0 \\ and \",
+// with no interpolation, so braces are text. A non-ASCII character is an error, and so is
+// any other escape, including the \u{...} and \{ escapes of strings.
+fn f() -> List<Bytes> {
+  let request = b"GET / HTTP/1.1\r\n\t\0\\\"{ a + b }"
+  let empty = b""
+  let accented = b"caf\u{e9}" //~ E0006
+  let brace = b"\{" //~ E0006
+  let quote = b"it\'s" //~ E0006
+  let unknown = b"\q" //~ E0006
+  let raw = b"café" //~ E0011
+  let open = b"never closed
+  //~^ E0004
+  [request, empty]
+}

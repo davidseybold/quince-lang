@@ -1,0 +1,13 @@
+// rule: lex.lit.tagged.raw
+// mode: parse
+// A tagged literal's body is raw, so backslashes and braces mean what they say. Like a
+// raw string, it can't contain a quote, and one with no closing quote on its line is an
+// error.
+fn f() -> List<Regex> {
+  let number = re"\d+\.\d+"
+  let twice = re"a{2}"
+  let spaced = re"a{ 2, 3 }\q"
+  let open = re"never closed
+  //~^ E0004
+  [number, twice, spaced]
+}

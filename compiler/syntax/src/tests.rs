@@ -6,6 +6,7 @@ use std::path::Path;
 mod errors;
 mod multiline;
 mod numbers;
+mod prefixed;
 mod strings;
 
 /// `Kind "text"`, one token per line, after checking the invariants.
@@ -127,19 +128,9 @@ fn tokens_for_errors() {
     assert_eq!(dump("/**/"), "BlockComment \"/**/\"\n");
 }
 
-/// Until their own layers, literals lex by a fallback rule (`docs/design/m1-lexer.md`).
+/// Until their own layer, char literals lex by a fallback rule (`docs/design/m1-lexer.md`).
 #[test]
-fn literal_fallbacks() {
-    assert_eq!(
-        dump("\"a b\" b\"\"\"x"),
-        "StringStart \"\\\"\"\nStringText \"a b\"\nStringEnd \"\\\"\"\nWhitespace \" \"\n\
-         Ident \"b\"\nStringStart \"\\\"\"\nStringEnd \"\\\"\"\nStringStart \"\\\"\"\n\
-         StringText \"x\"\n"
-    );
-    assert_eq!(
-        dump("re\"[a]\""),
-        "Ident \"re\"\nStringStart \"\\\"\"\nStringText \"[a]\"\nStringEnd \"\\\"\"\n"
-    );
+fn char_fallback() {
     assert_eq!(
         dump("'a' 'b\n"),
         "Char \"'a'\"\nWhitespace \" \"\nChar \"'b\"\nNewline \"\\n\"\n"
