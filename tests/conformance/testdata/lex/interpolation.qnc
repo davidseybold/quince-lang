@@ -1,0 +1,9 @@
+// rule: lex.lit.string.interp
+// mode: parse
+// A string interpolates with {}. A $ before the brace is plain text.
+fn f(name: String, amount: Int) {
+  let a = "hello {name}"
+  let b = "{name}{amount}"
+  let c = "Total: ${amount}"
+  let d = "{name}, you owe {amount}."
+}

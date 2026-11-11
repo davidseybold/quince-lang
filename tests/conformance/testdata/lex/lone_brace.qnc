@@ -1,0 +1,9 @@
+// rule: lex.lit.string.lone-brace
+// mode: parse
+// Only { opens an interpolation, so a lone } is plain text and needs no escape.
+fn f(name: String) {
+  let a = "}"
+  let b = "a } b"
+  let c = "{name}}"
+  let d = "}{name}"
+}

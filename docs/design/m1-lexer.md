@@ -356,9 +356,9 @@ Rule IDs in brackets are what each task's fixtures cite. Rules added by spec que
 - [x] Numbers, the tuple-index rule, `literal::int_value` and `float_value`; E0008. [`lex.lit.int.forms`, `lex.lit.float.forms`, `lex.lit.underscore`, `lex.lit.int.prefix`, `lex.lit.int.leading-zero`, `lex.lit.float.shape`, `lex.lit.no-suffix`]
 
 **Layer 5: `m1/lexer-strings`**
-- [ ] Spec: questions 2 and 7, retiring `lex.lit.string.interp-path`, and a bump.
-- [ ] String shape and escapes, `literal::string_value`; E0004, E0006. [`lex.lit.string.escapes`, `lex.lit.string.one-line`, `lex.lit.string.unicode-escape`]
-- [ ] Interpolation tokens; E0007. [`lex.lit.string.interp`, `lex.lit.string.interp-root`, `lex.lit.string.lone-brace`]
+- [x] Spec: questions 2 and 7, retiring `lex.lit.string.interp-path`, and a bump.
+- [x] String shape and escapes, `literal::string_value`; E0004, E0006. [`lex.lit.string.escapes`, `lex.lit.string.one-line`, `lex.lit.string.unicode-escape`]
+- [x] Interpolation tokens; E0007. [`lex.lit.string.interp`, `lex.lit.string.interp-root`, `lex.lit.string.lone-brace`]
 
 **Layer 6: `m1/lexer-literals`**
 - [ ] Spec: questions 3 and 8, and a bump.

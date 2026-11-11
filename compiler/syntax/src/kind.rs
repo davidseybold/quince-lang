@@ -33,6 +33,8 @@ syntax_kinds! {
         /// Characters that start no token. Trivia to the parser.
         Error,
         Ident, Int, Float, Char, StringStart, StringText, StringEnd,
+        /// The `{` and `}` around an interpolated path in a string.
+        InterpStart, InterpEnd,
         /// Reported as E0002, and read by the parser as a line break.
         Semicolon,
     ],

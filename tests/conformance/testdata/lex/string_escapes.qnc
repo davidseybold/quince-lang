@@ -1,0 +1,13 @@
+// rule: lex.lit.string.escapes
+// mode: parse
+// A string's escapes are \n \t \\ \" \{ \r \0 and \u{...}. Any other escape is an
+// error, including \' (a quote needs no escape in a string), \} (a lone } is text)
+// and \x (which only bytes literals take).
+fn f() {
+  let a = "tab\there\nline\\slash\"quote\{brace\rcr\0nul\u{1F600}"
+  let b = "it's fine"
+  let c = "\q" //~ E0006
+  let d = "it\'s" //~ E0006
+  let e = "\}" //~ E0006
+  let g = "\x41" //~ E0006
+}

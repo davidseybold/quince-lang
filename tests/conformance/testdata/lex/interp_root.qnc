@@ -1,0 +1,19 @@
+// rule: lex.lit.string.interp-root
+// mode: parse
+// Inside braces only a path is allowed: a name, self or a constant name, followed by
+// field names or tuple positions, with no spaces. Never an expression, and never a
+// path that starts with a type.
+impl User {
+  fn show(self, user: User, id: UserId) -> String {
+    let a = "{user}{user.name}{self.email}{self}{id.0}{MAX_RETRIES}{user.address.city}"
+    let b = "{a + b}" //~ E0007
+    let c = "{}" //~ E0007
+    let d = "{ user }" //~ E0007
+    let e = "{user.name.len()}" //~ E0007
+    let g = "{Self.MAX}" //~ E0007
+    let h = "{0}" //~ E0007
+    let i = "{user.}" //~ E0007
+    let j = "{user" //~ E0007
+    a
+  }
+}
