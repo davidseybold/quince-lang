@@ -145,6 +145,15 @@ fn escapes() {
     assert_eq!(errors(r#""\u0041 \u""#), ["E0006 1..7", "E0006 8..10"]);
     // One error with no fix: deleting the backslash would make a valid escape, changing the value.
     assert_eq!(errors(r#""\u{ab\}""#), ["E0006 1..8"]);
+    // Only hex digits merge with a `\}`, so the `\'` fix can't regroup the escape.
+    let text = r#""\u{AB\'\}""#;
+    let lexed = lex_str(text);
+    assert_eq!(lexed.errors.len(), 3);
+    let quote = lexed.errors.iter().find(|e| e.range == (6..8)).unwrap();
+    let mut fixed = text.to_string();
+    fixed.replace_range(6..7, "");
+    assert_eq!(quote.fixes[0].edits[0].0, 6..7);
+    assert_eq!(lex_str(&fixed).errors.len(), 2, "{fixed}");
     assert_eq!(
         lex_str(r#""\'""#).errors[0].fixes[0].applicability,
         Applicability::Safe
@@ -318,6 +327,9 @@ fn test_names() {
     // Only spaces are skipped: after a comment or another token, a string interpolates.
     assert_eq!(errors("test // c\n\"{}\""), ["E0007 11..13"]);
     assert_eq!(errors(r#"test(x, "{}")"#), ["E0007 9..11"]);
+    // Messages about interpolation don't apply in a test name.
+    assert_eq!(message(r#"test "\}" {"#), "`}` needs no escape in a string");
+    assert!(message(r#"test "\(x)" {"#).starts_with("`\\(` isn't an escape: a string's escapes"));
 }
 
 /// E0001's hint for a Rust raw string still reads the tokens around the `#`.

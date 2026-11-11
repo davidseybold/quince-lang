@@ -75,8 +75,13 @@ impl Lexer<'_> {
                         dangling = problem == BadEscape::Dangling;
                         let text = &rest[len..len + escape.len];
                         let after = &rest[len + escape.len..];
-                        self.errors
-                            .push(escape_error(text, after, start + len, problem));
+                        self.errors.push(escape_error(
+                            text,
+                            after,
+                            start + len,
+                            problem,
+                            interpolates,
+                        ));
                     }
                     len += escape.len;
                 }
@@ -316,7 +321,13 @@ fn space_deletions(at: usize, body: &str) -> Option<Vec<(Range<usize>, String)>>
 }
 
 /// The E0006 for the escape `text`, at `at`, which the text `after` follows.
-fn escape_error(text: &str, after: &str, at: usize, problem: BadEscape) -> LexError {
+fn escape_error(
+    text: &str,
+    after: &str,
+    at: usize,
+    problem: BadEscape,
+    interpolates: bool,
+) -> LexError {
     let error =
         |message: String| LexError::new(at..at + text.len(), codes::INVALID_ESCAPE, message);
     let example = "as in `\\u{1F600}`";
@@ -326,7 +337,7 @@ fn escape_error(text: &str, after: &str, at: usize, problem: BadEscape) -> LexEr
         }
         BadEscape::Needless(c) => {
             let why = match c {
-                '}' => ": only `{` opens an interpolation, so a lone `}` is text",
+                '}' if interpolates => ": only `{` opens an interpolation, so a lone `}` is text",
                 _ => "",
             };
             return error(format!("`{c}` needs no escape in a string{why}")).with_fix(
@@ -391,8 +402,8 @@ fn escape_error(text: &str, after: &str, at: usize, problem: BadEscape) -> LexEr
                 };
                 format!("`{text}` isn't a Quince escape: write the character as `\\u{{{code:X}}}`")
             }
-            '(' => {
-                // Swift's `\(name)`.
+            // Swift's `\(name)`, where the string interpolates.
+            '(' if interpolates => {
                 let path = after
                     .find(')')
                     .map(|end| &after[..end])

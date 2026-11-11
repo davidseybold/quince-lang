@@ -146,10 +146,12 @@ fn unicode_escape(text: &str) -> Escape {
         .find(['}', '"', '{', '\\', '\n', '\r'])
         .unwrap_or(inner.len());
     let digits = &inner[..end];
-    // `\u{AB\}` is one bad escape, so that deleting the `\` of a `\}` can't complete it.
+    // `\u{AB\}` is one bad escape, so that deleting the `\` of a `\}` can't complete it. Only
+    // with hex digits: a fix can turn `\'` into `'`, and that must not regroup the escape.
+    let hex = digits.bytes().all(|b| b.is_ascii_hexdigit());
     let close = match &inner[end..] {
         rest if rest.starts_with('}') => 1,
-        rest if rest.starts_with("\\}") => 2,
+        rest if rest.starts_with("\\}") && hex => 2,
         _ => return bad(3 + end, BadEscape::UnicodeUnclosed),
     };
     let len = 3 + end + close;

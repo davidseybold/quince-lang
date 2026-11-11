@@ -358,6 +358,8 @@ Rule IDs in brackets are what each task's fixtures cite. Rules added by spec que
 
 **Layer 5: `m1/lexer-strings`**
 - [x] Spec: questions 2 and 7, retiring `lex.lit.string.interp-path`, and a bump.
+- [x] Spec: `r[test.name-escapes]` (decided by David in review); test names don't interpolate. [`test.name`, `test.name-escapes`]
+- [x] E0013: no fix for a CR right after another CR (a layer 3 fix, folded in by David).
 - [x] String shape and escapes, `literal::string_value`; E0004, E0006. [`lex.lit.string.escapes`, `lex.lit.string.one-line`, `lex.lit.string.unicode-escape`]
 - [x] Interpolation tokens; E0007. [`lex.lit.string.interp`, `lex.lit.string.interp-root`, `lex.lit.string.lone-brace`]
 
