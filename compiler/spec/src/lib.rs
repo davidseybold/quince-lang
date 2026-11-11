@@ -20,8 +20,6 @@ pub const CHAPTERS_PATH: &str = "spec/chapters.txt";
 pub const README_PATH: &str = "spec/README.md";
 /// Rule IDs that must never be used again, relative to the repo root.
 pub const RETIRED_PATH: &str = "spec/retired-rules.txt";
-/// The allowed first segments of rule IDs, relative to the repo root.
-pub const TOPICS_PATH: &str = "spec/rule-topics.txt";
 /// The grammar assembled from the spec's `ebnf` blocks, relative to the repo root.
 pub const GRAMMAR_PATH: &str = "spec/grammar.ebnf";
 /// The folders whose Markdown files must all be chapters listed in the manifest, relative to

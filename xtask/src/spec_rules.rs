@@ -1,32 +1,34 @@
 //! `cargo xtask spec-rules`: checks the chapter manifest and the rule tags in every chapter
 //! file. `--strip` prints the spec with every tag removed.
 
-use quince_spec::{FileError, README_PATH, RETIRED_PATH, Spec, SpecError, TOPICS_PATH};
+use quince_spec::{CHAPTERS_PATH, FileError, README_PATH, RETIRED_PATH, Spec, SpecError};
 use quince_spec::{manifest, rules};
 use std::path::Path;
 
 /// The CI step: the manifest, the README's chapter list, and every tag's format, placement,
-/// topic and uniqueness. Problems in every file are reported together.
+/// chapter, construct and uniqueness. Problems in every file are reported together.
 pub fn check(root: &Path) -> Result<(), String> {
     let spec = load(root)?;
     let (retired, retired_errors) = rules::parse_retired(&read(root, RETIRED_PATH)?);
-    let (topics, topic_errors) = rules::parse_topics(&read(root, TOPICS_PATH)?);
-    let mut problems = report(RETIRED_PATH, &retired_errors) + report(TOPICS_PATH, &topic_errors);
+    let mut problems = report(RETIRED_PATH, &retired_errors);
     problems += report(
         README_PATH,
         &manifest::check_readme(&spec.readme, &spec.files),
     );
-    let (found, errors) = rules::check(&spec.files, &retired, &topics);
+    let (found, errors) = rules::check(&spec.files, &retired, &spec.chapters);
     problems += report_located(&errors);
-    problems += report(TOPICS_PATH, &rules::unused_topics(&found, &topics));
+    problems += report(
+        CHAPTERS_PATH,
+        &rules::unused_constructs(&found, &spec.chapters),
+    );
     if problems > 0 {
         return Err(format!("{problems} problem(s) in the spec's rule IDs"));
     }
     eprintln!(
-        "spec: {} rule IDs under {} topics in {} chapter file(s), all valid",
+        "spec: {} rule IDs in {} chapter file(s) of {} chapters, all valid",
         found.len(),
-        topics.len(),
-        spec.files.len()
+        spec.files.len(),
+        spec.chapters.len()
     );
     Ok(())
 }

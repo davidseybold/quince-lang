@@ -513,11 +513,11 @@ One `gh stack`, a PR per layer (decision 11). Tick each box as it lands on its b
   - [x] `std/API.md` from `spec/std-api.md`, plus the Prelude's library material, tags stripped
   - [x] `id-map.tsv` with 34 `removed` rows; `removed.tsv` `to-std` rows; `std` out of `rule-topics.txt`
   - [x] `std/README.md`, `CLAUDE.md`, `AGENTS.md`, `docs/milestones.md`, `docs/repo-plan.md` paths
-- [ ] 6. `rename-ids`
-  - [ ] `id-map.tsv` renames, with `hand` rows (40 or fewer)
-  - [ ] `chapters.txt` constructs; `rule-topics.txt` deleted; chapter checks on
-  - [ ] `moved-rules.txt` and the runner's moved-ID error
-  - [ ] `compiler/spec/README.md`, `tests/conformance/testdata/README.md`, `AGENTS.md`
+- [ ] 6. `rename-ids`, as two PRs to stay under the size limit: `rename-ids`, then `moved-rules`
+  - [x] `id-map.tsv` renames, with `hand` rows (40 or fewer): 644 renamed, 7 of them `hand`
+  - [x] `chapters.txt` constructs; `rule-topics.txt` deleted; chapter checks on
+  - [ ] `moved-rules.txt` and the runner's moved-ID error (second PR, `moved-rules`)
+  - [x] `compiler/spec/README.md`, `tests/conformance/testdata/README.md`, `AGENTS.md`
 - [ ] 7. `references`: scan; `refs.tsv` with final targets; `rewordings.tsv`; removals not tied to a move; `### Prelude names` interim heading; `grammar.ebnf` header and `DEFAULT_HEADER` wording; leftover check on (prose only)
 - [ ] 8. `move-core`: chapters 1 to 9; `headings.tsv` rows; flagged units listed in the PR
 - [ ] 9. `move-semantics`: chapters 10 to 17; flagged units listed

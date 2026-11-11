@@ -1,10 +1,125 @@
 # The chapters of the spec, in reading order (compiler/spec/README.md).
 #
 # A chapter line gives the chapter's rule-ID prefix, its file (relative to spec/) and its title.
-# An indented line under it gives a construct of that chapter and the subject it covers. The
-# order of the chapter lines is the reading order, the coverage order and the order the grammar
-# is assembled in. `legacy` is the one-file spec while it is split into chapters; it never
-# appears in a rule ID.
+# An indented line under it gives a construct of that chapter and the subject it covers: the
+# second segment of a rule ID such as `stmt.bind.shadow.same-scope`. Reuse a construct before
+# adding one. The order of the chapter lines is the reading order, the coverage order and the
+# order the grammar is assembled in. `legacy` is the one-file spec while it is split into
+# chapters; it never appears in a rule ID. A chapter file that doesn't exist yet is still in
+# `legacy`.
 #
 # chapter  file                           title
+intro      reference/introduction.md      Introduction
+  excl        Features deliberately excluded
+lex        reference/lexical.md           Lexical structure
+  continue    Line continuation
+  name        Naming conventions
+  lit         Literals
+  comment     Comments
+mod        reference/packages.md          Packages and modules
+  import      Imports
+  pkg         Packages and project layout
+  edition     Editions
+item       reference/items.md             Items
+  const       Constants
+  struct      Structs
+  enum        Enums (algebraic data types)
+  newtype     Newtypes
+  alias       Type aliases (`type Name = T`)
+  iface       Interfaces and `impl`
+  method      Methods
+  generic     Generics and type parameters
+  arg         Function arguments: labels, defaults, passing
+  attr        Attributes (`@name`)
+type       reference/types.md             Types
+  num         Numeric types and arithmetic
+  float       Floating-point numbers: IEEE 754 `Float` and `Float32`
+  string      Strings: immutable UTF-8 text
+  tuple       Tuples
+  never       The `Never` type
+  map         Maps
+  ref         Reference types
+  mut         Mutation and `var`
+  infer       Type inference
+  type-arg    Type arguments and construction
+prelude    reference/prelude.md           Prelude and special interfaces
+  user-op     Operators on user types
+  iter        Iterators
+  auto        Automatically derived `Eq` and `Hash`
+  dbg         The `dbg()` debugging helper
+  wire        Serialization (`Encode` and `Decode`)
+expr       reference/expressions.md       Expressions
+  block       Blocks and their values
+  op          Operators and precedence
+  range       Ranges
+  index       Indexing and slicing
+  if          `if` expressions
+  match       `match` and exhaustiveness
+  is          Pattern tests with `is`
+  jump        `return`, `break` and `continue` as expressions
+  ret         `return`
+  closure     Closures and what they capture
+  fn-value    Functions as values
+stmt       reference/statements.md        Statements
+  bind        Bindings: `let`, `var`, shadowing
+  assign      Assignment statements
+  loop        Loops
+pat        reference/patterns.md          Patterns
+err        reference/errors.md            Errors and failure
+  try         The `?` operator
+  panic       Panics (bugs)
+effect     reference/effects.md           Effects
+  effvar      Effect variables (`uses E`)
+  handler     Effect handlers
+  with        `with` handler blocks
+conc       reference/concurrency.md       Concurrency
+  fanout      Fan-out over a collection
+  background  Long-lived background tasks (fire and forget)
+  cancel      Task cancellation
+  timeout     Timeouts
+  share       Shared state between tasks
+  chan        Channels
+  select      Waiting on several channels with `select`
+contract   reference/contracts.md         Contracts
+  verify      Static verification
+test       reference/testing.md           Testing
+  doc         Doc comments and executable examples
+  itest       Integration tests
+  prop        Property tests
+  dtest       Deterministic testing
+mem        reference/memory.md            Memory
+exec       reference/execution.md         Program execution
+  main        The `main` function and process exit
+  cap         Runtime capabilities that back effects
+ffi        reference/interop.md           Interop with C
+  cbind       `quince bind`: generating C bindings
+  ctype       C types and their Quince mappings
+  cbuf        C buffers in generated bindings
+  cstring     C strings in generated bindings
+  cresource   C resources and handles in generated bindings
+  trust       Trusting native dependencies
+  link        Linking
+  cmem        Memory across the C boundary
+  pool        `Pool` and pooled resources
+  callback    C callbacks into Quince
+  ffitest     Testing foreign code
+dep        tooling/dependencies.md        Dependencies and publishing
+  manifest    The `quince.toml` manifest
+  lock        The lockfile
+  mvs         Minimal version selection
+  update      `quince update` and dependency versions
+  hash        Content addressing of definitions
+  semver      Enforced semantic versioning
+  publish     Publishing packages
+tool       tooling/toolchain.md           Toolchain
+  cli         `quince` commands
+  perf        Performance targets
+  fmt         Formatting rules enforced by `quince fmt`
+  build       Compilation model and backend
+  profile     Build profiles
+  target      Compilation targets
+  incr        Incremental compilation
+  debug       Debugging and debug info
+diag       tooling/diagnostics.md         Diagnostics and queries
+  query       `quince query`
 legacy     quince-spec.md                 Quince Language Spec (being split)

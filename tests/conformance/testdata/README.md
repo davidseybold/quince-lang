@@ -5,7 +5,7 @@ Each `.qnc` file below this folder is one conformance test, run by `cargo xtask 
 A fixture starts with a header: comment lines (and blank lines) before any code.
 
 ```
-// rule: bind.shadow.same-scope
+// rule: stmt.bind.shadow.same-scope
 // Shadowing a binding in the same scope is an error.
 fn f() {
   let x = 1
