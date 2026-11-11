@@ -475,7 +475,7 @@ Rule IDs in brackets are what each task's fixtures cite. Grammar productions are
 - [ ] Add `rowan`, pinned after checking its dependencies and minimum Rust version.
 - [ ] `SyntaxError` replaces `LexError`; split `codes::ALL` so the lexer's mutation test requires the lexer's codes.
 - [ ] Events, the tree builder and the CST; trivia placement (decision 3); the tree dumps, with and without trivia; tests on hand-built events.
-- [ ] The coverage ratchet and `cargo xtask conformance --write`; `AGENTS.md`.
+- [x] The coverage ratchet and `cargo xtask conformance --write`; `AGENTS.md`.
 - [ ] Correct the repo plan's step 3 to match decision 11.
 
 **Layer 1: `m1/parser-core`**

@@ -46,3 +46,5 @@ Each run writes `target/conformance/coverage.json` and prints the total and cove
 - `spec_version` is the spec's draft version, such as `"0.5"`, read from the header of `spec/README.md`.
 - Sections are chapters in the order of `spec/chapters.txt`, each named by its title there. A chapter with no rule IDs is left out. Grammar IDs come last, under `Grammar productions`.
 - An empty `covered_by` means the rule is uncovered.
+
+`tests/conformance/covered.txt` lists every covered rule ID, one per line, sorted. The run fails when a listed rule has no passing fixture, since coverage fell, and when a covered rule isn't listed, since the list is stale. `cargo xtask conformance --write` rewrites the list, and refuses while a fixture fails. So a PR that covers or uncovers a rule shows it in its diff, and review can check it against the PR's fixtures.

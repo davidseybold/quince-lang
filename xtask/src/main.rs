@@ -22,7 +22,9 @@ commands:
   spec-grammar --write  regenerate spec/grammar.ebnf from the spec
   spec-links            check that the spec's relative links and their #fragments resolve
   diagnostics           check every diagnostic code has explain text and a conformance test
-  conformance           run the conformance fixtures and write the spec coverage report
+  conformance           run the conformance fixtures, write the spec coverage report, and
+                        check the covered rules against tests/conformance/covered.txt
+  conformance --write   rewrite tests/conformance/covered.txt from the run
 ";
 
 fn main() -> ExitCode {
@@ -39,6 +41,7 @@ fn main() -> ExitCode {
         ["spec-links"] => exit(spec_links::check(&root)),
         ["diagnostics"] => exit(diagnostics::check(&root)),
         ["conformance"] => exit(conformance::check(&root)),
+        ["conformance", "--write"] => exit(conformance::write(&root)),
         ["help" | "--help" | "-h"] => {
             print!("{USAGE}");
             ExitCode::SUCCESS
