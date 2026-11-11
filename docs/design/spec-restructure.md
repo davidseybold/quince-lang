@@ -518,7 +518,9 @@ One `gh stack`, a PR per layer (decision 11). Tick each box as it lands on its b
   - [x] `chapters.txt` constructs; `rule-topics.txt` deleted; chapter checks on
   - [x] `moved-rules.txt` and the runner's moved-ID error (second PR, `moved-rules`)
   - [x] `compiler/spec/README.md`, `tests/conformance/testdata/README.md`, `AGENTS.md`
-- [ ] 7. `references`: scan; `refs.tsv` with final targets; `rewordings.tsv`; removals not tied to a move; `### Prelude names` interim heading; `grammar.ebnf` header and `DEFAULT_HEADER` wording; leftover check on (prose only)
+- [ ] 7. `references`, as two PRs: `references-tables`, then `references`
+  - [x] `spec-compare` applies `refs.tsv` and `rewordings.tsv`, ignores link targets, and allows the headings `headings.tsv` lists as `new` (its mapping rows come with layer 8) (first PR, `references-tables`)
+  - [ ] scan; `refs.tsv` with final targets; `rewordings.tsv`; removals not tied to a move; `### Prelude names` interim heading; `grammar.ebnf` header and `DEFAULT_HEADER` wording; leftover check on (prose only)
 - [ ] 8. `move-core`: chapters 1 to 9; `headings.tsv` rows; flagged units listed in the PR
 - [ ] 9. `move-semantics`: chapters 10 to 17; flagged units listed
 - [ ] 10. `move-tooling`: chapters 18 to 20; `docs/design-principles.md`; Pipeline to `docs/repo-plan.md`; `quince-spec.md` and `legacy` deleted; final-target check; diagnostics example test path; leftover check extended to headings
