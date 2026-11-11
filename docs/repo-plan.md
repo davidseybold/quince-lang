@@ -38,9 +38,13 @@ The cost is that LLVM makes Rust builds slow and fussy. To contain that, pin one
 ```
 quince/
   AGENTS.md              build, test, bless; map of the repo
-  spec/                  language spec (Markdown, one file per section, rule IDs)
-    grammar.ebnf         the grammar appendices, extracted; the parser is tested against it
+  spec/                  language spec (Markdown, rule IDs); README.md is its index
+    reference/           Part I, the language: one file per chapter
+    tooling/             Part II, the tools the language guarantees: one file per chapter
+    chapters.txt         the chapters in reading order, with their rule-ID prefixes
+    grammar.ebnf         the grammar, assembled from every chapter's ebnf blocks; the parser is tested against it
   docs/
+    design-principles.md what Quince is for, and the principles behind it
     design/              one design doc per milestone chunk; its tasks cite spec rule IDs
   compiler/              cargo workspace, crates named quince_*
     syntax/              lexer, parser, lossless CST, formatter        <- start here
@@ -72,7 +76,7 @@ v0.4 rules the layout has to respect:
 
 The parser lives in `compiler/syntax` (`quince_syntax`). It has no dependencies on the rest of the compiler and no LLVM, so it builds in seconds.
 
-1. Extract the two grammar appendices into `spec/grammar.ebnf`, and add a CI check that the file matches the spec text.
+1. Assemble the spec's grammar into `spec/grammar.ebnf`, and add a CI check that the file matches the spec text.
 2. Write a hand-written recursive-descent parser that produces a lossless CST, in the style of `rowan`. Agent tools need comments and spacing preserved: `fmt`, `fix` and the LSP all rewrite source, and error recovery depends on it too.
 3. Tests:
    - Every code block in the spec and the std API parses.
