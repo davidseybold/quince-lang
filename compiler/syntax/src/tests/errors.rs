@@ -68,6 +68,11 @@ fn block_comments() {
 #[test]
 fn lone_carriage_returns_and_late_byte_order_marks() {
     assert_eq!(errors("a\r\nb\rc"), [r#"E0013 4..5 => "a\r\nb\nc""#]);
+    // A line feed after the first CR would make CR LF, one line ending in place of two.
+    assert_eq!(
+        errors("a\r\rb"),
+        [r#"E0013 1..2 => "a\n\rb""#, "E0013 2..3"]
+    );
     assert_eq!(errors("\u{FEFF}a\u{FEFF}"), ["E0001 4..7"]);
     // A CR that ends an unclosed literal gets no fix.
     assert_eq!(errors("\"a\rb"), ["E0013 2..3"]);

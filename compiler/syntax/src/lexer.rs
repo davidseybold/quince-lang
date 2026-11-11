@@ -194,7 +194,8 @@ impl<'a> Lexer<'a> {
                 .to_string(),
         );
         // A CR that ends an unclosed literal would leave it unclosed if it became a line feed.
-        let error = if self.unclosed_literal_end == Some(at) {
+        // After another CR, a line feed would join it into one CR LF, losing a line ending.
+        let error = if self.unclosed_literal_end == Some(at) || self.text[..at].ends_with('\r') {
             error
         } else {
             error.with_fix(

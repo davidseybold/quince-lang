@@ -8,17 +8,21 @@ use quince_diagnostics::Applicability;
 use std::ops::Range;
 
 impl Lexer<'_> {
-    /// A string, at its `"`.
+    /// A string, at its `"`. A test's name, the string after `test` and any spaces, doesn't
+    /// interpolate (`r[test.name]`), but takes a string's escapes (`r[test.name-escapes]`).
     pub(super) fn string(&mut self) {
         let prefixed = self.tokens.last().map(|t| t.kind) == Some(SyntaxKind::Ident);
         if prefixed || self.rest().starts_with("\"\"\"") {
             return self.unchecked_string();
         }
+        let test_name = (self.tokens.iter().rev())
+            .find(|t| t.kind != SyntaxKind::Whitespace)
+            .is_some_and(|t| t.kind == SyntaxKind::TestKw);
         let open = self.pos;
         let first_error = self.errors.len();
         self.bump(SyntaxKind::StringStart, 1);
         loop {
-            let dangling = self.string_text();
+            let dangling = self.string_text(!test_name);
             match self.rest().chars().next() {
                 Some('"') => return self.bump(SyntaxKind::StringEnd, 1),
                 Some('{') => self.interpolation(),
@@ -50,15 +54,20 @@ impl Lexer<'_> {
         }
     }
 
-    /// The text up to the next `{`, `"` or line ending, if there is any, as one `StringText`,
-    /// with an E0006 for each invalid escape. True when it ends with a `\` that escapes nothing.
-    fn string_text(&mut self) -> bool {
+    /// The text up to the next `"` or line ending, or `{` when the string `interpolates`, if
+    /// there is any, as one `StringText`, with an E0006 for each invalid escape. True when it
+    /// ends with a `\` that escapes nothing.
+    fn string_text(&mut self, interpolates: bool) -> bool {
         let start = self.pos;
         let rest = self.rest();
         let mut len = 0;
         let mut dangling = false;
+        let ends: &[char] = match interpolates {
+            true => &['\\', '{', '"', '\n', '\r'],
+            false => &['\\', '"', '\n', '\r'],
+        };
         loop {
-            match rest[len..].find(['\\', '{', '"', '\n', '\r']) {
+            match rest[len..].find(ends) {
                 Some(at) if rest[len + at..].starts_with('\\') => {
                     len += at;
                     let escape = escape(&rest[len..]);

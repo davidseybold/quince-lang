@@ -307,6 +307,19 @@ fn forms_not_lexed_yet_are_not_checked() {
     assert_eq!(errors("test\"\\q\""), ["E0006 5..7"]);
 }
 
+/// A test's name doesn't interpolate, so `{` is text in it, but its escapes are checked.
+#[test]
+fn test_names() {
+    assert_eq!(
+        tokens(r#"test  "{} { a } {name}" {"#),
+        r#"TestKw:test Whitespace:   StringStart:" StringText:{} { a } {name} StringEnd:" Whitespace:  LBrace:{"#
+    );
+    assert_eq!(errors(r#"test "\{ \q" {"#), ["E0006 9..11"]);
+    // Only spaces are skipped: after a comment or another token, a string interpolates.
+    assert_eq!(errors("test // c\n\"{}\""), ["E0007 11..13"]);
+    assert_eq!(errors(r#"test(x, "{}")"#), ["E0007 9..11"]);
+}
+
 /// E0001's hint for a Rust raw string still reads the tokens around the `#`.
 #[test]
 fn raw_string_hint_around_checked_strings() {

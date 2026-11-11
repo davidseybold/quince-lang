@@ -1,0 +1,8 @@
+// rule: test.name
+// mode: parse
+// A test's name doesn't interpolate, so braces in it are plain text.
+test "parses {} and { a } and {name} as text" {
+}
+
+test "a lone } and a {" {
+}
