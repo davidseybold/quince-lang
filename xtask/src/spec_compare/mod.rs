@@ -25,8 +25,17 @@ pub const STD_API: &str = "std/API.md";
 pub const REFS: &str = "docs/design/spec-restructure/refs.tsv";
 /// Tagged sentences whose wording changed, relative to the repo root.
 pub const REWORDINGS: &str = "docs/design/spec-restructure/rewordings.tsv";
-/// The headings the restructure adds, relative to the repo root.
+/// What became of the baseline's headings, relative to the repo root.
 pub const HEADINGS: &str = "docs/design/spec-restructure/headings.tsv";
+
+/// The Introduction's link to the note that some examples are signature listings: the one
+/// paragraph the restructure adds to a chapter (decision 6), as a file and its text with link
+/// targets removed.
+const INTRO_LINK: (&str, &str) = (
+    "spec/reference/introduction.md",
+    "Some examples are signature listings rather than compilable code: [Prelude and special \
+     interfaces]() says which.",
+);
 
 /// The headings in the baseline whose code block holds the grammar.
 const BASELINE_GRAMMAR_HEADINGS: [&str; 2] = [
@@ -70,8 +79,35 @@ pub struct Tables {
     /// Rewrites made in `std/API.md`, from the `std` rows of `refs.tsv`. Each unit is a line
     /// of `std/API.md`.
     pub std_rewrites: Vec<Rewrite>,
-    /// Headings the restructure adds, as a file and its heading line, from `headings.tsv`.
-    pub new_headings: Vec<(String, String)>,
+    /// What became of the baseline's headings, and the headings the restructure adds, from
+    /// `headings.tsv`.
+    pub headings: Vec<HeadingRow>,
+}
+
+/// A row of `headings.tsv`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HeadingRow {
+    /// The table row, as `path:line`.
+    pub at: String,
+    pub change: HeadingChange,
+}
+
+/// What a row of `headings.tsv` says.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HeadingChange {
+    /// The restructure adds this heading line to this file.
+    New { path: String, heading: String },
+    /// The baseline heading `old` on `line` became this heading line in this file. A heading
+    /// whose section split has a row for each part.
+    Moved {
+        line: usize,
+        old: String,
+        path: String,
+        heading: String,
+    },
+    /// The baseline heading `old` on `line` is gone, and its section's text sits under other
+    /// headings.
+    Dropped { line: usize, old: String },
 }
 
 /// One rewrite of a baseline unit's text: its first `old` becomes `new`.
@@ -173,7 +209,9 @@ impl Tables {
     ///   undone in `std/API.md` before checking that the units that moved there still hold
     ///   their text; its other text isn't compared.
     /// - `rewordings.tsv`: a rule ID, the old text and the new text.
-    /// - `headings.tsv`: `new`, a chapter file and the heading line the restructure adds there.
+    /// - `headings.tsv`: `new`, a file and the heading line the restructure adds there;
+    ///   `moved`, a baseline line (`L120`), the heading on it, a file and the heading line it
+    ///   became there; or `dropped`, a baseline line and the heading on it.
     pub fn parse_rewrites(&mut self, refs: &str, rewordings: &str, headings: &str) -> Vec<String> {
         let mut errors = Vec::new();
         let filled = |columns: &[&str]| columns.iter().all(|c| !c.is_empty());
@@ -222,14 +260,44 @@ impl Tables {
                 )),
             }
         }
+        let is_heading = |text: &str| text.starts_with('#');
+        let baseline_line = |unit: &str| match UnitRef::parse(unit) {
+            Some(UnitRef::Line(line)) => Some(line),
+            _ => None,
+        };
         for (line, columns) in rows(headings) {
-            match columns.as_slice() {
-                ["new", path, heading] if !path.is_empty() && heading.starts_with('#') => {
-                    self.new_headings
-                        .push((path.to_string(), heading.to_string()));
+            let at = format!("{HEADINGS}:{line}");
+            let change = match columns.as_slice() {
+                ["new", path, heading] if !path.is_empty() && is_heading(heading) => {
+                    Some(HeadingChange::New {
+                        path: path.to_string(),
+                        heading: heading.to_string(),
+                    })
                 }
-                _ => errors.push(format!(
-                    "{HEADINGS}:{line}: a row is `new`, a chapter file and the heading line it adds"
+                ["moved", unit, old, path, heading]
+                    if is_heading(old) && !path.is_empty() && is_heading(heading) =>
+                {
+                    baseline_line(unit).map(|line| HeadingChange::Moved {
+                        line,
+                        old: old.to_string(),
+                        path: path.to_string(),
+                        heading: heading.to_string(),
+                    })
+                }
+                ["dropped", unit, old] if is_heading(old) => {
+                    baseline_line(unit).map(|line| HeadingChange::Dropped {
+                        line,
+                        old: old.to_string(),
+                    })
+                }
+                _ => None,
+            };
+            match change {
+                Some(change) => self.headings.push(HeadingRow { at, change }),
+                None => errors.push(format!(
+                    "{at}: a row is `new`, a file and the heading line it adds; `moved`, a \
+                     baseline line such as `L120`, its heading, a file and the heading line there; \
+                     or `dropped`, a baseline line and its heading"
                 )),
             }
         }
@@ -268,7 +336,7 @@ pub struct Outcome {
     /// Baseline units that left the spec for `std/API.md`.
     pub to_std: usize,
     /// Units allowed without a baseline match: chapter titles, repeated table headers and
-    /// the headings in `headings.tsv`.
+    /// the headings `headings.tsv` lists as new.
     pub added: usize,
     /// Rewrites from `refs.tsv` and `rewordings.tsv` applied to the baseline.
     pub rewritten: usize,
@@ -561,7 +629,6 @@ pub fn compare(before: &[Unit], after: &[Source], tables: &Tables, std_text: &st
         })
         .collect();
     let after = after.as_slice();
-    let mut new_headings_found: HashSet<(&str, &str)> = HashSet::new();
     let renamed_from: HashMap<&str, &str> = tables
         .renamed
         .iter()
@@ -635,8 +702,13 @@ pub fn compare(before: &[Unit], after: &[Source], tables: &Tables, std_text: &st
         }
     }
 
+    // Headings are checked on their own, against `headings.tsv`.
     let mut pool: HashMap<(Kind, &str), Vec<usize>> = HashMap::new();
-    for unit in before.iter().rev().filter(|u| u.id.is_none()) {
+    for unit in before
+        .iter()
+        .rev()
+        .filter(|u| u.id.is_none() && u.kind != Kind::Heading)
+    {
         pool.entry((unit.kind, &unit.text))
             .or_default()
             .push(unit.line);
@@ -650,8 +722,8 @@ pub fn compare(before: &[Unit], after: &[Source], tables: &Tables, std_text: &st
     let mut ordered: Vec<&Source> = after.iter().filter(|s| s.role != Role::Landing).collect();
     ordered.extend(after.iter().filter(|s| s.role == Role::Landing));
     for source in ordered {
-        for (index, unit) in source.units.iter().enumerate() {
-            if unit.id.is_some() {
+        for unit in &source.units {
+            if unit.id.is_some() || unit.kind == Kind::Heading {
                 continue;
             }
             if let Some(lines) = pool.get_mut(&(unit.kind, unit.text.as_str()))
@@ -669,17 +741,9 @@ pub fn compare(before: &[Unit], after: &[Source], tables: &Tables, std_text: &st
                     outcome.added += 1;
                 }
                 Role::Chapter
-                    if index == 0 && unit.kind == Kind::Heading && unit.text.starts_with("# ") =>
+                    if unit.kind == Kind::Paragraph
+                        && (source.path.as_str(), unit.text.as_str()) == INTRO_LINK =>
                 {
-                    outcome.added += 1;
-                }
-                _ if unit.kind == Kind::Heading
-                    && tables
-                        .new_headings
-                        .iter()
-                        .any(|(path, heading)| *path == source.path && *heading == unit.text) =>
-                {
-                    new_headings_found.insert((&source.path, &unit.text));
                     outcome.added += 1;
                 }
                 _ => problems.push(format!(
@@ -690,13 +754,6 @@ pub fn compare(before: &[Unit], after: &[Source], tables: &Tables, std_text: &st
                     snippet(&unit.text)
                 )),
             }
-        }
-    }
-    for (path, heading) in &tables.new_headings {
-        if !new_headings_found.contains(&(path.as_str(), heading.as_str())) {
-            problems.push(format!(
-                "{HEADINGS}: `{heading}` is listed as new in {path}, but {path} has no such heading"
-            ));
         }
     }
     let mut missing: Vec<(usize, Kind, &str)> = pool
@@ -711,7 +768,166 @@ pub fn compare(before: &[Unit], after: &[Source], tables: &Tables, std_text: &st
             snippet(text)
         ));
     }
+    compare_headings(before, after, tables, &mut outcome);
     outcome
+}
+
+/// A heading the "after" side must have, and why.
+enum Expected<'a> {
+    /// The baseline heading on this line, which has no row in `headings.tsv`, so it is still
+    /// in the legacy file.
+    Kept(usize),
+    /// A `moved` or `new` row of `headings.tsv`.
+    Row { at: &'a str, new: bool },
+}
+
+/// Checks the headings of the chapter files and the legacy file:
+/// - a baseline heading without a row in `headings.tsv` is still in the legacy file, so once
+///   the legacy file is gone every baseline heading needs a row;
+/// - each `moved` and `new` row's heading is in its file, and each `moved` and `dropped` row
+///   names a baseline heading;
+/// - every other heading is a chapter's `# Title` line.
+fn compare_headings(before: &[Unit], after: &[Source], tables: &Tables, outcome: &mut Outcome) {
+    let baseline: HashMap<usize, &str> = before
+        .iter()
+        .filter(|u| u.kind == Kind::Heading)
+        .map(|u| (u.line, u.text.as_str()))
+        .collect();
+    let legacy = after
+        .iter()
+        .find(|s| s.role == Role::Legacy)
+        .map(|s| s.path.as_str());
+    let mut expected: Vec<(&str, &str, Expected)> = Vec::new();
+    let mut targets: HashSet<(&str, &str)> = HashSet::new();
+    let mut with_rows: HashMap<usize, (&str, bool)> = HashMap::new();
+    for row in &tables.headings {
+        let (line, old) = match &row.change {
+            HeadingChange::New { path, heading } => {
+                expected.push((
+                    path,
+                    heading,
+                    Expected::Row {
+                        at: &row.at,
+                        new: true,
+                    },
+                ));
+                continue;
+            }
+            HeadingChange::Moved {
+                line,
+                old,
+                path,
+                heading,
+            } => {
+                if targets.insert((path, heading)) {
+                    expected.push((
+                        path,
+                        heading,
+                        Expected::Row {
+                            at: &row.at,
+                            new: false,
+                        },
+                    ));
+                }
+                (*line, old)
+            }
+            HeadingChange::Dropped { line, old } => (*line, old),
+        };
+        match baseline.get(&line) {
+            Some(text) if text == old => {}
+            Some(text) => outcome.problems.push(format!(
+                "{}: the baseline heading on line {line} is `{text}`, not `{old}`",
+                row.at
+            )),
+            None => outcome.problems.push(format!(
+                "{}: no baseline heading that stays in the spec is on line {line}",
+                row.at
+            )),
+        }
+        let dropped = matches!(row.change, HeadingChange::Dropped { .. });
+        if let Some((_, other_dropped)) = with_rows.insert(line, (&row.at, dropped))
+            && (dropped || other_dropped)
+        {
+            outcome.problems.push(format!(
+                "{}: the baseline heading on line {line} has another row; a dropped heading has \
+                 only one",
+                row.at
+            ));
+        }
+    }
+    let mut kept: Vec<(&str, &str, Expected)> = before
+        .iter()
+        .filter(|u| u.kind == Kind::Heading && !with_rows.contains_key(&u.line))
+        .map(|u| {
+            (
+                legacy.unwrap_or_default(),
+                u.text.as_str(),
+                Expected::Kept(u.line),
+            )
+        })
+        .collect();
+    kept.append(&mut expected);
+
+    // Each heading on the "after" side, and whether something accounts for it.
+    let mut found: Vec<(&Source, &Unit, bool)> = after
+        .iter()
+        .filter(|s| s.role != Role::Landing)
+        .flat_map(|s| {
+            s.units
+                .iter()
+                .filter(|u| u.kind == Kind::Heading)
+                .map(move |u| (s, u, false))
+        })
+        .collect();
+    for (path, heading, why) in kept {
+        let hit = found
+            .iter_mut()
+            .find(|(s, u, taken)| !*taken && s.path == path && u.text == heading);
+        match (hit, why) {
+            (Some(hit), why) => {
+                hit.2 = true;
+                match why {
+                    Expected::Kept(_) => outcome.matched += 1,
+                    Expected::Row { new: true, .. } => outcome.added += 1,
+                    Expected::Row { new: false, .. } => {
+                        outcome.matched += 1;
+                        outcome.moved += 1;
+                    }
+                }
+            }
+            (None, Expected::Kept(line)) => outcome.problems.push(match legacy {
+                Some(legacy) => format!(
+                    "{BASELINE_SPEC}:{line}: heading `{heading}` is missing from {legacy}; a \
+                     heading that moved or went needs a row in {HEADINGS}"
+                ),
+                None => {
+                    format!("{BASELINE_SPEC}:{line}: heading `{heading}` has no row in {HEADINGS}")
+                }
+            }),
+            (None, Expected::Row { at, .. }) => outcome.problems.push(format!(
+                "{at}: `{heading}` is listed in {path}, but {path} has no such heading"
+            )),
+        }
+    }
+    for (source, unit, taken) in found {
+        if taken {
+            continue;
+        }
+        let is_title = source.role == Role::Chapter
+            && unit.text.starts_with("# ")
+            && source
+                .units
+                .first()
+                .is_some_and(|first| std::ptr::eq(first, unit));
+        if is_title {
+            outcome.added += 1;
+        } else {
+            outcome.problems.push(format!(
+                "{}:{}: this heading isn't in the baseline or {HEADINGS}: {}",
+                source.path, unit.line, unit.text
+            ));
+        }
+    }
 }
 
 /// The first line of `text`, cut to 100 characters.
@@ -1097,7 +1313,10 @@ file = { expr }
             "# where\tunit\told\tnew\ttarget\nspec\tval.a\tx\t[x](a.md)\tspec/a.md\nstd\tL3\ty\t[y](b.md)\tspec/b.md\n\
              spec\tL9\tz\tZ\t\ndoc\tval.a\tx\ty\tz\nspec\tBad\tx\ty\tz\n",
             "val.b\told\tnew\nval.b\told\n",
-            "new\tspec/quince-spec.md\t### Kinds\nnew\tspec/quince-spec.md\tKinds\n",
+            "new\tspec/quince-spec.md\t### Kinds\nnew\tspec/quince-spec.md\tKinds\n\
+             moved\tL5\t## 1. Values\tspec/a.md\t# Values\ndropped\tL34\t### Old\n\
+             moved\t5\t## 1. Values\tspec/a.md\t# Values\nmoved\tL5\t## 1. Values\tspec/a.md\n\
+             dropped\tL34\tOld\n",
         );
         assert_eq!(
             tables.rewrites,
@@ -1117,8 +1336,32 @@ file = { expr }
             ]
         );
         assert_eq!(
-            tables.new_headings,
-            [("spec/quince-spec.md".to_string(), "### Kinds".to_string())]
+            tables.headings,
+            [
+                HeadingRow {
+                    at: "docs/design/spec-restructure/headings.tsv:1".into(),
+                    change: HeadingChange::New {
+                        path: "spec/quince-spec.md".into(),
+                        heading: "### Kinds".into(),
+                    },
+                },
+                HeadingRow {
+                    at: "docs/design/spec-restructure/headings.tsv:3".into(),
+                    change: HeadingChange::Moved {
+                        line: 5,
+                        old: "## 1. Values".into(),
+                        path: "spec/a.md".into(),
+                        heading: "# Values".into(),
+                    },
+                },
+                HeadingRow {
+                    at: "docs/design/spec-restructure/headings.tsv:4".into(),
+                    change: HeadingChange::Dropped {
+                        line: 34,
+                        old: "### Old".into(),
+                    },
+                },
+            ]
         );
         let lines: Vec<_> = errors
             .iter()
@@ -1132,6 +1375,9 @@ file = { expr }
                 "docs/design/spec-restructure/refs.tsv:6",
                 "docs/design/spec-restructure/rewordings.tsv:2",
                 "docs/design/spec-restructure/headings.tsv:2",
+                "docs/design/spec-restructure/headings.tsv:5",
+                "docs/design/spec-restructure/headings.tsv:6",
+                "docs/design/spec-restructure/headings.tsv:7",
             ],
             "{errors:?}"
         );
@@ -1161,7 +1407,9 @@ file = { expr }
             "{problems}"
         );
         assert!(
-            problems.contains("this heading isn't in the baseline: ### Kinds"),
+            problems.contains(
+                "spec/quince-spec.md:9: this heading isn't in the baseline or docs/design/spec-restructure/headings.tsv: ### Kinds"
+            ),
             "{problems}"
         );
     }
@@ -1180,7 +1428,138 @@ file = { expr }
                 "docs/design/spec-restructure/refs.tsv:1: the baseline unit on line 7 doesn't hold `mutable!`",
                 "docs/design/spec-restructure/refs.tsv:2: no baseline unit is tagged `val.zzz`",
                 "docs/design/spec-restructure/refs.tsv:3: no baseline unit is untagged on line 16",
-                "docs/design/spec-restructure/headings.tsv: `### Gone` is listed as new in spec/quince-spec.md, but spec/quince-spec.md has no such heading",
+                "docs/design/spec-restructure/headings.tsv:1: `### Gone` is listed in spec/quince-spec.md, but spec/quince-spec.md has no such heading",
+            ]
+        );
+    }
+
+    #[test]
+    fn only_the_introduction_may_add_its_link() {
+        let link = "Some examples are signature listings rather than compilable code: \
+                    [Prelude and special interfaces](prelude.md) says which.";
+        let intro = format!("# Introduction\n\n{link}\n");
+        let outcome = compare_with(&[
+            legacy(BASELINE),
+            source("spec/reference/introduction.md", Role::Chapter, &intro),
+        ]);
+        assert_eq!(outcome.problems, Vec::<String>::new());
+        assert_eq!(outcome.added, 2);
+
+        let elsewhere = format!("# Values\n\n{link}\n");
+        let outcome = compare_with(&[
+            legacy(BASELINE),
+            source("spec/reference/values.md", Role::Chapter, &elsewhere),
+        ]);
+        assert_eq!(
+            outcome.problems,
+            [
+                "spec/reference/values.md:3: this paragraph isn't in the baseline: Some examples are signature listings rather than compilable code: [Prelude and special interfaces]()…"
+            ]
+        );
+    }
+
+    #[test]
+    fn moved_split_and_dropped_headings_pass() {
+        // The Values section becomes a chapter whose title and `## Kinds` heading both come
+        // from `## 1. Values`, and the second grammar heading goes.
+        let values_at = BASELINE.find("## 1. Values").unwrap();
+        let grammar_at = BASELINE.find("## Appendix").unwrap();
+        let chapter = BASELINE[values_at..grammar_at]
+            .replace("## 1. Values", "# Values")
+            .replace("| Kind | Rule |", "## Kinds\n\n| Kind | Rule |");
+        let rest = format!(
+            "{}{}",
+            &BASELINE[..values_at],
+            BASELINE[grammar_at..].replace("### Declarations, types and patterns\n\n", "")
+        );
+        let tables = rewrite_tables(
+            "",
+            "",
+            "moved\tL5\t## 1. Values\tspec/reference/values.md\t# Values\n\
+             moved\tL5\t## 1. Values\tspec/reference/values.md\t## Kinds\n\
+             dropped\tL34\t### Declarations, types and patterns\n",
+        );
+        let outcome = compare(
+            &segment(BASELINE),
+            &[
+                legacy(&rest),
+                source("spec/reference/values.md", Role::Chapter, &chapter),
+            ],
+            &tables,
+            "",
+        );
+        assert_eq!(outcome.problems, Vec::<String>::new());
+        // The chapter title is a moved heading, not an added one.
+        assert_eq!(outcome.added, 0);
+
+        // Without the rows, both chapter headings are new and the baseline ones are missing.
+        let outcome = compare(
+            &segment(BASELINE),
+            &[
+                legacy(&rest),
+                source("spec/reference/values.md", Role::Chapter, &chapter),
+            ],
+            &Tables::default(),
+            "",
+        );
+        assert_eq!(
+            outcome.problems,
+            [
+                "docs/design/spec-restructure/baseline/quince-spec.md:5: heading `## 1. Values` is missing from spec/quince-spec.md; a heading that moved or went needs a row in docs/design/spec-restructure/headings.tsv",
+                "docs/design/spec-restructure/baseline/quince-spec.md:34: heading `### Declarations, types and patterns` is missing from spec/quince-spec.md; a heading that moved or went needs a row in docs/design/spec-restructure/headings.tsv",
+                "spec/reference/values.md:5: this heading isn't in the baseline or docs/design/spec-restructure/headings.tsv: ## Kinds",
+            ]
+        );
+    }
+
+    #[test]
+    fn stale_or_conflicting_heading_rows_fail() {
+        let tables = rewrite_tables(
+            "",
+            "",
+            "moved\tL6\t## 1. Values\tspec/reference/values.md\t# Values\n\
+             dropped\tL5\t## Values\n\
+             moved\tL5\t## 1. Values\tspec/quince-spec.md\t## 1. Values\n",
+        );
+        let outcome = compare(&segment(BASELINE), &[legacy(BASELINE)], &tables, "");
+        assert_eq!(
+            outcome.problems,
+            [
+                "docs/design/spec-restructure/headings.tsv:1: no baseline heading that stays in the spec is on line 6",
+                "docs/design/spec-restructure/headings.tsv:2: the baseline heading on line 5 is `## 1. Values`, not `## Values`",
+                "docs/design/spec-restructure/headings.tsv:3: the baseline heading on line 5 has another row; a dropped heading has only one",
+                "docs/design/spec-restructure/headings.tsv:1: `# Values` is listed in spec/reference/values.md, but spec/reference/values.md has no such heading",
+            ]
+        );
+    }
+
+    #[test]
+    fn without_the_legacy_file_every_heading_needs_a_row() {
+        let tables = rewrite_tables(
+            "",
+            "",
+            "moved\tL5\t## 1. Values\tspec/reference/values.md\t# Values\n",
+        );
+        let chapter = "# Values\n\n## Kinds\n\n# Late title\n";
+        let outcome = compare(
+            &segment(BASELINE),
+            &[source("spec/reference/values.md", Role::Chapter, chapter)],
+            &tables,
+            "",
+        );
+        let headings: Vec<&String> = outcome
+            .problems
+            .iter()
+            .filter(|p| p.contains("heading"))
+            .collect();
+        assert_eq!(
+            headings,
+            [
+                "docs/design/spec-restructure/baseline/quince-spec.md:1: heading `# Spec` has no row in docs/design/spec-restructure/headings.tsv",
+                "docs/design/spec-restructure/baseline/quince-spec.md:27: heading `## Appendix: Expression grammar` has no row in docs/design/spec-restructure/headings.tsv",
+                "docs/design/spec-restructure/baseline/quince-spec.md:34: heading `### Declarations, types and patterns` has no row in docs/design/spec-restructure/headings.tsv",
+                "spec/reference/values.md:3: this heading isn't in the baseline or docs/design/spec-restructure/headings.tsv: ## Kinds",
+                "spec/reference/values.md:5: this heading isn't in the baseline or docs/design/spec-restructure/headings.tsv: # Late title",
             ]
         );
     }
