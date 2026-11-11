@@ -3,6 +3,7 @@
 //! The formats it checks are defined in this crate's `README.md`.
 
 pub mod grammar;
+pub mod links;
 pub mod manifest;
 pub mod rules;
 

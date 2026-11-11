@@ -504,7 +504,7 @@ One `gh stack`, a PR per layer (decision 11). Tick each box as it lands on its b
   - [x] coverage by chapter; `spec_version` from the README
   - [x] pointers to `spec/quince-spec.md` moved to `spec/README.md`; `compiler/spec/README.md` and the testdata README updated
   - [x] `AGENTS.md`: Conventional Commits section
-- [ ] 3. `links`: `spec-links` with github-slugger anchors, its subcommand and `ci` step, tests on awkward headings
+- [x] 3. `links`: `spec-links` with github-slugger anchors, its subcommand and `ci` step, tests on awkward headings
 - [ ] 4. `compare`: baseline committed; segmenter with planted-failure tests; production and declaration units; placement and count checks; `ci` step
 - [ ] 5. `move-library`
   - [ ] `std/API.md` from `spec/std-api.md`, plus the Prelude's library material, tags stripped
