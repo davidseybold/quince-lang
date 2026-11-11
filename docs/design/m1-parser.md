@@ -114,7 +114,7 @@ The parser checks that one function, `at_break()`, wherever a construct may end 
 
 A line that starts with `- b` or `(x)` isn't one of these: it can start a statement, so it is one, as `r[lex.line-end]` says.
 
-E0018's fix replaces the break, and the indentation after it, with one space (`safe`), which joins the lines as `r[lex.else-same-line]` asks. When a comment ends the first line there is no fix, since joining would move code into the comment.
+E0018's fix replaces everything between the two tokens with one space (`safe`): the break, any blank lines, and the indentation. That joins the lines, as `r[lex.else-same-line]` asks. When any comment lies between the two tokens there is no fix, since joining would move code into the comment or delete it.
 
 A hard break never joins. `a;` followed by a line `.b()` is an E0002 plus an E0016 at `.`, which no statement starts with. Deleting the `;` fixes both, which is why E0002's fix is `needs-review` there.
 
@@ -144,9 +144,10 @@ What it reports:
   - a chained range (`r[expr.op.range.no-chain]`), with no fix.
 - **Jumps.** `jump` (`return`, `break`, `continue`, `spawn`) is an expression only at the top of an expression, so `a + return` is an E0016. `return` and `spawn` take everything to their right (`r[expr.op.keyword-forms]`). `spawn in` takes a postfix expression, which takes a following `(` or `[`, so `spawn in bg (x).run()` calls `bg`, as the grammar says.
 
-**When `<` opens type arguments** (spec question 6). After a name or a path in an expression, the parser parses ahead to see whether type arguments closed by `>` follow. If they do, it checks the token after the `>`. `<` opens type arguments only when that token is `(`, `.`, `?`, `,`, a closing bracket or a break, and isn't a `=` directly after the `>`. Otherwise `<` is less-than.
+**When `<` opens type arguments** (spec question 6). After a name or a path in an expression, the parser parses ahead to see whether type arguments closed by `>` follow. If they do, it checks the token after the `>`. `<` opens type arguments only when that token is `(`, `.`, `?`, `,`, `)`, `]`, `}` or a break. A `>` doesn't count, and neither does a `=` directly after the `>`. Otherwise `<` is less-than.
 - So `json.decode<Order>(body)` and `Channel<Job>.new(16)` take type arguments.
 - `a < b > c` and `x < Y >= z` are chained comparisons, E0020 with its fix.
+- `a < b >> c` is a comparison with a shift as its operand, E0019, not type arguments followed by `> c`.
 - Case can't decide this, since a type can be a C name such as `sqlite3` (`grammar.type_path`, as in `CBuf.new<Ptr<sqlite3>>()`).
 
 Parsing ahead discards its events. The parser remembers the answer for every `<` it examines, nested ones included, so each `<` is examined once and the file stays linear.
@@ -196,11 +197,14 @@ Every error goes through one rule: report it, then skip to a sync point, reporti
 **A member start closes what can't hold it.** Some tokens, at the start of a line, can only start a member of a certain container. Such a token closes every open construct inside the innermost open container that can hold it, and each construct it closes that has an opening bracket gets an E0017 at that bracket. The member starts are:
 - for the file: `fn` followed by a name, `struct`, `enum`, `type`, `interface`, `impl`, `effect`, `foreign`, `import`, `const`, `test` and `pub`;
 - for an `impl`, `interface`, `effect` or `foreign` body: `fn` followed by a name, `type`, `const` and `pub`;
-- for a block: `let`, `var`, `for` and `while`. These start statements but never expressions, so inside a block they can only sit in a nested block, never inside a list.
+- for struct braces, enum braces and a variant's field list: `pub`. A field or variant otherwise starts with a name, so these close at any other file member start. Since `pub` is theirs, a `pub` field on its own line never closes a struct, and a `pub` on a variant field stays the one E0016 of decision 8;
+- for a block: `let`, `var` and `while`. These start statements but never expressions, so inside a block they can only sit in a nested block, never inside a list. `for` isn't one, since `concurrent(limit: 4) for x in xs { ... }` is an expression that can sit in a list.
 
-So a missing `}` gives one E0017 at its `{` when the next declaration starts, rather than an error on every line after it. A missing `)` gives one E0017 when the next statement starts. A declaration can't go in a block (`grammar.block`, `grammar.stmt`), so this never closes a block that was meant to stay open.
+So a missing `}` gives one E0017 at its `{` when the next declaration starts, rather than an error on every line after it. A missing `)` gives one E0017 when the next statement starts with one of those keywords. A declaration can't go in a block (`grammar.block`, `grammar.stmt`), so this never closes a block that was meant to stay open.
 
-Struct and enum braces have no member start of their own, since a field or variant starts with a name, so they close at a file member start. Doc comments and attributes aren't member starts: they belong to the declaration after them, so a stray `///` or `@` never closes anything.
+Doc comments and attributes aren't member starts: they belong to the declaration after them. A stray `///` or `@` never closes anything. At the start of a line, the check looks past attribute and doc-comment lines to the token after them, so a `@` line before a `fn` closes what the `fn` closes, with no E0016 at the `@`.
+
+**Order and silence.** The member-start check runs before the parser reports "expected" at the start of a line, so a missing `)` before a `let` line is the E0017 alone. A construct closed while the parser is skipping after an error gets no E0017, since the error already reported covers that slip. So `f(a, b` followed by a line `g()` is one E0016 at `g`, expecting `,` or `)`, and the block's `}` later closes the `(` silently.
 
 **Brackets.** A skip never stops inside a bracket it opened.
 - A closing bracket that matches an open one further out closes everything inside it, with an E0017 at each inner opener. `f(a` followed by a line `}` is an E0017 at `(`.
@@ -213,16 +217,19 @@ Struct and enum braces have no member start of their own, since a field or varia
 
 **Errors the lexer already reported** aren't reported again (lexer README). Beyond that contract:
 - An error the parser would report right after one of the lexer's `Error` tokens, with only trivia between, is dropped. So `let x = $` gives the lexer's E0001 alone, even though the `=` continues the line and the parser's error would fall on the next line. One slip, one error.
-- An unclosed one-line literal (a string with no `StringEnd`, E0004, or a char with no closing `'`, E0009) ends its line's constructs. Brackets opened on that line close at its end with no E0017, and nothing else on the line is reported. So `print("hello)` is the E0004 alone.
+- An unclosed one-line literal (a string with no `StringEnd`, E0004, or a char with no closing `'`, E0009) ends its line's lists. Parentheses, square brackets and list braces opened on that line close at its end with no E0017, and nothing else on the line is reported. A block's `{` stays open, so in `if ok { log("done)` followed by a line `}`, the `}` closes the `if`'s block. So `print("hello)` is the E0004 alone.
 - When a multi-line string or a block comment runs to the end of the file unclosed (E0005, E0003), the parser reports nothing at the end of the file. Everything it would report there, such as a missing `)` or `}`, is that slip.
 
-**Loop safety.** Every parser loop takes a token or exits. A debug-build counter panics when the parser looks ahead 256 times without taking a token, so the fuzz target and the unit tests see a loop as a panic.
+**Loop safety.** Every parser loop takes a token or exits. A counter under `debug_assertions`, which fuzz builds turn on, panics when the parser looks ahead 256 times without taking a token, so the fuzz target and the unit tests see a loop as a panic.
 
 **Slips and their diagnostics.** These are unit tests, and each row lands with the layer that parses its construct. Each later layer adds rows of its own.
 
 | Slip | Diagnostics |
 | --- | --- |
 | `f(a, b` followed by a line `let y = 2` | E0017 at `(` |
+| `f(a, b` followed by a line `g()` | E0016 at `g` |
+| `struct S {` with `pub` fields on lines of their own | None |
+| `if ok { log("done)` followed by a line `}` | E0004 |
 | `fn f() {` with no `}`, followed later by a line `fn g() {` | E0017 at the first `{` |
 | `f(a` followed by a line `}` | E0017 at `(` |
 | `f(a, b]` | E0016 at `]` |
@@ -290,7 +297,8 @@ Past the limit, E0022 is reported at the token that goes past it, and the parser
   - every lexer token is in the tree in order, apart from the joins (decision 5);
   - every error range lies inside the input, on character boundaries.
 - **The fuzzer** (decided by David, 2026-11-11) is a `cargo-fuzz` target in `compiler/syntax/fuzz/`.
-  - That crate is outside the workspace, so `cargo xtask ci` and stable builds never build it or its `libfuzzer-sys` dependency. It runs on nightly Rust, only where someone runs it, and `AGENTS.md` gives the command.
+  - That crate is outside the workspace, with its own `[workspace]` table, as `cargo fuzz init` writes. So `cargo xtask ci` and stable builds never build it or its `libfuzzer-sys` dependency. Its `Cargo.lock` is committed, so a run can be reproduced.
+  - It runs on nightly Rust, only where someone runs it. `rust-toolchain.toml` pins a stable release, so `AGENTS.md` gives the command as `cargo +nightly fuzz run parse`.
   - The target decodes the input bytes, parses them and checks the invariants. Its seed corpus is the fixtures.
   - It isn't a CI step. M1's exit criterion is met by a fuzz run of at least four hours with no crash before M1 closes, recorded in the milestone's last PR. Every crash a run finds becomes a unit test or a fixture, so CI guards against it coming back.
   - The lexer's mutation test stays as it is.
@@ -317,7 +325,7 @@ The layers:
    - significant tokens, breaks and `at_break()` in line contexts;
    - recovery, E0016 and E0017;
    - `parse`, `Parse::diagnostics` and the lossy rule;
-   - `fn` declarations with parameters (`self` included) and return types, `test`, `const`, and `impl` with methods;
+   - `fn` declarations with parameters (`self` included) and return types, `test`, `const`, and an inherent `impl` with methods (`impl User { ... }`). Layer 7 takes the rest of `impl`: generics, `for`, and `type` and `const` members;
    - type paths with type arguments;
    - blocks, `let` with a type;
    - literals, booleans (question 2), names, list literals, ranges, calls, method calls and fields;
@@ -328,7 +336,7 @@ The layers:
 4. `m1/parser-stmts`: statements, assignment and E0026; list contexts; E0018; `if` and `else`.
 5. `m1/parser-patterns`: patterns, `match`, `is` and `for`.
 6. `m1/parser-keyword-forms`: closures, `concurrent`, `background`, `select`, `with`, `spawn` and contracts.
-7. `m1/parser-items`: `interface`, `effect` and `foreign`; members' doc comments and attributes; E0023.
+7. `m1/parser-items`: the rest of `impl`, `interface`, `effect` and `foreign`; members' doc comments and attributes; E0023.
 8. `m1/parser-names`: `validate`, the case check and E0021.
 9. `m1/parser-fuzz`: the fuzz crate, the nesting limit and E0022, and the deep-nesting tests.
 
@@ -363,13 +371,15 @@ The grammar's `primary` and `alt` list `name` and `NAME` but no `c_name`, so tod
 
 **5. Negative literals (layer 3).** `r[lex.lit.int.neg]` says the minus is "directly before" the literal, but not whether a space may come between, or what a postfix operator after the literal does. Proposed: `r[lex.lit.neg-adjacent]` "Directly before means with nothing between them, not even a space, and the literal isn't followed by a postfix operator. So `- 1` is the prefix minus applied to `1`, and `-2.pow(2)` is `-(2.pow(2))`, as `-x.abs()` is." So `Int.MIN` is written `-9_223_372_036_854_775_808`, and postfix still binds tighter than prefix everywhere.
 
-**6. Type arguments in expressions (layer 3).** `r[expr.op.compare.no-chain]` says `json.decode<Order>(body)` "has only one reading", but not how a parser finds it. Case can't settle it, since a type can be a C name (`Ptr<sqlite3>`). Proposed: `r[expr.op.type-args]` "In an expression, `<` after a name or path starts type arguments when what follows parses as type arguments closed by `>`, and the token after the `>` is `(`, `.`, `?`, `,`, a closing bracket or a line break, and not a `=` directly after the `>`. Otherwise `<` is less-than."
+**6. Type arguments in expressions (layer 3).** `r[expr.op.compare.no-chain]` says `json.decode<Order>(body)` "has only one reading", but not how a parser finds it. Case can't settle it, since a type can be a C name (`Ptr<sqlite3>`). Proposed: `r[expr.op.type-args]` "In an expression, `<` after a name or path starts type arguments when what follows parses as type arguments closed by `>`, and the token after the `>` is `(`, `.`, `?`, `,`, `)`, `]`, `}` or a line break, and not a `=` directly after the `>`. Otherwise `<` is less-than."
 
 So `a < b > c` stays a chained comparison with its fix, as the spec's example wants. One case still reads as type arguments: `f(a < b, c > (d))` calls `a<b, c>`. That reading then has to type-check as a generic call, and `f((a < b), c > (d))` gives the other one.
 
 **7. The `ensures` binder (layer 6).** `contract = "requires" expr | "ensures" [ "(" name ")" ] expr` can read `ensures (x) - 1 > 0` two ways: as a condition on `x`, or as naming the result `x` with the condition `-1 > 0`. Proposed: `r[contract.ensures-binder]` "`ensures` followed by a name in parentheses always names the return value. A condition that starts with a parenthesized name is written without the parentheses."
 
-**8. Where a `uses` list ends (layer 2).** `effects = "*" | effect_ref { "," effect_ref }`, and `type_path` includes `c_name`, so in `handler: fn(Request) -> Response uses E, host: String` (`std/API.md`, `http.serve`), `host` could be read as a second effect. The same goes for `Pool.new`'s `open:` parameter, struct fields, and `Output = T` in a bound. Proposed: `r[effect.uses-list]` "A comma continues a `uses` list only when a type path follows it that isn't followed by `:` or `=`. So a parameter, a field or a named bound argument after a function type ends its effects. Inside type arguments, a function type's effects take every type path after them, so `Map<String, fn() uses Io, Db>` gives the function both effects."
+**8. Where a `uses` list ends (layer 2).** `effects = "*" | effect_ref { "," effect_ref }`, and `type_path` includes `c_name`, so in `handler: fn(Request) -> Response uses E, host: String` (`std/API.md`, `http.serve`), `host` could be read as a second effect. The same goes for `Pool.new`'s `open:` parameter, struct fields, and `Output = T` in a bound. Proposed: `r[effect.uses-list]` "A comma continues a `uses` list only when a type path follows it that isn't followed by `:` or `=`. So a parameter, a field or a named bound argument after a function type ends its effects. In a list of types, a function type's effects take every type path after them. That applies to type arguments, tuple types and a function type's parameters, so `Map<String, fn() uses Io, Db>` gives the function both effects."
+
+*Consequence:* a function type with effects can't be followed by another type in such a list. `(fn() uses Io, Int)` reads `Int` as a second effect, which is an error, and `fn(fn() uses Io, Int) -> T` does the same. Each is written with an alias for the function type. Neither the spec nor `std/API.md` has such a type today.
 
 **9. Doc comments and attributes on members (layer 7).** In the grammar, `impl_item`, the members of `interface_decl` and `effect_decl`, and the items of `foreign_decl` take no doc comments, and the first three take no attributes. But `@deprecated` applies to "any public declaration", and `@unchecked` and `@verify` to functions. Proposed: each of the four takes `{ doc_comment } { attribute NEWLINE }` before it, as `decl` does. For the grammar:
 ```
@@ -428,7 +438,7 @@ Revert the stack's PRs. Nothing changes outside `quince_syntax`, the conformance
 
 ## Tasks
 
-Rule IDs in brackets are what each task's fixtures cite. Grammar productions are cited as `grammar.<production>`. Rules added by spec questions are cited only once approved.
+Rule IDs in brackets are what each task's fixtures cite. Grammar productions are cited as `grammar.<production>`. Rules added by spec questions are cited only once approved. A rule a question retires (`lex.continue.signature` under question 12, and `stmt.assign.place` under question 13's second option) is cited by its replacement once that is approved, since the runner rejects a retired ID.
 
 **Before building**
 - [x] David decides questions A, B and C (2026-11-11).
@@ -476,7 +486,7 @@ Rule IDs in brackets are what each task's fixtures cite. Grammar productions are
 
 **Layer 7: `m1/parser-items`**
 - [ ] Spec: questions 4, 9 and 10, and a bump.
-- [ ] `interface`, `effect` and `foreign`; members' doc comments and attributes; E0023; `lex/control.qnc`'s doc comment. [`grammar.impl_decl`, `grammar.interface_decl`, `grammar.effect_decl`, `grammar.foreign_decl`, `item.const.assoc.no-interface`, `lex.comment.doc-exact`]
+- [ ] The rest of `impl` (generics, `for`, `type` and `const` members), `interface`, `effect` and `foreign`; members' doc comments and attributes; E0023; `lex/control.qnc`'s doc comment. [`grammar.impl_decl`, `grammar.interface_decl`, `grammar.effect_decl`, `grammar.foreign_decl`, `item.const.assoc.no-interface`, `lex.comment.doc-exact`]
 
 **Layer 8: `m1/parser-names`**
 - [ ] Spec: question 1, and a bump.
