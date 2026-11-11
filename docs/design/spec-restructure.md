@@ -509,10 +509,10 @@ One `gh stack`, a PR per layer (decision 11). Tick each box as it lands on its b
   - [x] `AGENTS.md`: Conventional Commits section
 - [x] 3. `links`: `spec-links` with github-slugger anchors, its subcommand and `ci` step, tests on awkward headings
 - [x] 4. `compare`: baseline committed; segmenter with planted-failure tests; production and declaration units; placement and count checks; `ci` step
-- [ ] 5. `move-library`
-  - [ ] `std/API.md` from `spec/std-api.md`, plus the Prelude's library material, tags stripped
-  - [ ] `id-map.tsv` with 34 `removed` rows; `removed.tsv` `to-std` rows; `std` out of `rule-topics.txt`
-  - [ ] `std/README.md`, `CLAUDE.md`, `AGENTS.md`, `docs/milestones.md`, `docs/repo-plan.md` paths
+- [x] 5. `move-library`
+  - [x] `std/API.md` from `spec/std-api.md`, plus the Prelude's library material, tags stripped
+  - [x] `id-map.tsv` with 34 `removed` rows; `removed.tsv` `to-std` rows; `std` out of `rule-topics.txt`
+  - [x] `std/README.md`, `CLAUDE.md`, `AGENTS.md`, `docs/milestones.md`, `docs/repo-plan.md` paths
 - [ ] 6. `rename-ids`
   - [ ] `id-map.tsv` renames, with `hand` rows (40 or fewer)
   - [ ] `chapters.txt` constructs; `rule-topics.txt` deleted; chapter checks on

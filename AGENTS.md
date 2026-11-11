@@ -37,12 +37,12 @@ A spec change that adds normative text tags it in the same PR. No check can tell
 
 | Path | What it is |
 | --- | --- |
-| `spec/` | The language spec and std API. The source of truth for what Quince means. Don't edit it without David's approval. |
+| `spec/` | The language spec. The source of truth for what Quince means. Don't edit it without David's approval. |
 | `compiler/<name>/` | One crate per compiler stage, named `quince_<name>`. Each crate's `lib.rs` says what it holds, and its `README.md`, when it has one, holds the formats and rules it enforces. |
 | `compiler/cli/` | The single `quince` binary. |
 | `compiler/spec/` | `quince_spec`: reads the spec (chapter manifest, rule tags, `ebnf` grammar blocks) for xtask and the conformance runner. |
 | `runtime/` | The runtime, built as a static library linked into every Quince binary. |
-| `std/` | The standard library in Quince (from M6). |
+| `std/` | The standard library in Quince (from M6), and `std/API.md`, its API doc. For a std signature, read `std/API.md`; once `quince query` works (M5), use it instead. |
 | `tests/conformance/` | The conformance runner (`quince_conformance`); fixtures live in its `testdata/`. |
 | `xtask/` | `cargo xtask`: repo checks. Add a check as a `Step` in `xtask/src/ci.rs`. |
 | `docs/` | The repo plan and milestones. `docs/design/` holds one design doc per milestone chunk, with its task list. |

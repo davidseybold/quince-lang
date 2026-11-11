@@ -55,7 +55,7 @@ quince/
     lsp/
     cli/                 the single `quince` binary
   runtime/               Rust staticlib: scheduler, RC, cycle collector, FFI pool, deterministic test scheduler
-  std/                   standard library in Quince, built from std-api v0.4
+  std/                   standard library in Quince, built from std/API.md
   tests/
     conformance/         .qnc files with inline expectations, tagged with rule IDs (in testdata/ folders)
     diagnostics/ fix/ query/   snapshot tests of the JSON outputs

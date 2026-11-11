@@ -10,4 +10,4 @@ The spec says what Quince programs mean, and what the tools guarantee about them
 
 Read the chapters in the order listed. [`chapters.txt`](chapters.txt) lists them with their rule-ID prefixes.
 
-The standard library API is in [`std-api.md`](std-api.md).
+The standard library's API isn't part of the spec. It is in [`std/API.md`](../std/API.md), which isn't normative and needs no approval to change.

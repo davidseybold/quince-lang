@@ -113,7 +113,7 @@ Phase 3 ends when `quince build` produces a native binary that runs concurrent Q
 
 Phase 4 ends when four programs (an HTTP service with a database, a CLI tool, a fan-out pipeline, and a C library wrapper) build from git dependencies and pass their tests.
 
-**M9. Standard library and runtime effects.** Section 5 (runtime) and `spec/std-api.md`.
+**M9. Standard library and runtime effects.** Section 5 (runtime) and `std/API.md`.
 
 - Real handlers for every built-in effect (`Net`, `Listen`, `Fs`, `Clock`, `Random`, `Env`, `Process`, `Console`); handlers in tests and production; `[cmd.*]` capability limits enforced at runtime, with path normalization.
 - The rest of `std/` from the std API: time, URLs, regex, JSON and serialization, HTTP, sync.
