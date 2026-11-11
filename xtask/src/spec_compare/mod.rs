@@ -21,6 +21,12 @@ pub const ID_MAP: &str = "docs/design/spec-restructure/id-map.tsv";
 pub const REMOVED: &str = "docs/design/spec-restructure/removed.tsv";
 /// Where the spec's library material went, relative to the repo root.
 pub const STD_API: &str = "std/API.md";
+/// Positional references rewritten as links, relative to the repo root.
+pub const REFS: &str = "docs/design/spec-restructure/refs.tsv";
+/// Tagged sentences whose wording changed, relative to the repo root.
+pub const REWORDINGS: &str = "docs/design/spec-restructure/rewordings.tsv";
+/// The headings the restructure adds, relative to the repo root.
+pub const HEADINGS: &str = "docs/design/spec-restructure/headings.tsv";
 
 /// The headings in the baseline whose code block holds the grammar.
 const BASELINE_GRAMMAR_HEADINGS: [&str; 2] = [
@@ -59,6 +65,50 @@ pub struct Tables {
     pub to_std: Vec<(usize, usize)>,
     /// Text removed outright from the baseline unit that starts on a line, from `removed.tsv`.
     pub removed_text: Vec<(usize, String)>,
+    /// Rewrites of baseline text, from `refs.tsv` and then `rewordings.tsv`, in table order.
+    pub rewrites: Vec<Rewrite>,
+    /// Rewrites made in `std/API.md`, from the `std` rows of `refs.tsv`. Each unit is a line
+    /// of `std/API.md`.
+    pub std_rewrites: Vec<Rewrite>,
+    /// Headings the restructure adds, as a file and its heading line, from `headings.tsv`.
+    pub new_headings: Vec<(String, String)>,
+}
+
+/// One rewrite of a baseline unit's text: its first `old` becomes `new`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Rewrite {
+    /// The table row, as `path:line`.
+    pub at: String,
+    pub unit: UnitRef,
+    pub old: String,
+    pub new: String,
+}
+
+/// The baseline unit a rewrite applies to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UnitRef {
+    /// The tagged rule with this ID, as the spec tags it now.
+    Rule(String),
+    /// The untagged unit that starts on this baseline line.
+    Line(usize),
+}
+
+impl UnitRef {
+    /// A rule ID, or `L` and a line number.
+    fn parse(text: &str) -> Option<UnitRef> {
+        match text.strip_prefix('L').map(str::parse) {
+            Some(Ok(line)) => Some(UnitRef::Line(line)),
+            _ if quince_spec::rules::is_valid_id(text) => Some(UnitRef::Rule(text.to_string())),
+            _ => None,
+        }
+    }
+
+    fn matches(&self, unit: &Unit) -> bool {
+        match self {
+            UnitRef::Rule(id) => unit.id.as_deref() == Some(id),
+            UnitRef::Line(line) => unit.id.is_none() && unit.line == *line,
+        }
+    }
 }
 
 impl Tables {
@@ -114,6 +164,78 @@ impl Tables {
         (tables, errors)
     }
 
+    /// Adds the rows of `refs.tsv`, `rewordings.tsv` and `headings.tsv`, and returns an error
+    /// for each bad row. Columns are tab-separated; blank lines and `#` comments are ignored.
+    /// - `refs.tsv`: where the reference is (`spec`, or `std` for `std/API.md`), its unit (a
+    ///   rule ID, or `L` and the line the unit starts on: in the baseline for `spec`, in
+    ///   `std/API.md` for `std`), the old phrase, the new phrase, and the final target of its
+    ///   link as a path from the repo root. `spec` rows rewrite the baseline. `std` rows are
+    ///   undone in `std/API.md` before checking that the units that moved there still hold
+    ///   their text; its other text isn't compared.
+    /// - `rewordings.tsv`: a rule ID, the old text and the new text.
+    /// - `headings.tsv`: `new`, a chapter file and the heading line the restructure adds there.
+    pub fn parse_rewrites(&mut self, refs: &str, rewordings: &str, headings: &str) -> Vec<String> {
+        let mut errors = Vec::new();
+        let filled = |columns: &[&str]| columns.iter().all(|c| !c.is_empty());
+        for (line, columns) in rows(refs) {
+            let at = format!("{REFS}:{line}");
+            match columns.as_slice() {
+                [origin @ ("spec" | "std"), unit, old, new, _] if filled(&columns) => {
+                    let rewrite = |unit| Rewrite {
+                        at: at.clone(),
+                        unit,
+                        old: old.to_string(),
+                        new: new.to_string(),
+                    };
+                    match (*origin, UnitRef::parse(unit)) {
+                        ("spec", Some(unit)) => self.rewrites.push(rewrite(unit)),
+                        ("std", Some(unit @ UnitRef::Line(_))) => {
+                            self.std_rewrites.push(rewrite(unit))
+                        }
+                        ("std", _) => errors.push(format!(
+                            "{at}: a `std` row names a line of {STD_API}, such as `L120`"
+                        )),
+                        _ => errors.push(format!(
+                            "{at}: `{unit}` is not a rule ID or a line such as `L120`"
+                        )),
+                    }
+                }
+                _ => errors.push(format!(
+                    "{at}: a row is `spec` or `std`, the unit, the old phrase, the new phrase and \
+                     the final target"
+                )),
+            }
+        }
+        for (line, columns) in rows(rewordings) {
+            let at = format!("{REWORDINGS}:{line}");
+            match columns.as_slice() {
+                [id, old, new] if filled(&columns) && quince_spec::rules::is_valid_id(id) => {
+                    self.rewrites.push(Rewrite {
+                        at,
+                        unit: UnitRef::Rule(id.to_string()),
+                        old: old.to_string(),
+                        new: new.to_string(),
+                    })
+                }
+                _ => errors.push(format!(
+                    "{at}: a row is a rule ID, the old text and the new text"
+                )),
+            }
+        }
+        for (line, columns) in rows(headings) {
+            match columns.as_slice() {
+                ["new", path, heading] if !path.is_empty() && heading.starts_with('#') => {
+                    self.new_headings
+                        .push((path.to_string(), heading.to_string()));
+                }
+                _ => errors.push(format!(
+                    "{HEADINGS}:{line}: a row is `new`, a chapter file and the heading line it adds"
+                )),
+            }
+        }
+        errors
+    }
+
     fn in_to_std(&self, line: usize) -> bool {
         self.to_std
             .iter()
@@ -145,8 +267,11 @@ pub struct Outcome {
     pub moved: usize,
     /// Baseline units that left the spec for `std/API.md`.
     pub to_std: usize,
-    /// Units allowed without a baseline match: chapter titles and repeated table headers.
+    /// Units allowed without a baseline match: chapter titles, repeated table headers and
+    /// the headings in `headings.tsv`.
     pub added: usize,
+    /// Rewrites from `refs.tsv` and `rewordings.tsv` applied to the baseline.
+    pub rewritten: usize,
 }
 
 pub fn check(root: &Path) -> Result<(), String> {
@@ -177,7 +302,12 @@ pub fn check(root: &Path) -> Result<(), String> {
             Err(e) => Err(format!("can't read {path}: {e}")),
         }
     };
-    let (tables, table_errors) = Tables::parse(&optional(ID_MAP)?, &optional(REMOVED)?);
+    let (mut tables, mut table_errors) = Tables::parse(&optional(ID_MAP)?, &optional(REMOVED)?);
+    table_errors.extend(tables.parse_rewrites(
+        &optional(REFS)?,
+        &optional(REWORDINGS)?,
+        &optional(HEADINGS)?,
+    ));
     let std_text = optional(STD_API)?;
     let before = segment(&baseline);
     let mut outcome = compare(&before, &sources, &tables, &std_text);
@@ -214,12 +344,13 @@ pub fn check(root: &Path) -> Result<(), String> {
     eprintln!(
         "spec-compare against {BASELINE_SPEC}: rule tags {tags_before} before, {} removed, \
          {tags_after} after; productions {productions_before} before, {productions_after} after; \
-         units {} matched, {} moved, {} to std/API.md, {} added",
+         units {} matched, {} moved, {} to std/API.md, {} added; {} rewrites",
         tables.removed_ids.len(),
         outcome.matched,
         outcome.moved,
         outcome.to_std,
-        outcome.added
+        outcome.added,
+        outcome.rewritten
     );
     if outcome.problems.is_empty() {
         Ok(())
@@ -232,8 +363,8 @@ pub fn check(root: &Path) -> Result<(), String> {
 }
 
 /// Applies the tables to the baseline's units: removes the text `removed.tsv` lists, takes out
-/// the units that moved to `std/API.md` (checking that `std_text` holds each one), and maps
-/// renamed IDs to their new names.
+/// the units that moved to `std/API.md` (checking that `std_text` holds each one), maps
+/// renamed IDs to their new names, and applies the rewrites.
 fn normalize(before: &[Unit], tables: &Tables, std_text: &str, outcome: &mut Outcome) -> Vec<Unit> {
     let problems = &mut outcome.problems;
     let mut units = before.to_vec();
@@ -269,6 +400,7 @@ fn normalize(before: &[Unit], tables: &Tables, std_text: &str, outcome: &mut Out
         }
     }
 
+    let std_before = std_before_references(std_text, tables, problems);
     let mut kept = Vec::new();
     for unit in units {
         let to_std = match &unit.id {
@@ -295,7 +427,7 @@ fn normalize(before: &[Unit], tables: &Tables, std_text: &str, outcome: &mut Out
             continue;
         }
         outcome.to_std += 1;
-        if !std_text.contains(&unit.text) {
+        if !std_before.contains(&link_targets_removed(&unit.text)) {
             let what = match &unit.id {
                 Some(id) => format!("rule `{id}`"),
                 None => format!("this {}", unit.kind.name()),
@@ -312,7 +444,87 @@ fn normalize(before: &[Unit], tables: &Tables, std_text: &str, outcome: &mut Out
             unit.id = Some(new.clone());
         }
     }
+    for rewrite in &tables.rewrites {
+        match kept.iter_mut().find(|unit| rewrite.unit.matches(unit)) {
+            Some(unit) if unit.text.contains(&rewrite.old) => {
+                unit.text = unit.text.replacen(&rewrite.old, &rewrite.new, 1);
+                outcome.rewritten += 1;
+            }
+            Some(unit) => problems.push(format!(
+                "{}: the baseline unit on line {} doesn't hold `{}`",
+                rewrite.at,
+                unit.line,
+                snippet(&rewrite.old)
+            )),
+            None => problems.push(format!(
+                "{}: no baseline unit is {}",
+                rewrite.at,
+                match &rewrite.unit {
+                    UnitRef::Rule(id) => format!("tagged `{id}`"),
+                    UnitRef::Line(line) => format!("untagged on line {line}"),
+                }
+            )),
+        }
+    }
     kept
+}
+
+/// `std_text` as it was before its positional references were rewritten: each `std` row of
+/// `refs.tsv` undone on its line, with link targets removed from the whole text so a link that
+/// was retargeted later still matches.
+fn std_before_references(std_text: &str, tables: &Tables, problems: &mut Vec<String>) -> String {
+    let mut lines: Vec<String> = std_text.lines().map(link_targets_removed).collect();
+    let mut cursor: HashMap<usize, usize> = HashMap::new();
+    for rewrite in &tables.std_rewrites {
+        let UnitRef::Line(line) = rewrite.unit else {
+            continue;
+        };
+        let new = link_targets_removed(&rewrite.new);
+        let from = cursor.get(&line).copied().unwrap_or(0);
+        let found = lines
+            .get(line.wrapping_sub(1))
+            .and_then(|text| text[from..].find(&new).map(|at| from + at));
+        match found {
+            Some(at) => {
+                lines[line - 1].replace_range(at..at + new.len(), &rewrite.old);
+                cursor.insert(line, at + rewrite.old.len());
+            }
+            None => problems.push(format!(
+                "{}: line {line} of {STD_API} doesn't hold `{}`",
+                rewrite.at,
+                snippet(&new)
+            )),
+        }
+    }
+    lines.join("\n")
+}
+
+/// `unit` with its link targets removed (see [`link_targets_removed`]). Code is left alone.
+fn without_link_targets(mut unit: Unit) -> Unit {
+    if unit.kind != Kind::Code {
+        unit.text = link_targets_removed(&unit.text);
+    }
+    unit
+}
+
+/// `text` with every Markdown link target emptied, so `[text](target)` becomes `[text]()`.
+/// Targets change as text moves, and `spec-links` checks them.
+fn link_targets_removed(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find("](") {
+        out.push_str(&rest[..at + 2]);
+        let target = &rest[at + 2..];
+        match target.find(')') {
+            Some(end) => rest = &target[end..],
+            None => {
+                rest = target;
+                break;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 /// `unit` without `text`, keeping one space where two would meet.
@@ -330,8 +542,26 @@ fn remove_text(unit: &str, text: &str) -> String {
 /// Matches the baseline's units against the current files'.
 pub fn compare(before: &[Unit], after: &[Source], tables: &Tables, std_text: &str) -> Outcome {
     let mut outcome = Outcome::default();
-    let before = normalize(before, tables, std_text, &mut outcome);
+    let before: Vec<Unit> = normalize(before, tables, std_text, &mut outcome)
+        .into_iter()
+        .map(without_link_targets)
+        .collect();
     let before = before.as_slice();
+    let after: Vec<Source> = after
+        .iter()
+        .map(|source| Source {
+            path: source.path.clone(),
+            units: source
+                .units
+                .iter()
+                .cloned()
+                .map(without_link_targets)
+                .collect(),
+            role: source.role,
+        })
+        .collect();
+    let after = after.as_slice();
+    let mut new_headings_found: HashSet<(&str, &str)> = HashSet::new();
     let renamed_from: HashMap<&str, &str> = tables
         .renamed
         .iter()
@@ -443,6 +673,15 @@ pub fn compare(before: &[Unit], after: &[Source], tables: &Tables, std_text: &st
                 {
                     outcome.added += 1;
                 }
+                _ if unit.kind == Kind::Heading
+                    && tables
+                        .new_headings
+                        .iter()
+                        .any(|(path, heading)| *path == source.path && *heading == unit.text) =>
+                {
+                    new_headings_found.insert((&source.path, &unit.text));
+                    outcome.added += 1;
+                }
                 _ => problems.push(format!(
                     "{}:{}: this {} isn't in the baseline: {}",
                     source.path,
@@ -451,6 +690,13 @@ pub fn compare(before: &[Unit], after: &[Source], tables: &Tables, std_text: &st
                     snippet(&unit.text)
                 )),
             }
+        }
+    }
+    for (path, heading) in &tables.new_headings {
+        if !new_headings_found.contains(&(path.as_str(), heading.as_str())) {
+            problems.push(format!(
+                "{HEADINGS}: `{heading}` is listed as new in {path}, but {path} has no such heading"
+            ));
         }
     }
     let mut missing: Vec<(usize, Kind, &str)> = pool
@@ -835,6 +1081,167 @@ file = { expr }
         assert_eq!(outcome.problems, Vec::<String>::new());
         let outcome = compare(&segment(BASELINE), &[legacy(BASELINE)], &renamed, "");
         assert!(outcome.problems[0].contains("rule `val.a` is tagged, but docs/design/spec-restructure/id-map.tsv renames it to `value.a`"), "{:?}", outcome.problems);
+    }
+
+    fn rewrite_tables(refs: &str, rewordings: &str, headings: &str) -> Tables {
+        let mut tables = Tables::default();
+        let errors = tables.parse_rewrites(refs, rewordings, headings);
+        assert_eq!(errors, Vec::<String>::new());
+        tables
+    }
+
+    #[test]
+    fn rewrite_rows() {
+        let mut tables = Tables::default();
+        let errors = tables.parse_rewrites(
+            "# where\tunit\told\tnew\ttarget\nspec\tval.a\tx\t[x](a.md)\tspec/a.md\nstd\tL3\ty\t[y](b.md)\tspec/b.md\n\
+             spec\tL9\tz\tZ\t\ndoc\tval.a\tx\ty\tz\nspec\tBad\tx\ty\tz\n",
+            "val.b\told\tnew\nval.b\told\n",
+            "new\tspec/quince-spec.md\t### Kinds\nnew\tspec/quince-spec.md\tKinds\n",
+        );
+        assert_eq!(
+            tables.rewrites,
+            [
+                Rewrite {
+                    at: "docs/design/spec-restructure/refs.tsv:2".into(),
+                    unit: UnitRef::Rule("val.a".into()),
+                    old: "x".into(),
+                    new: "[x](a.md)".into(),
+                },
+                Rewrite {
+                    at: "docs/design/spec-restructure/rewordings.tsv:1".into(),
+                    unit: UnitRef::Rule("val.b".into()),
+                    old: "old".into(),
+                    new: "new".into(),
+                },
+            ]
+        );
+        assert_eq!(
+            tables.new_headings,
+            [("spec/quince-spec.md".to_string(), "### Kinds".to_string())]
+        );
+        let lines: Vec<_> = errors
+            .iter()
+            .map(|e| e.split(": ").next().unwrap_or_default())
+            .collect();
+        assert_eq!(
+            lines,
+            [
+                "docs/design/spec-restructure/refs.tsv:4",
+                "docs/design/spec-restructure/refs.tsv:5",
+                "docs/design/spec-restructure/refs.tsv:6",
+                "docs/design/spec-restructure/rewordings.tsv:2",
+                "docs/design/spec-restructure/headings.tsv:2",
+            ],
+            "{errors:?}"
+        );
+    }
+
+    #[test]
+    fn rewrites_and_new_headings_pass() {
+        let tables = rewrite_tables(
+            "spec\tval.a\timmutable\t[immutable](#values)\tspec/reference/values.md\n\
+             spec\tL15\ttoo\t[too](#kinds)\tspec/reference/values.md#kinds\n",
+            "val.b\tCopies are cheap.\tCopies cost little.\n",
+            "new\tspec/quince-spec.md\t### Kinds\n",
+        );
+        let spec = BASELINE
+            .replace("are immutable.", "are [immutable](reference/values.md).")
+            .replace("Copies are cheap.", "Copies cost little.")
+            .replace("* Maps are too.", "* Maps are [too](other.md#x).")
+            .replace("| Kind | Rule |", "### Kinds\n\n| Kind | Rule |");
+        let outcome = compare(&segment(BASELINE), &[legacy(&spec)], &tables, "");
+        assert_eq!(outcome.problems, Vec::<String>::new());
+        assert_eq!((outcome.rewritten, outcome.added), (3, 1));
+
+        let outcome = compare(&segment(BASELINE), &[legacy(&spec)], &Tables::default(), "");
+        let problems = outcome.problems.join("\n");
+        assert!(
+            problems.contains("the text of rule `val.a` changed"),
+            "{problems}"
+        );
+        assert!(
+            problems.contains("this heading isn't in the baseline: ### Kinds"),
+            "{problems}"
+        );
+    }
+
+    #[test]
+    fn stale_rewrites_and_headings_fail() {
+        let tables = rewrite_tables(
+            "spec\tval.a\tmutable!\tx\tspec/a.md\nspec\tval.zzz\tx\ty\tspec/a.md\nspec\tL16\tx\ty\tspec/a.md\n",
+            "",
+            "new\tspec/quince-spec.md\t### Gone\n",
+        );
+        let outcome = compare(&segment(BASELINE), &[legacy(BASELINE)], &tables, "");
+        assert_eq!(
+            outcome.problems,
+            [
+                "docs/design/spec-restructure/refs.tsv:1: the baseline unit on line 7 doesn't hold `mutable!`",
+                "docs/design/spec-restructure/refs.tsv:2: no baseline unit is tagged `val.zzz`",
+                "docs/design/spec-restructure/refs.tsv:3: no baseline unit is untagged on line 16",
+                "docs/design/spec-restructure/headings.tsv: `### Gone` is listed as new in spec/quince-spec.md, but spec/quince-spec.md has no such heading",
+            ]
+        );
+    }
+
+    #[test]
+    fn std_rows_are_undone_before_checking_moved_text() {
+        let (spec, tables_moved, std) = library_move();
+        let rewritten = std.replace("Maps are too.", "Maps are [too](../spec/x.md#y).");
+        let mut tables_moved = tables_moved;
+        let errors =
+            tables_moved.parse_rewrites("std\tL4\ttoo\t[too](../spec/a.md)\tspec/a.md\n", "", "");
+        assert_eq!(errors, Vec::<String>::new());
+        let outcome = compare(
+            &segment(BASELINE),
+            &[legacy(&spec)],
+            &tables_moved,
+            &rewritten,
+        );
+        assert_eq!(outcome.problems, Vec::<String>::new());
+
+        let errors = tables_moved.parse_rewrites(
+            "std\tL3\tLists\t[Lists](a.md)\tspec/a.md\nstd\tval.a\tx\ty\tz\n",
+            "",
+            "",
+        );
+        assert_eq!(
+            errors,
+            [
+                "docs/design/spec-restructure/refs.tsv:2: a `std` row names a line of std/API.md, such as `L120`"
+            ]
+        );
+        let outcome = compare(
+            &segment(BASELINE),
+            &[legacy(&spec)],
+            &tables_moved,
+            &rewritten,
+        );
+        assert_eq!(
+            outcome.problems,
+            [
+                "docs/design/spec-restructure/refs.tsv:1: line 3 of std/API.md doesn't hold `[Lists]()`"
+            ]
+        );
+    }
+
+    #[test]
+    fn link_targets_are_ignored() {
+        let unit = |kind, text: &str| Unit {
+            kind,
+            id: None,
+            text: text.into(),
+            line: 1,
+        };
+        assert_eq!(
+            without_link_targets(unit(Kind::Item, "[a](b.md) and [c](d.md#e), [f] (g) [h](i")).text,
+            "[a]() and [c](), [f] (g) [h](i"
+        );
+        assert_eq!(
+            without_link_targets(unit(Kind::Code, "xs[0](y)")).text,
+            "xs[0](y)"
+        );
     }
 
     #[test]
