@@ -62,24 +62,34 @@ pub fn code_blocks(text: &str) -> Vec<CodeBlock<'_>> {
     blocks
 }
 
-/// One error for every code block in `text` whose label isn't one of [`LABELS`].
+/// One error for every code block in `text` whose label isn't one of [`LABELS`], and one for
+/// a block the file never closes.
 pub fn check_labels(text: &str) -> Vec<SpecError> {
     let allowed = LABELS.map(|label| format!("`{label}`")).join(", ");
-    code_blocks(text)
-        .into_iter()
-        .filter(|block| !LABELS.contains(&block.label))
-        .map(|block| SpecError {
+    let mut errors = Vec::new();
+    for block in code_blocks(text) {
+        let error = |message| SpecError {
             line: block.line,
-            message: if block.label.is_empty() {
-                format!("this code block has no label; label it with one of {allowed}")
-            } else {
-                format!(
-                    "the code block label `{}` isn't one of {allowed}",
-                    block.label
-                )
-            },
-        })
-        .collect()
+            message,
+        };
+        if block.label.is_empty() {
+            errors.push(error(format!(
+                "this code block has no label; label it with one of {allowed}"
+            )));
+        } else if !LABELS.contains(&block.label) {
+            errors.push(error(format!(
+                "the code block label `{}` isn't one of {allowed}",
+                block.label
+            )));
+        }
+        if !block.closed {
+            errors.push(error(
+                "this code block is never closed; end it with a line of three backticks"
+                    .to_string(),
+            ));
+        }
+    }
+    errors
 }
 
 #[cfg(test)]
@@ -126,6 +136,24 @@ mod tests {
                 "line 7: the code block label `rust` isn't one of `quince`, `toml`, `json`, `text`, `ebnf`",
                 "line 10: the code block label `quince title` isn't one of `quince`, `toml`, `json`, `text`, `ebnf`",
             ]
+        );
+    }
+
+    #[test]
+    fn an_unclosed_block_fails() {
+        let messages: Vec<_> = (check_labels(
+            "Text.
+
+```quince
+let x = 1
+",
+        )
+        .iter())
+        .map(|e| e.to_string())
+        .collect();
+        assert_eq!(
+            messages,
+            ["line 3: this code block is never closed; end it with a line of three backticks"]
         );
     }
 }

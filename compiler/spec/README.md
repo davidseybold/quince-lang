@@ -77,9 +77,9 @@ Every fenced code block in a chapter file and in `std/API.md` carries a label, s
   - `quince`: Quince source that lexes with no errors. The lexer's corpus test lexes every such block. It may be a fragment, such as a signature with no body or a `{ ... }` placeholder, so it isn't promised to parse.
   - `toml` and `json`: a manifest or a JSON document.
   - `text`: anything else, such as a REPL transcript or Quince that is wrong on purpose.
-  - `ebnf`: grammar (below).
+  - `ebnf`: grammar (below). Only chapter files hold it, because the grammar is assembled from chapters alone; `std/API.md` never does.
 
-`cargo xtask spec-rules` fails on a block with no label or with any other label, naming the file and the line of its opening fence.
+`cargo xtask spec-rules` fails on a block with no label, with any other label, or that is never closed, naming the file and the line of its opening fence.
 
 ## Grammar
 

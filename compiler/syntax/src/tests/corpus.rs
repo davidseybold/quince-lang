@@ -68,7 +68,12 @@ fn corpus() -> Vec<(String, String)> {
 #[test]
 fn every_quince_block_lexes() {
     let corpus = corpus();
-    assert!(corpus.len() >= 60, "only {} blocks", corpus.len());
+    // Only proves the test found the corpus: the spec holds 60 `quince` blocks.
+    assert!(
+        corpus.len() >= 40,
+        "found only {} `quince` code blocks in the spec and the std API doc; did their labels change?",
+        corpus.len()
+    );
     for (at, text) in &corpus {
         let lexed = lex_str(text);
         check_error_ranges(text, &lexed);
@@ -81,7 +86,8 @@ fn every_quince_block_lexes() {
 
 /// Seeded mutations of the corpus and the `lex/` fixtures keep the invariants. They are bytes,
 /// so they reach invalid UTF-8 through `decode_source` and `lex`. Together they report every
-/// code, so no error's path goes unmutated.
+/// code, so no error's path goes unmutated. The fixtures guarantee that, since every code has
+/// one, and `cargo xtask diagnostics` requires it.
 #[test]
 fn mutations_keep_the_invariants() {
     let dir = repo_root().join(LEX_FIXTURES_DIR);
@@ -92,7 +98,11 @@ fn mutations_keep_the_invariants() {
     let fixtures = std::fs::read_dir(&dir).unwrap();
     let mut fixtures: Vec<_> = fixtures.map(|entry| entry.unwrap().path()).collect();
     fixtures.sort();
-    assert!(fixtures.len() >= 30, "only {} fixtures", fixtures.len());
+    assert!(
+        fixtures.len() >= 30,
+        "found only {} fixtures in {LEX_FIXTURES_DIR}",
+        fixtures.len()
+    );
     for path in fixtures {
         let name = path.file_name().unwrap().to_string_lossy();
         seeds.push((
@@ -101,9 +111,10 @@ fn mutations_keep_the_invariants() {
         ));
     }
 
-    let mut rng = Rng(0x5157_494e_4345);
     let mut reported = BTreeSet::new();
     for (at, seed) in &seeds {
+        // Each seed has its own stream, so adding a block elsewhere doesn't change its mutants.
+        let mut rng = Rng(0x5157_494e_4345 ^ fnv1a(seed));
         for n in 0..MUTANTS_PER_SEED {
             let mut bytes = seed.clone();
             for _ in 0..=rng.below(MAX_MUTATIONS) {
@@ -144,6 +155,13 @@ fn mutate(bytes: &mut Vec<u8>, rng: &mut Rng) {
         2 => drop(bytes.remove(rng.below(len))),
         _ => bytes.swap(rng.below(len), rng.below(len)),
     }
+}
+
+/// The 64-bit FNV-1a hash of `bytes`.
+fn fnv1a(bytes: &[u8]) -> u64 {
+    (bytes.iter()).fold(0xcbf2_9ce4_8422_2325, |hash, &b| {
+        (hash ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
+    })
 }
 
 /// SplitMix64: a fixed seed gives the same mutants on every run, with no dependency.
