@@ -417,6 +417,8 @@ On a new worktree off `main`, once the OpenSpec removal (#10) is merged. Each la
    - coverage by chapter;
    - the pointers to `spec/quince-spec.md` (project `CLAUDE.md`, `AGENTS.md`, the testdata README, `docs/kickoff-prompt.md`, the xtask help, the crate docs) now point at `spec/README.md`.
 
+   - `AGENTS.md` gets a "Commits" section: Conventional Commits for every commit subject and PR title, `type(scope): imperative summary` (David, 2026-11-10). Squash merges use the PR title.
+
    The two `spec/` edits (the header move and the info strings) come before `spec-compare` exists, so a manual diff in the PR covers them.
 3. **`links`:** `spec-links` and its subcommand.
 4. **`compare`:** `spec-compare`, the segmenter, the baseline and the `ci` step.
@@ -500,6 +502,7 @@ One `gh stack`, a PR per layer (decision 11). Tick each box as it lands on its b
   - [ ] rule parsing across files; `--strip` across files
   - [ ] coverage by chapter; `spec_version` from the README
   - [ ] pointers to `spec/quince-spec.md` moved to `spec/README.md`; `compiler/spec/README.md` and the testdata README updated
+  - [ ] `AGENTS.md`: Conventional Commits section
 - [ ] 3. `links`: `spec-links` with github-slugger anchors, its subcommand and `ci` step, tests on awkward headings
 - [ ] 4. `compare`: baseline committed; segmenter with planted-failure tests; production and declaration units; placement and count checks; `ci` step
 - [ ] 5. `move-library`
