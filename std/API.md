@@ -2,13 +2,13 @@
 
 Nov 10, 2026 · @David
 
-**Draft, scope approved.** This doc will hold the full API of Quince's standard library: the methods of every prelude type, the operations of every built-in effect, and every `std` package. The spec keeps only the std index and the prelude method lists (v0.3 plan item 5) and points here for signatures. David approved the package map and decisions 1 to 3 on 2026-11-10.
+**Draft, scope approved.** This doc will hold the full API of Quince's standard library: the methods of every prelude type, the operations of every built-in effect, and every `std` package. The spec keeps only the prelude names, interfaces and effect operations the language depends on, and points here for the rest. David approved the package map and decisions 1 to 3 on 2026-11-10.
 
 ## About this doc
 
 The spec decides what Quince code means; this doc decides the standard library's names and signatures. Where they disagree, the spec wins and this doc is fixed. It is versioned with the spec and currently tracks v0.3.
 
-Each signature is written in one place. The spec's prelude appendix holds the signature of every prelude method and effect operation, because the v0.3 agent test gives a fresh agent only the spec. This doc cites those lines and adds the rest of each entry. Every `std.*` signature lives only here.
+Each signature is written in one place. The spec holds the signatures of the prelude interfaces and every effect operation. The other prelude methods are in [Signatures from the spec](#signatures-from-the-spec) at the end of this doc, and the entries here add the rest. A fresh agent gets the spec and this doc. Every `std.*` signature lives only here.
 
 ### Entry format
 
@@ -87,7 +87,7 @@ Out of v1: database drivers and a `std.sql` interface (the spec's `Db` stays a u
 
 A name is in the prelude only if the language's syntax or the compiler needs it (David, 2026-11-10). Everything else is imported, so a name with no import is always a language name. That leaves about 40 names: the types that literals produce, `Option` and `Result` with their variants, `Ordering`, `Iter`, `Range`, `Never`, `Hasher`, the 14 prelude interfaces, `TaskScope`, `FailurePolicy`, the errors `ScopeFailed`, `DecodeError` and `InvalidFormat`, and four functions: `assert`, `todo`, `unreachable` and `dbg`.
 
-The spec's prelude appendix is the single source for these signatures; this section adds cost, failure, panic and wait notes. Methods that come from an interface (`display`, `compare`, `eq`, `hash`) are listed once, under Prelude interfaces. Methods need no import, because the value's type already says where they come from.
+[Signatures from the spec](#signatures-from-the-spec) is the single source for these signatures; this section adds cost, failure, panic and wait notes. Methods that come from an interface (`display`, `compare`, `eq`, `hash`) are listed once, under Prelude interfaces. Methods need no import, because the value's type already says where they come from.
 
 ### Integers
 
@@ -1036,3 +1036,557 @@ All of these are now settled: items 9 to 11 in the spec's own rounds, and items 
 13. **`Pool` type parameters.** Decided (David, 2026-11-10): `Pool<T, Err, uses E>`, carrying the error type and effects of `open`. The spec already uses this form.
 14. **HTTP handler panics.** Decided (David, 2026-11-10): a panic in one request answers 500 and prints the usual panic report on standard error, as the runtime does for any task, without the server needing `uses Console`; the server keeps running.
 15. **`Log` needs `Clock`.** Decided (David, 2026-11-10): `pub effect Log uses Console, Clock`, as spec §5 now declares.
+
+## Signatures from the spec
+
+Until the spec restructure (2026-11-10), these signatures and rules sat in the spec's Prelude appendix, which kept the signature of every prelude method and std type the spec used. The spec now keeps only what the language depends on, and these sections are the source for the rest until M9 merges them into the entries above.
+
+### Conventions
+
+Every function in this appendix that takes a closure declares an effect variable for it, except `modify` and `update` on reference types, which take pure closures (section 9), so passing an effectful closure is always allowed and the caller takes on its effects (section 5).
+
+Each such section names its package, and code that names one of those types imports it, as in `import std.sync.{Ref}`.
+
+- `expect` is a method on `Option` and `Result` (below), not a free function.
+- `unwrap()` is not in the standard library. Use `expect("why this can't fail")`, which forces the author to state the assumption.
+
+### Timeouts and resources (std.time, std.ffi)
+
+```
+pub fn with_timeout<T, uses E>(limit: Duration, body: fn() -> T uses E)
+  -> Result<T, TimedOut>
+  uses E, Clock
+pub fn with_resource<T, R, uses E>(resource: Resource<T>, body: fn(Resource<T>) -> R uses E)
+  -> R
+  uses E
+```
+
+They are called through their packages: `time.with_timeout` from std.time, which needs `uses Clock` (section 9), and `ffi.with_resource` from std.ffi (section 11). Neither is in the prelude.
+
+### Numbers, Bool and Char
+
+For each integer type `I` (`Int8`…`Int64`, `UInt8`…`UInt64`):
+
+```
+impl I {
+  fn parse(text: String, radix: Int = 10) -> Result<I, InvalidFormat>  requires radix >= 2 && radix <= 36
+  fn checked_add(self, other: I) -> Option<I>     // also checked_sub, checked_mul, checked_div, checked_rem
+  fn wrapping_add(self, other: I) -> I            // also wrapping_sub, wrapping_mul
+  fn saturating_add(self, other: I) -> I          // clamps to MIN and MAX; also saturating_sub, saturating_mul
+  fn div_euclid(self, other: I) -> I              // remainder never negative; also rem_euclid
+  fn signum(self) -> I                            // -1, 0 or 1; signed types only
+  fn pow(self, exponent: Int) -> I  requires exponent >= 0
+  fn abs(self) -> I                               // signed types only; panics on I.MIN
+  fn min(self, other: I) -> I
+  fn max(self, other: I) -> I
+  fn clamp(self, low: I, high: I) -> I  requires low <= high
+  fn to_float(self) -> Float
+  fn to_float32(self) -> Float32
+  fn to_char(self) -> Option<Char>                // None for surrogates and values above 0x10FFFF
+  fn to_string(self, radix: Int = 10) -> String  requires radix >= 2 && radix <= 36
+}
+```
+
+- Every integer type has `to_<type>()` for every other integer type, such as `n.to_int64()` and `n.to_uint8()`. It returns the target type when every value fits, and `Option` when some don't.
+- Associated constants: `I.MIN` and `I.MAX`.
+
+```
+impl Float {
+  fn parse(text: String) -> Result<Float, InvalidFormat>
+  fn abs(self) -> Float
+  fn floor(self) -> Float
+  fn ceil(self) -> Float
+  fn round(self) -> Float                         // halves round away from zero
+  fn trunc(self) -> Float
+  fn sqrt(self) -> Float
+  fn pow(self, exponent: Float) -> Float
+  fn exp(self) -> Float
+  fn ln(self) -> Float
+  fn min(self, other: Float) -> Float             // total order (section 3)
+  fn max(self, other: Float) -> Float
+  fn clamp(self, low: Float, high: Float) -> Float  requires low <= high
+  fn is_nan(self) -> Bool
+  fn is_finite(self) -> Bool
+  fn to_int(self) -> Option<Int>                  // truncates; None for NaN, infinities, out of range
+  fn to_float32(self) -> Float32                  // rounds to nearest
+  fn to_string(self) -> String                    // shortest text that reads back as the same value
+  fn to_fixed(self, decimals: Int) -> String  requires decimals >= 0 && decimals <= 20   // rounds half to even
+  fn is_infinite(self) -> Bool
+  fn signum(self) -> Float
+  fn is_close(self, other: Float, tolerance: Float = 1e-9) -> Bool   // relative, for tests and contracts
+  fn atan2(self, x: Float) -> Float
+  // also cbrt, log2, log10, sin, cos, tan, asin, acos, atan: each fn(self) -> Float, in radians
+}
+```
+
+- Associated constants: `Float.PI`, `Float.E`, `Float.INFINITY`, `Float.NAN`, Float.EPSILON. `Float32` has the same methods.
+- `Bool` has no methods; the operators cover it.
+
+```
+impl Char {
+  fn from_code(code: UInt32) -> Option<Char>
+  fn code(self) -> UInt32
+  fn is_alphabetic(self) -> Bool
+  fn is_numeric(self) -> Bool
+  fn is_whitespace(self) -> Bool
+  fn is_uppercase(self) -> Bool
+  fn is_lowercase(self) -> Bool
+  fn is_alphanumeric(self) -> Bool
+  fn is_ascii(self) -> Bool
+  fn to_digit(self, radix: Int = 10) -> Option<Int>  requires radix >= 2 && radix <= 36
+  fn utf8_len(self) -> Int                        // 1 to 4
+  fn to_uppercase(self) -> String                 // some characters uppercase to several
+  fn to_lowercase(self) -> String
+}
+```
+
+### Ranges
+
+`a..b` and `a..=b` build a `Range<T>` over one integer type (section 2).
+
+```
+impl<T> Range<T> {                       // T is an integer type
+  fn contains(self, value: T) -> Bool
+  fn len(self) -> Int
+  fn is_empty(self) -> Bool
+  fn first(self) -> Option<T>
+  fn last(self) -> Option<T>
+  fn rev(self) -> Range<T>                // the same values, last to first
+  fn step_by(self, step: Int) -> Range<T>  requires step >= 1
+  fn iter(self) -> Iter<T>
+  fn to_list(self) -> List<T>
+}
+
+impl<T> Iterator for Range<T> { type Item = T }
+```
+
+- A range is a start, an end and a step, so `rev` and `step_by` return another `Range` rather than a new type: `for i in (0..10).step_by(2).rev()` counts 8, 6, 4, 2, 0. `contains`, `len`, `first` and `last` take the step into account.
+- `first` and `last` return `Option` because a range can be empty.
+
+### String and Bytes
+
+```
+impl String {
+  fn from_utf8(bytes: Bytes) -> Result<String, InvalidFormat>
+  fn byte_len(self) -> Int
+  fn char_count(self) -> Int
+  fn is_empty(self) -> Bool
+  fn contains(self, part: String) -> Bool
+  fn starts_with(self, prefix: String) -> Bool
+  fn ends_with(self, suffix: String) -> Bool
+  fn find(self, part: String) -> Option<Int>      // byte offset of the first match
+  fn find_last(self, part: String) -> Option<Int>
+  fn split_once(self, separator: String) -> Option<(String, String)>
+  fn slice(self, range: Range<Int>) -> Option<String>  // byte offsets; None off a char boundary or out of range
+  fn strip_prefix(self, prefix: String) -> Option<String>
+  fn strip_suffix(self, suffix: String) -> Option<String>
+  fn split(self, separator: String) -> List<String>
+  fn split_whitespace(self) -> List<String>
+  fn lines(self) -> List<String>                 // splits on \n or \r\n; a trailing newline adds no empty line
+  fn trim(self) -> String
+  fn trim_start(self) -> String
+  fn trim_end(self) -> String
+  fn to_uppercase(self) -> String
+  fn to_lowercase(self) -> String
+  fn replace(self, part: String, by: String) -> String   // every match
+  fn replace_first(self, part: String, by: String) -> String
+  fn pad_start(self, width: Int, fill: Char = ' ') -> String   // pads to width chars; no change if already that wide
+  fn pad_end(self, width: Int, fill: Char = ' ') -> String
+  fn concat(self, other: String) -> String
+  fn compare_ignore_case(self, other: String) -> Ordering
+  fn repeat(self, times: Int) -> String  requires times >= 0
+  fn chars(self) -> Iter<Char>
+  fn bytes(self) -> Bytes
+}
+```
+
+- `String` has no `len`. `s.len()` is a compile error whose suggested fixes are `byte_len()` and `char_count()`, so a length always says which unit it counts.
+- `String` is immutable, so none of its methods take `var self`. Joining is `parts.join(", ")` on a `List<String>`.
+
+```
+impl Bytes {
+  fn from_list(values: List<UInt8>) -> Bytes
+  fn lend(self) -> ConstPtr<UInt8>    // std.ffi; only as a foreign-call argument (section 11)
+  fn len(self) -> Int
+  fn is_empty(self) -> Bool
+  fn get(self, index: Int) -> Option<UInt8>
+  fn slice(self, range: Range<Int>) -> Bytes      // panics out of bounds, like xs[i]
+  fn concat(self, other: Bytes) -> Bytes
+  fn starts_with(self, prefix: Bytes) -> Bool
+  fn ends_with(self, suffix: Bytes) -> Bool
+  fn find(self, part: Bytes) -> Option<Int>
+  fn iter(self) -> Iter<UInt8>
+  fn to_list(self) -> List<UInt8>
+}
+```
+
+### List
+
+```
+impl<T> List<T> {
+  fn filled(value: T, count: Int) -> List<T>  requires count >= 0
+  fn len(self) -> Int
+  fn is_empty(self) -> Bool
+  fn get(self, index: Int) -> Option<T>
+  fn first(self) -> Option<T>
+  fn last(self) -> Option<T>
+  fn slice(self, range: Range<Int>) -> List<T>    // panics out of bounds, like xs[i]
+  fn take(self, count: Int) -> List<T>           // at most count items
+  fn skip(self, count: Int) -> List<T>
+  fn concat(self, other: List<T>) -> List<T>
+  fn reversed(self) -> List<T>
+  fn chunks(self, size: Int) -> List<List<T>>  requires size >= 1
+  fn zip<U>(self, other: List<U>) -> List<(T, U)>  // stops at the shorter list
+  fn enumerate(self) -> List<(Int, T)>
+  fn iter(self) -> Iter<T>                       // lazy, for chains (see Iter)
+  fn take_last(self, count: Int) -> List<T>
+  fn windows(self, size: Int) -> List<List<T>>  requires size >= 1
+
+  fn map<U, uses E>(self, f: fn(T) -> U uses E) -> List<U> uses E
+  fn filter<uses E>(self, keep: fn(T) -> Bool uses E) -> List<T> uses E
+  fn filter_map<U, uses E>(self, f: fn(T) -> Option<U> uses E) -> List<U> uses E
+  fn flat_map<U, uses E>(self, f: fn(T) -> List<U> uses E) -> List<U> uses E
+  fn try_map<U, Err, uses E>(self, f: fn(T) -> Result<U, Err> uses E) -> Result<List<U>, Err> uses E   // stops at the first Err
+  fn partition<uses E>(self, pred: fn(T) -> Bool uses E) -> (List<T>, List<T>) uses E
+  fn fold<A, uses E>(self, initial: A, f: fn(A, T) -> A uses E) -> A uses E
+  fn find<uses E>(self, pred: fn(T) -> Bool uses E) -> Option<T> uses E
+  fn find_index<uses E>(self, pred: fn(T) -> Bool uses E) -> Option<Int> uses E
+  fn find_last<uses E>(self, pred: fn(T) -> Bool uses E) -> Option<T> uses E
+  fn any<uses E>(self, pred: fn(T) -> Bool uses E) -> Bool uses E
+  fn all<uses E>(self, pred: fn(T) -> Bool uses E) -> Bool uses E
+  fn count<uses E>(self, pred: fn(T) -> Bool uses E) -> Int uses E
+  fn sorted_by<uses E>(self, compare: fn(T, T) -> Ordering uses E) -> List<T> uses E
+  fn sorted_by_key<K: Ord, uses E>(self, key: fn(T) -> K uses E) -> List<T> uses E
+  fn group_by<K: Hash, uses E>(self, key: fn(T) -> K uses E) -> Map<K, List<T>> uses E
+  fn min_by_key<K: Ord, uses E>(self, key: fn(T) -> K uses E) -> Option<T> uses E
+  fn max_by_key<K: Ord, uses E>(self, key: fn(T) -> K uses E) -> Option<T> uses E
+
+  fn push(var self, item: T)
+  fn pop(var self) -> Option<T>
+  fn insert(var self, index: Int, item: T)  requires 0 <= index && index <= self.len()
+  fn remove(var self, index: Int) -> T  requires 0 <= index && index < self.len()
+  fn set(var self, index: Int, value: T)  requires 0 <= index && index < self.len()
+  fn extend(var self, items: List<T>)
+  fn clear(var self)
+}
+
+impl<T: Eq> List<T> {
+  fn contains(self, item: T) -> Bool
+  fn index_of(self, item: T) -> Option<Int>
+}
+
+impl<T: Ord> List<T> {
+  fn sorted(self) -> List<T>                      // stable
+  fn min(self) -> Option<T>
+  fn max(self) -> Option<T>
+}
+
+impl<T: Hash> List<T> {
+  fn unique(self) -> List<T>                      // keeps the first of each
+  fn to_set(self) -> Set<T>
+}
+
+impl List<Int> { fn sum(self) -> Int }
+impl List<Float> { fn sum(self) -> Float }
+impl List<String> { fn join(self, separator: String) -> String }
+impl<K: Hash, V> List<(K, V)> { fn to_map(self) -> Map<K, V> }   // later pairs win
+```
+
+- Sorting, reversing and filtering return a new list and have no in-place twin, so there is one way to do each: xs = xs.sorted() updates in place when xs is unique (section 3).
+- There is no `for_each`. A `for` loop is the one way to run code for each item.
+
+### Iter
+
+`Iter<T, uses E>` is a concrete type that implements `Iterator<uses E>` with `Item = T` and carries every adapter as an ordinary method, since interfaces have no default method bodies (section 3). `xs.iter()`, `m.iter()`, `s.chars()`, `(0..n).iter()` and `Iter.from(it)` give one. Adapters are lazy; nothing runs until a consumer or a `for` loop pulls items.
+
+```
+impl<T, uses E> Iter<T, uses E> {
+  fn from<I: Iterator<uses E>>(it: I) -> Iter<I.Item, uses E>
+  fn next(var self) -> Option<T> uses E
+
+  fn map<U, uses F>(self, f: fn(T) -> U uses F) -> Iter<U, uses E, F>
+  fn filter<uses F>(self, keep: fn(T) -> Bool uses F) -> Iter<T, uses E, F>
+  fn filter_map<U, uses F>(self, f: fn(T) -> Option<U> uses F) -> Iter<U, uses E, F>
+  fn flat_map<U, uses F>(self, f: fn(T) -> Iter<U, uses F> uses F) -> Iter<U, uses E, F>
+  fn take(self, count: Int) -> Iter<T, uses E>
+  fn skip(self, count: Int) -> Iter<T, uses E>
+  fn step_by(self, step: Int) -> Iter<T, uses E>  requires step >= 1
+  fn take_while<uses F>(self, pred: fn(T) -> Bool uses F) -> Iter<T, uses E, F>
+  fn skip_while<uses F>(self, pred: fn(T) -> Bool uses F) -> Iter<T, uses E, F>
+  fn enumerate(self) -> Iter<(Int, T), uses E>
+  fn zip<U, uses F>(self, other: Iter<U, uses F>) -> Iter<(T, U), uses E, F>   // stops at the shorter
+  fn chain<uses F>(self, other: Iter<T, uses F>) -> Iter<T, uses E, F>
+  fn chunks(self, size: Int) -> Iter<List<T>, uses E>  requires size >= 1
+
+  fn to_list(self) -> List<T> uses E
+  fn fold<A, uses F>(self, initial: A, f: fn(A, T) -> A uses F) -> A uses E, F
+  fn count(self) -> Int uses E
+  fn find<uses F>(self, pred: fn(T) -> Bool uses F) -> Option<T> uses E, F
+  fn position<uses F>(self, pred: fn(T) -> Bool uses F) -> Option<Int> uses E, F
+  fn any<uses F>(self, pred: fn(T) -> Bool uses F) -> Bool uses E, F
+  fn all<uses F>(self, pred: fn(T) -> Bool uses F) -> Bool uses E, F
+  fn first(self) -> Option<T> uses E
+  fn last(self) -> Option<T> uses E
+  fn min_by_key<K: Ord, uses F>(self, key: fn(T) -> K uses F) -> Option<T> uses E, F
+  fn max_by_key<K: Ord, uses F>(self, key: fn(T) -> K uses F) -> Option<T> uses E, F
+}
+
+impl<T: Ord, uses E> Iter<T, uses E> {
+  fn min(self) -> Option<T> uses E
+  fn max(self) -> Option<T> uses E
+}
+impl<T: Hash, uses E> Iter<T, uses E> { fn to_set(self) -> Set<T> uses E }
+impl<K: Hash, V, uses E> Iter<(K, V), uses E> { fn to_map(self) -> Map<K, V> uses E }
+impl<uses E> Iter<Int, uses E> { fn sum(self) -> Int uses E }
+impl<uses E> Iter<Float, uses E> { fn sum(self) -> Float uses E }
+impl<uses E> Iter<String, uses E> { fn join(self, separator: String) -> String uses E }
+impl<T, uses E> Iterator<uses E> for Iter<T, uses E> { type Item = T }
+```
+
+- A chain's effects add up: each adapter adds its closure's effects, and the consumer that pulls the items has all of them.
+- `List` keeps eager `map` and `filter` for one step. Use an `Iter` for a chain, or for input that isn't a list, such as `Fs.read_lines(path)`.
+- There is no `for_each`; a `for` loop pulls the items.
+
+### Map and Set
+
+Both convert from a list with `From`: `Map.from([("a", 1)])`, `Set.from([1, 2, 3])`. A conversion that can fail is named `try_from` and returns `Option`, as in `CString.try_from(s)`, so `T.from(x)` always goes through `From` and never fails.
+
+```
+impl<K: Hash, V> Map<K, V> {
+  fn len(self) -> Int
+  fn is_empty(self) -> Bool
+  fn get(self, key: K) -> Option<V>
+  fn contains_key(self, key: K) -> Bool
+  fn keys(self) -> List<K>
+  fn values(self) -> List<V>
+  fn entries(self) -> List<(K, V)>
+  fn map_values<U, uses E>(self, f: fn(V) -> U uses E) -> Map<K, U> uses E
+  fn filter<uses E>(self, keep: fn(K, V) -> Bool uses E) -> Map<K, V> uses E
+  fn get_or(self, key: K, default: V) -> V
+  fn merge(self, other: Map<K, V>) -> Map<K, V>   // other wins on shared keys
+  fn iter(self) -> Iter<(K, V)>
+
+  fn insert(var self, key: K, value: V) -> Option<V>   // the value it replaced
+  fn remove(var self, key: K) -> Option<V>
+  fn update<uses E>(var self, key: K, default: V, f: fn(V) -> V uses E) uses E
+  fn clear(var self)
+}
+
+impl<T: Hash> Set<T> {
+  fn len(self) -> Int
+  fn is_empty(self) -> Bool
+  fn contains(self, item: T) -> Bool
+  fn union(self, other: Set<T>) -> Set<T>
+  fn intersection(self, other: Set<T>) -> Set<T>
+  fn difference(self, other: Set<T>) -> Set<T>
+  fn is_subset(self, other: Set<T>) -> Bool
+  fn is_disjoint(self, other: Set<T>) -> Bool
+  fn iter(self) -> Iter<T>
+  fn to_list(self) -> List<T>
+  fn filter<uses E>(self, keep: fn(T) -> Bool uses E) -> Set<T> uses E
+
+  fn insert(var self, item: T) -> Bool            // false if it was already there
+  fn remove(var self, item: T) -> Bool
+  fn clear(var self)
+}
+```
+
+- `for (k, v) in m` iterates a map's entries and `for x in s` a set's items.
+- `m.update(key, default: d, f)` applies `f` to the current value, or to `d` when the key is missing, and stores the result.
+
+### Option and Result
+
+```
+impl<T> Option<T> {
+  fn is_some(self) -> Bool
+  fn is_none(self) -> Bool
+  fn expect(self, reason: String) -> T            // panics with reason on None
+  fn unwrap_or(self, default: T) -> T
+  fn unwrap_or_else<uses E>(self, f: fn() -> T uses E) -> T uses E
+  fn ok_or<Err>(self, error: Err) -> Result<T, Err>
+  fn or(self, other: Option<T>) -> Option<T>
+  fn or_else<uses E>(self, f: fn() -> Option<T> uses E) -> Option<T> uses E
+  fn zip<U>(self, other: Option<U>) -> Option<(T, U)>
+  fn map<U, uses E>(self, f: fn(T) -> U uses E) -> Option<U> uses E
+  fn and_then<U, uses E>(self, f: fn(T) -> Option<U> uses E) -> Option<U> uses E
+  fn filter<uses E>(self, keep: fn(T) -> Bool uses E) -> Option<T> uses E
+}
+
+impl<T, Err> Result<T, Err> {
+  fn is_ok(self) -> Bool
+  fn is_err(self) -> Bool
+  fn expect(self, reason: String) -> T            // panics with reason and the error's debug form
+  fn unwrap_or(self, default: T) -> T
+  fn unwrap_or_else<uses E>(self, f: fn(Err) -> T uses E) -> T uses E
+  fn ok(self) -> Option<T>
+  fn err(self) -> Option<Err>
+  fn map<U, uses E>(self, f: fn(T) -> U uses E) -> Result<U, Err> uses E
+  fn map_err<F, uses E>(self, f: fn(Err) -> F uses E) -> Result<T, F> uses E
+  fn and_then<U, uses E>(self, f: fn(T) -> Result<U, Err> uses E) -> Result<U, Err> uses E
+  fn or_else<F, uses E>(self, f: fn(Err) -> Result<T, F> uses E) -> Result<T, F> uses E
+}
+```
+
+- There is no `unwrap()` (section 4). `unwrap_or` is kept because it can't panic.
+
+### Duration, Timestamp, Url and Regex
+
+```
+impl Duration {
+  fn milliseconds(n: Int) -> Duration
+  fn seconds(n: Int) -> Duration
+  fn minutes(n: Int) -> Duration
+  fn hours(n: Int) -> Duration
+  fn days(n: Int) -> Duration
+  fn microseconds(n: Int) -> Duration
+  fn nanoseconds(n: Int) -> Duration
+  fn parse(text: String) -> Result<Duration, InvalidFormat>   // the dur literal's syntax, as in "1h30m"
+  fn is_zero(self) -> Bool
+  fn is_negative(self) -> Bool
+  fn to_milliseconds(self) -> Int
+  fn to_seconds(self) -> Float
+}
+
+impl Add<Duration> for Duration { type Output = Duration }     // also Sub<Duration>; Mul<Int> and Div<Int>, which panics on 0
+
+impl Timestamp {
+  fn parse(text: String) -> Result<Timestamp, InvalidFormat>   // RFC 3339
+  fn from_unix_seconds(seconds: Int) -> Timestamp
+  fn to_unix_seconds(self) -> Int
+  fn from_unix_milliseconds(ms: Int) -> Timestamp
+  fn to_unix_milliseconds(self) -> Int
+  fn to_rfc3339(self) -> String                    // UTC with Z; equals display()
+  fn since(self, earlier: Timestamp) -> Duration
+}
+
+impl Add<Duration> for Timestamp { type Output = Timestamp }   // also Sub<Duration>, and Sub<Timestamp> with Output = Duration
+
+impl Url {
+  fn parse(text: String) -> Result<Url, InvalidFormat>
+  fn scheme(self) -> String
+  fn host(self) -> Option<String>
+  fn port(self) -> Option<Int>
+  fn path(self) -> String
+  fn query(self) -> Option<String>
+  fn fragment(self) -> Option<String>
+  fn query_params(self) -> List<(String, String)>   // decoded, in order
+  fn with_path(self, path: String) -> Url
+  fn with_query(self, params: List<(String, String)>) -> Url
+  fn join(self, path: String) -> Result<Url, InvalidFormat>
+}
+
+impl Regex {
+  fn new(pattern: String) -> Result<Regex, InvalidFormat>
+  fn is_match(self, text: String) -> Bool
+  fn find(self, text: String) -> Option<Match>
+  fn find_all(self, text: String) -> List<Match>
+  fn captures(self, text: String) -> Option<Captures>
+  fn replace_all(self, text: String, by: String) -> String   // $1 and ${name} refer to groups
+  fn replace_first(self, text: String, by: String) -> String
+  fn split(self, text: String) -> List<String>
+}
+
+pub struct InvalidFormat { pub expected: String, pub found: String }
+pub struct Match { pub start: Int, pub end: Int, pub text: String }   // byte offsets
+impl Captures {
+  fn get(self, index: Int) -> Option<String>      // 0 is the whole match
+  fn named(self, name: String) -> Option<String>
+}
+```
+
+- `Timestamp` and `Duration` display as RFC 3339 text and as `30s`-style text, and encode the same way. Calendar and time-zone work is in `std.time`. Match and Captures are imported from std.regex; Regex itself is in the prelude because re"..." produces it.
+- Every `parse` in the prelude fails with the same `InvalidFormat`, so code that parses several kinds of text handles one error type.
+
+### Reference types and concurrency (std.sync)
+
+Ref, Atomic, ConcurrentMap, Channel, Pool and ChannelClosed are imported from std.sync, TimedOut from std.time, and Resource from std.ffi. TaskScope, FailurePolicy and ScopeFailed are in the prelude. Every method on a reference type takes `self`, never `var self`, because it changes shared state through the reference's identity. A `let` binding is enough: ` let ch =  ``Channel<Job>.new(100)`.
+
+```
+impl<T> Ref<T> {
+  fn new(value: T) -> Ref<T>
+  fn get(self) -> T uses State
+  fn set(self, value: T) uses State
+  fn modify(self, f: fn(T) -> T) -> T uses State           // returns the new value
+}
+
+impl<T> Atomic<T> {                                       // T must be able to cross a task boundary
+  fn new(value: T) -> Atomic<T>
+  fn get(self) -> T uses State
+  fn set(self, value: T) uses State
+  fn swap(self, value: T) -> T uses State                  // returns the old value
+  fn modify(self, f: fn(T) -> T) -> T uses State           // f may run more than once; returns the new value
+}
+
+impl<T: Eq> Atomic<T> {
+  fn compare_and_set(self, expected: T, new: T) -> Bool uses State
+}
+
+impl<K: Hash, V> ConcurrentMap<K, V> {
+  fn new() -> ConcurrentMap<K, V>
+  fn get(self, key: K) -> Option<V> uses State
+  fn contains_key(self, key: K) -> Bool uses State
+  fn insert(self, key: K, value: V) -> Option<V> uses State
+  fn remove(self, key: K) -> Option<V> uses State
+  fn update(self, key: K, default: V, f: fn(V) -> V) -> V uses State
+  fn len(self) -> Int uses State
+  fn snapshot(self) -> Map<K, V> uses State
+}
+
+impl<T> Channel<T> {
+  fn new(capacity: Int) -> Channel<T>  requires capacity >= 0   // 0: every send waits for a receiver
+  fn send(self, value: T) -> Result<Unit, ChannelClosed> uses State
+  fn receive(self) -> Option<T> uses State
+  fn close(self) uses State                                  // closing twice does nothing
+  fn is_closed(self) -> Bool uses State
+  fn len(self) -> Int uses State
+  fn iter(self) -> Iter<T, uses State>             // receives until closed: for job in jobs.iter()
+}
+
+impl<T, Err, uses E> Pool<T, Err, uses E> {
+  fn new(max: Int, healthy: fn(T) -> Bool uses E, open: fn() -> Result<T, Err> uses E) -> Pool<T, Err, uses E>  requires max >= 1
+  fn checkout<R, uses E2>(self, body: fn(T) -> R uses E2) -> Result<R, Err> uses E, E2, State
+  fn size(self) -> Int uses State                  // values open now
+  fn idle(self) -> Int uses State
+}
+```
+
+- `modify` and `update` take pure closures (section 9).
+- There is no unbounded channel and no non-blocking `try_send` or `try_receive`, matching `select`, which has no default arm.
+- `Pool` names the error and effects of its `open` function, because `checkout` may open a new value: `PgDb { pool: Pool<PgConn, PgError, uses Net> }`. `checkout` returns `Err` only when opening fails.
+- `TaskScope` has no methods; tasks start with `spawn in` (section 9). `Resource` is built with `Resource.adopt` lent with res.ptr(), closed with res.close(), checked with res.is\_closed() and tied to a callback with res.keep(cb), all only in the package that declares the foreign type (section 11).
+
+### Types the built-in effects use
+
+Calling the operations needs no import, but naming the types they use does: FsError and Metadata come from std.fs; NetError, Outbound, Inbound and Listener from std.net; ProcessError and ProcessOutput from std.process.
+
+```
+pub enum ProcessError { NotFound(program: String), PermissionDenied(program: String), Other(message: String) }
+pub struct ProcessOutput { pub status: Int, pub stdout: Bytes, pub stderr: Bytes }
+pub struct Metadata { pub size: Int, pub is_dir: Bool, pub modified: Timestamp }
+```
+
+- `Outbound`, `Inbound` and `Listener` are reference types (section 3): copies share one connection, they can cross a task boundary, so a server can hand an accepted connection to a task, and a connection closes with `close` or when its last reference is dropped. std.testing builds in-memory ones for fake handlers. `Inbound` connections take `Listen` operations, so a server that only accepts connections needs `uses Listen` and not `Net`.
+
+### Standard library index
+
+Every standard library name this spec uses that isn't in the prelude. Each needs an import (section 7), and its full signature is in the [Quince](https://claude.ai/artifact/MRcpqw3BqGotK6yE1psFvC) [standard library API](https://claude.ai/artifact/MRcpqw3BqGotK6yE1psFvC) doc.
+
+| Name | Package | Used in |
+| --- | --- | --- |
+| Log effect, Log.info, `log.json` | std.log | Sections 3, 5, 9 |
+| fixed\_clock, Generate | std.testing | Sections 5, 6 |
+| Encoder, Decoder, Encode and Decode methods | std.encoding | Section 3 |
+| json.decode, json.encode, json.Value | std.json | Sections 3, 7 |
+| toml, form formats | std.toml, std.form | Section 3 |
+| get, serve, Request, Response, ServeError | std.http | Sections 5, 7, 9 |
+| net.only(host) | std.net | Section 5 |
+| CInt and the other C types, CString, Ptr, ConstPtr, CBuf, Callback | std.ffi | Sections 3, 11 |
+| Ref, Atomic, ConcurrentMap, Channel, Pool, ChannelClosed | std.sync | Sections 3, 9, 11 |
+| with\_timeout, TimedOut | std.time | Section 9 |
+| Resource, with\_resource | std.ffi | Sections 3, 11 |
+| FsError, Metadata | std.fs | Section 5, Appendix: Prelude |
+| NetError, Outbound, Inbound, Listener | std.net | Section 5, Appendix: Prelude |
+| ProcessError, ProcessOutput | std.process | Appendix: Prelude |
+| Match, Captures | std.regex | Appendix: Prelude |
+
+Names in examples that are not std: `retry` in section 5 is an illustrative signature, and `load_config` and the database types (`Db`, `PgDb`, `Rows`, `DbError`) belong to the example program.

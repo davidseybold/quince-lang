@@ -95,7 +95,6 @@ ret         `return`
 select      Waiting on several channels with `select`
 semver      Enforced semantic versioning
 share       Shared state between tasks
-std         What the standard library leaves out
 struct      Structs
 target      Compilation targets
 test        Unit tests and test handlers

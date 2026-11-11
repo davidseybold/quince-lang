@@ -1,0 +1,14 @@
+# action	baseline lines	text removed (`removed` rows), or what the lines hold (`to-std` rows)
+to-std	527-529	the Not included heading of section 4, whose one rule was std.no-unwrap
+to-std	1450-1619	Timeouts and resources; Numbers, Bool and Char; Ranges; String and Bytes
+to-std	1622-1691	the List method listing
+to-std	1696-1747	Iter
+to-std	1751-1793	the Map and Set method listing and notes
+to-std	1795-1829	Option and Result
+to-std	1832-1894	the Duration, Timestamp, Url and Regex method listing
+to-std	1901-1950	the std.sync methods
+to-std	1957-1960	the std.sync notes
+to-std	2038-2040	ProcessError, ProcessOutput and Metadata
+to-std	2049-2071	the Standard library index
+removed	1387	This appendix is the single source for each prelude signature; the standard library API doc cites these lines and adds cost, failure and example notes.
+removed	1403	This appendix also gives the signatures of the std types and functions that the spec's own sections and the prelude's signatures use, so the spec alone is enough to write code.
