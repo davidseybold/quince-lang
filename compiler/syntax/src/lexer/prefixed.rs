@@ -2,7 +2,7 @@
 //! a non-ASCII character in bytes (E0011).
 
 use super::Lexer;
-use super::string::{escape_error, opens_unicode};
+use super::string::{EscapeIn, escape_error, opens_unicode};
 use crate::literal::{BadEscape, TAGS, byte_escape};
 use crate::{LexError, SyntaxKind, codes};
 use quince_diagnostics::Applicability;
@@ -102,7 +102,7 @@ impl<'a> Lexer<'a> {
                 if let Err(problem) = escape.value {
                     dangling = problem == BadEscape::Dangling;
                     let text = &rest[len..len + escape.len];
-                    let mut error = escape_error(text, start + len, problem, false, true);
+                    let mut error = escape_error(text, start + len, problem, EscapeIn::Bytes);
                     if open_unicode_end == Some(len) {
                         error.fixes.clear();
                     }

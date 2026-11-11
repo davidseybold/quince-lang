@@ -25,12 +25,13 @@ pub mod codes {
     pub const INVALID_ESCAPE: &str = "E0006";
     pub const INVALID_INTERPOLATION: &str = "E0007";
     pub const MALFORMED_NUMBER: &str = "E0008";
+    pub const INVALID_CHAR: &str = "E0009";
     pub const UNKNOWN_TAG: &str = "E0010";
     pub const NON_ASCII_BYTES: &str = "E0011";
     pub const MULTILINE_LAYOUT: &str = "E0012";
     pub const LONE_CARRIAGE_RETURN: &str = "E0013";
     pub const INVALID_UTF8: &str = "E0014";
-    pub const ALL: [&str; 13] = [
+    pub const ALL: [&str; 14] = [
         UNKNOWN_CHARACTER,
         SEMICOLON,
         BLOCK_COMMENT,
@@ -39,6 +40,7 @@ pub mod codes {
         INVALID_ESCAPE,
         INVALID_INTERPOLATION,
         MALFORMED_NUMBER,
+        INVALID_CHAR,
         UNKNOWN_TAG,
         NON_ASCII_BYTES,
         MULTILINE_LAYOUT,

@@ -117,7 +117,7 @@ A test reads the keyword list from `spec/reference/lexical.md` through `quince_s
 
 - `Int` covers `42`, `1_000_000`, `0xFF`, `0b1010` and `0o17`. `Float` covers `3.14`, `1e-9` and `2.5e10`. The exact forms are spec question 4.
 - A `.` belongs to a float only when a digit follows it. So `1..10` is `1`, `..`, `10`, and `3.14159.to_fixed(2)` is a float then `.to_fixed`. An `e` after digits starts an exponent.
-- **After a `.` token with no trivia between, only digits are lexed.** So `pair.0.1` is `pair` `.` `0` `.` `1`, not `pair` `.` `0.1`, and the grammar's `"." int` works for nested tuples. Apart from two string rules in decision 8, this is the only place the lexer looks back, and only one token. Those string rules are a `"` glued to an identifier, one token back, and a test's name, which looks back past spaces to `test` (decided by David, 2026-11-11). Layer 4 reads "only digits" as a decimal integer with no point, exponent or base prefix: letters glued to it are still a suffix (`t.0u8` is one malformed `Int`), and a leading zero is still an error (`t.01`).
+- **After a `.` token with no trivia between, only digits are lexed.** So `pair.0.1` is `pair` `.` `0` `.` `1`, not `pair` `.` `0.1`, and the grammar's `"." int` works for nested tuples. Apart from two string rules in decision 8, and E0009's fix, which checks the character before a char literal, this is the only place the lexer looks back, and only one token. Those string rules are a `"` glued to an identifier, one token back, and a test's name, which looks back past spaces to `test` (decided by David, 2026-11-11). Layer 4 reads "only digits" as a decimal integer with no point, exponent or base prefix: letters glued to it are still a suffix (`t.0u8` is one malformed `Int`), and a leading zero is still an error (`t.01`).
 - A minus sign is always its own token. `r[lex.lit.int.neg]` joins it to the literal in prefix position, which the parser knows and the lexer doesn't.
 - A malformed number (`0b102`, `1__0`, `1_`, `0x`, `1e`, `007`) keeps its `Int` or `Float` kind and gets an E0008, so the parser sees a literal and reports nothing more.
 - Letters glued to a number (`1u8`, `10px`, `1.5f32`) stay part of it, as a malformed literal of the kind its digits give. The message says literal types come from context (`let b: UInt8 = 1`), and the fix removes the suffix (`needs-review`).
@@ -173,7 +173,7 @@ Codes are numbered in the order they are registered, from E0001, skipping the re
 | E0006 | An invalid escape: unknown (`\q`), `\'` in a string, `\}`, a bad `\u{...}`, a bad `\x` or one outside bytes | For `\'` and `\}`, delete the backslash (`safe`) | Q7 for `\u` and `\x` details |
 | E0007 | An interpolation that isn't a name or field path | For spaces inside the braces, delete them (`safe`) | Q2 |
 | E0008 | A malformed number (decision 7) | Remove a suffix (`needs-review`); lowercase an exponent `E` or a base prefix (`safe`) | Q4 |
-| E0009 | An invalid char literal: empty, more than one scalar value, or unclosed | For more than one character, use `"` (`needs-review`), escaping `"` and `{` and unescaping `\'`. None when a name character comes right before the `'`, which would make the `"` a tag's, or when the body has an invalid escape | |
+| E0009 | An invalid char literal: empty, more than one scalar value, or unclosed | For more than one, use `"` (`needs-review`), escaping `"` and `{` and unescaping `\'`. None when a name character comes right before the `'`, which would make the `"` a tag's, or a `"`, which would join it, or when the body has an invalid escape | |
 | E0010 | An unknown literal tag, or `b"""` or a tag before `"""` | None. The message lists the tags | |
 | E0011 | A non-ASCII character in a bytes literal | Replace it with the `\x` escapes of its UTF-8 bytes (`safe`). After a `\` it is part of an invalid escape, an E0006, so no E0011 shares its span | |
 | E0012 | A multi-line string layout error | For `"""` after text, move it to a line of its own (`needs-review`) | Q3 |
@@ -242,7 +242,7 @@ Each layer builds and passes `cargo xtask ci` on its own:
 
 Each layer should come in at around 500 to 900 changed lines. Layer 2 was first planned to hold layers 2 to 4, but it would have run to about 1,600 lines, so it is split into the token stream, its errors, and numbers. Layer 6 was planned as one layer with six codes, but layer 5 alone, with three, came to about 1,200 lines, so it is split into 6a to 6c (decided by David, 2026-11-11). Layer 6b, with three codes and four forms, was estimated at about 1,150 lines, so char literals moved to 6b2 (decided by David, 2026-11-11). The codes keep the numbers the table gives, so E0008 is registered after E0013 and E0014.
 
-**Literals before their layer.** Layers 2 to 5 must stand alone, so they lex the literal forms they don't handle yet by a fallback rule. Everything from a `"` to the next `"` on the same line is `StringStart`, `StringText` and `StringEnd`, with no validation. Everything from a `'` to the next `'` on the line is a `Char`. A prefix is a separate `Ident`. Until layer 4, a digit and the letters, digits and underscores after it are one `Int`. Until layer 6a, `"""` lexes as an empty string followed by another string, so a multi-line string lexes wrongly. Nothing depends on that: no fixture uses those forms, and no command lexes user code until the parser lands.
+**Literals before their layer.** Layers 2 to 6b stood alone by lexing the literal forms they didn't handle yet by a fallback rule. Everything from a `"` to the next `"` on the same line was `StringStart`, `StringText` and `StringEnd`, with no validation. Everything from a `'` to the next `'` on the line was a `Char`. A prefix was a separate `Ident`. Until layer 4, a digit and the letters, digits and underscores after it were one `Int`. Until layer 6a, `"""` lexed as an empty string followed by another string. Nothing depended on that: no fixture used those forms, and no command lexes user code until the parser lands. Layer 6b2 removed the last of it, the rule for chars, so every literal now lexes by its own rules.
 
 ## Spec questions (decided by David, 2026-11-11)
 
@@ -385,8 +385,8 @@ Rule IDs in brackets are what each task's fixtures cite. Rules added by spec que
 - [x] Remove the messages that call out other languages' constructs, and the per-case hints, from E0001, E0006, E0007, E0008 and E0010; reword E0012's docs (decision 9).
 
 **Layer 6b2: `m1/lexer-chars`**
-- [ ] Char literals; E0009. [`lex.lit.char`, `lex.lit.char.escapes`]
-- [ ] Remove the rest of the fallback rule and the README's "Literals not lexed yet".
+- [x] Char literals, `literal::char_value`; E0009. [`lex.lit.char`, `lex.lit.char.escapes`]
+- [x] Remove the rest of the fallback rule and the README's "Literals not lexed yet".
 
 **Layer 6c: `m1/lexer-control`**
 - [ ] Spec: question 8, and a bump.

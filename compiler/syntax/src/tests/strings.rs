@@ -2,7 +2,7 @@
 //! `multiline.rs`, and raw, bytes and tagged literals in `prefixed.rs`.
 
 use super::errors::errors;
-use crate::literal::{bytes_value, string_value};
+use crate::literal::{bytes_value, char_body_value, char_value, string_value};
 use crate::{SyntaxKind, lex_str};
 use quince_diagnostics::Applicability;
 
@@ -23,8 +23,9 @@ pub(super) fn message(text: &str) -> String {
 
 /// Every text of up to four characters from those that matter to literals keeps the
 /// invariants, reports its errors in order, never puts two errors on one span, and decodes.
-/// A safe E0006, E0007 or E0011 fix removes its error, leaves the others as they were, moved
-/// by its edits, and keeps the bytes of every bytes literal.
+/// A safe E0006, E0007 or E0011 fix, or E0009's fix, removes its error, leaves the others as
+/// they were, moved by its edits, and keeps the bytes of every bytes literal. E0009's fix
+/// makes a string whose value is the char's body.
 #[test]
 fn every_short_text() {
     let alphabet: Vec<char> = "\"{}\\ux.0arb# '\u{e9}\n\r".chars().collect();
@@ -49,16 +50,21 @@ fn every_short_text() {
                 lexed.errors
             );
             for (kind, range) in lexed.ranges() {
-                if kind == SyntaxKind::StringText {
-                    string_value(&text[range]);
+                match kind {
+                    SyntaxKind::StringText => drop(string_value(&text[range])),
+                    SyntaxKind::Char => drop(char_value(&text[range])),
+                    _ => {}
                 }
             }
             for (i, error) in lexed.errors.iter().enumerate() {
+                let char_fix = error.code == "E0009";
                 let string_code = ["E0006", "E0007", "E0011"].contains(&error.code);
-                let Some(fix) = error.fixes.first().filter(|_| string_code) else {
+                let Some(fix) = error.fixes.first().filter(|_| string_code || char_fix) else {
                     continue;
                 };
-                assert_eq!(fix.applicability, Applicability::Safe, "{text:?}");
+                if !char_fix {
+                    assert_eq!(fix.applicability, Applicability::Safe, "{text:?}");
+                }
                 let mut fixed = text.clone();
                 for (range, with) in fix.edits.iter().rev() {
                     fixed.replace_range(range.start as usize..range.end as usize, with);
@@ -84,10 +90,40 @@ fn every_short_text() {
                     all_bytes(text),
                     "{text:?} fixed to {fixed:?}"
                 );
+                if char_fix {
+                    let (start, end) = (error.range.start as usize, error.range.end as usize);
+                    let body = char_body_value(&text[start + 1..end - 1]);
+                    assert_eq!(
+                        string_at(&fixed, moved(error.range.start) as usize),
+                        Some(body),
+                        "{text:?} fixed to {fixed:?}"
+                    );
+                }
             }
         }
         texts = longer;
     }
+}
+
+/// The value of the `"` string that starts at `at` in `text`, its `StringText` decoded, or
+/// `None` when no such string starts there, or it isn't closed or interpolates.
+fn string_at(text: &str, at: usize) -> Option<String> {
+    let mut value = None;
+    for (kind, range) in lex_str(text).ranges() {
+        match (kind, &mut value) {
+            (SyntaxKind::StringStart, None) if range.start == at => {
+                if &text[range] != "\"" {
+                    return None;
+                }
+                value = Some(String::new());
+            }
+            (SyntaxKind::StringText, Some(v)) => v.push_str(&string_value(&text[range])),
+            (SyntaxKind::StringEnd, Some(_)) => return value,
+            (_, Some(_)) => return None,
+            _ => {}
+        }
+    }
+    None
 }
 
 /// The values of the bytes literals in `text`, each its `StringText` decoded.

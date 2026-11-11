@@ -1,0 +1,18 @@
+// rule: lex.lit.char
+// mode: parse
+// A char literal is one Unicode scalar value between single quotes, and nothing in it is
+// special but the backslash: a double quote and a brace are plain characters. An empty char,
+// one with more than one scalar value, such as a letter and a combining accent, and one with
+// no closing quote on its line are errors.
+fn f() {
+  let a = 'a'
+  let accented = 'é'
+  let emoji = '😀'
+  let quote = '"'
+  let brace = '{'
+  let empty = '' //~ E0009
+  let word = 'ab' //~ E0009
+  let combined = 'é' //~ E0009
+  let open = 'a
+  //~^ E0009
+}
