@@ -125,28 +125,101 @@ impl Position {
     }
 
     /// The position of a byte offset in `source`. An offset past the end gives the position
-    /// just after the last character.
+    /// just after the last character. For more than one offset, build a [`LineIndex`] once.
     pub fn at(source: &str, byte_offset: usize) -> Position {
-        let offset = source.floor_char_boundary(byte_offset.min(source.len()));
-        let before = &source[..offset];
+        LineIndex::new(source).position(byte_offset)
+    }
+}
+
+/// Where each line of a source text starts, found once, to convert between byte offsets and
+/// positions. Lines and columns count as [`Position`] says.
+#[derive(Debug, Clone)]
+pub struct LineIndex<'a> {
+    source: &'a str,
+    /// The byte offset each line starts at. Line 1 starts after a leading byte order mark.
+    line_starts: Vec<usize>,
+}
+
+impl<'a> LineIndex<'a> {
+    pub fn new(source: &'a str) -> Self {
+        let bom_len = if source.starts_with('\u{FEFF}') {
+            '\u{FEFF}'.len_utf8()
+        } else {
+            0
+        };
+        let mut line_starts = vec![bom_len];
         let bytes = source.as_bytes();
-        let (mut line, mut line_start) = (1, 0);
-        for (i, &b) in before.as_bytes().iter().enumerate() {
-            let ends_line = b == b'\n' || (b == b'\r' && bytes.get(i + 1) != Some(&b'\n'));
-            if ends_line {
-                line += 1;
-                line_start = i + 1;
+        for (i, &b) in bytes.iter().enumerate() {
+            if b == b'\n' || (b == b'\r' && bytes.get(i + 1) != Some(&b'\n')) {
+                line_starts.push(i + 1);
             }
         }
-        let mut text = &before[line_start..];
-        if line == 1 {
-            text = text.strip_prefix('\u{FEFF}').unwrap_or(text);
+        LineIndex {
+            source,
+            line_starts,
         }
-        // Between the CR and LF of a CRLF, the CR isn't a column.
-        if source[offset..].starts_with('\n') {
+    }
+
+    /// The number of lines. Text that ends with a line break has an empty last line after it,
+    /// where the end of input is.
+    pub fn line_count(&self) -> u32 {
+        to_u32(self.line_starts.len())
+    }
+
+    /// The text of a line without its line break, or `None` when there is no such line. Line 1
+    /// leaves out a leading byte order mark, as its columns do.
+    pub fn line(&self, line: u32) -> Option<&'a str> {
+        let index = usize::try_from(line).ok()?.checked_sub(1)?;
+        let start = *self.line_starts.get(index)?;
+        let end = self
+            .line_starts
+            .get(index + 1)
+            .copied()
+            .unwrap_or(self.source.len());
+        // Only a line break can end a line before the last, and the last line has none.
+        let text = &self.source[start..end];
+        let text = text.strip_suffix('\n').unwrap_or(text);
+        Some(text.strip_suffix('\r').unwrap_or(text))
+    }
+
+    /// Every line with its number, in order.
+    pub fn lines(&self) -> impl Iterator<Item = (u32, &'a str)> + '_ {
+        (1..=self.line_count()).map(|n| (n, self.line(n).expect("n is a line number")))
+    }
+
+    /// The position of a byte offset. An offset past the end gives the position just after the
+    /// last character, and an offset inside a character gives that character's position.
+    pub fn position(&self, byte_offset: usize) -> Position {
+        let offset = self
+            .source
+            .floor_char_boundary(byte_offset.min(self.source.len()));
+        let index = self
+            .line_starts
+            .partition_point(|&start| start <= offset)
+            .saturating_sub(1);
+        // An offset inside the byte order mark is line 1's first position.
+        let start = self.line_starts[index].min(offset);
+        let mut text = &self.source[start..offset];
+        // Between the CR and LF of a CR LF, the CR isn't a column.
+        if self.source[offset..].starts_with('\n') {
             text = text.strip_suffix('\r').unwrap_or(text);
         }
-        Position(to_u32(line), to_u32(text.chars().count() + 1))
+        Position(to_u32(index + 1), to_u32(text.chars().count() + 1))
+    }
+
+    /// The byte offset of a position, or `None` when the text has no such position. A line's
+    /// columns run from 1 to one past its last character, which is the offset of its line break
+    /// (the CR of a CR LF).
+    pub fn offset(&self, position: Position) -> Option<usize> {
+        let text = self.line(position.line())?;
+        let column = usize::try_from(position.column()).ok()?.checked_sub(1)?;
+        let within = text
+            .char_indices()
+            .map(|(i, _)| i)
+            .chain([text.len()])
+            .nth(column)?;
+        let line_start = self.line_starts[usize::try_from(position.line()).ok()? - 1];
+        Some(line_start + within)
     }
 }
 
@@ -194,6 +267,47 @@ impl Fix {
                     "edits in {file} at {:?}-{:?} and {:?}-{:?} overlap; every edit in a fix \
                      refers to the original text, so edits must not overlap",
                     a.start, a.end, b.start, b.end
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    /// Checks that every edit's positions exist in the text it edits: the rules that need the
+    /// source. `line_index_for` gives the index of an edited file that exists, and `None` for one
+    /// that doesn't, which an edit creates by inserting at `[1, 1]`. `span_file` is the file of an
+    /// edit that names none.
+    pub fn check_positions<'i>(
+        &self,
+        span_file: &str,
+        line_index_for: impl Fn(&str) -> Option<&'i LineIndex<'i>>,
+    ) -> Result<(), String> {
+        for edit in &self.edits {
+            let file = edit.file.as_deref().unwrap_or(span_file);
+            let Some(index) = line_index_for(file) else {
+                let first = Position(1, 1);
+                if (edit.start, edit.end) != (first, first) {
+                    return Err(format!(
+                        "edit in {file} is at {:?}-{:?}, but {file} doesn't exist; an edit that \
+                         creates a file inserts at {first:?}",
+                        edit.start, edit.end
+                    ));
+                }
+                continue;
+            };
+            for (verb, position) in [("starts", edit.start), ("ends", edit.end)] {
+                if index.offset(position).is_some() {
+                    continue;
+                }
+                let line = position.line();
+                let why = match index.line(line) {
+                    Some(text) => {
+                        format!("line {line} has columns 1 to {}", text.chars().count() + 1)
+                    }
+                    None => format!("the file has lines 1 to {}", index.line_count()),
+                };
+                return Err(format!(
+                    "edit in {file} {verb} at {position:?}, which isn't in the file: {why}"
                 ));
             }
         }
@@ -395,5 +509,98 @@ mod tests {
         assert_eq!(Position::at(bom, 3), Position(1, 1));
         assert_eq!(Position::at(bom, 4), Position(1, 2));
         assert_eq!(Position::at("a\n", 2), Position(2, 1));
+    }
+
+    #[test]
+    fn line_index_splits_lines_as_positions_do() {
+        let lines = |source| {
+            let index = LineIndex::new(source);
+            let lines: Vec<_> = index.lines().map(|(_, text)| text).collect();
+            assert_eq!(lines.len(), index.line_count() as usize);
+            lines
+        };
+        assert_eq!(lines("a\nb\r\nc\rd"), ["a", "b", "c", "d"]);
+        assert_eq!(lines("a\n"), ["a", ""]);
+        assert_eq!(lines("a\r\r\n"), ["a", "", ""]);
+        assert_eq!(lines(""), [""]);
+        assert_eq!(lines("\u{FEFF}// a\n"), ["// a", ""]);
+        assert_eq!(LineIndex::new("a").line(0), None);
+        assert_eq!(LineIndex::new("a").line(2), None);
+    }
+
+    /// Every character boundary maps to a position and back. The two exceptions are offsets
+    /// that share a position with an earlier one: the LF of a CR LF, and the start of a byte
+    /// order mark.
+    #[test]
+    fn offsets_and_positions_round_trip() {
+        for source in [
+            "let café = 1\n",
+            "a\r\nbc\rd\n\ne",
+            "\u{FEFF}x\r\n",
+            "\u{FEFF}",
+            "",
+            "\t\u{1F600}\r",
+        ] {
+            let index = LineIndex::new(source);
+            for offset in (0..=source.len()).filter(|&o| source.is_char_boundary(o)) {
+                let position = index.position(offset);
+                assert_eq!(
+                    position,
+                    Position::at(source, offset),
+                    "{source:?} at {offset}"
+                );
+                let expected =
+                    if source[..offset].ends_with('\r') && source[offset..].starts_with('\n') {
+                        offset - 1
+                    } else if offset == 0 && source.starts_with('\u{FEFF}') {
+                        3
+                    } else {
+                        offset
+                    };
+                assert_eq!(
+                    index.offset(position),
+                    Some(expected),
+                    "{source:?} at {offset}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn positions_that_dont_exist() {
+        let index = LineIndex::new("ab\r\ncafé\n");
+        assert_eq!(index.offset(Position(1, 3)), Some(2));
+        assert_eq!(index.offset(Position(2, 5)), Some(9));
+        assert_eq!(index.offset(Position(3, 1)), Some(10));
+        for missing in [(1, 4), (2, 6), (3, 2), (4, 1), (0, 1), (1, 0)] {
+            assert_eq!(
+                index.offset(Position(missing.0, missing.1)),
+                None,
+                "{missing:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn fix_positions_must_exist() {
+        let source = LineIndex::new("let x = 1\r\nlet y = 2");
+        let line_index_for = |file: &str| (file == "src/a.qnc").then_some(&source);
+        let check = |edits| fix(edits).check_positions("src/a.qnc", line_index_for);
+        assert_eq!(check(vec![edit((1, 5), (1, 10), None)]), Ok(()));
+        assert_eq!(check(vec![edit((2, 10), (2, 10), None)]), Ok(()));
+        let err = check(vec![edit((1, 5), (1, 11), None)]).unwrap_err();
+        assert_eq!(
+            err,
+            "edit in src/a.qnc ends at Position(1, 11), which isn't in the file: line 1 has \
+             columns 1 to 10"
+        );
+        let err = check(vec![edit((3, 1), (3, 1), None)]).unwrap_err();
+        assert!(err.ends_with("the file has lines 1 to 2"), "{err}");
+        assert_eq!(
+            check(vec![edit((1, 1), (1, 1), Some("src/new.qnc"))]),
+            Ok(())
+        );
+        let err = check(vec![edit((2, 1), (2, 1), Some("src/new.qnc"))]).unwrap_err();
+        assert!(err.contains("src/new.qnc doesn't exist"), "{err}");
     }
 }

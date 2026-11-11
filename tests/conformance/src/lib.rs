@@ -8,7 +8,7 @@ pub mod coverage;
 pub mod fixture;
 
 use fixture::{Fixture, Mode};
-use quince_diagnostics::{Diagnostic, Severity};
+use quince_diagnostics::{Diagnostic, LineIndex, Severity};
 use quince_spec::{GRAMMAR_PATH, MOVED_PATH, README_PATH, RETIRED_PATH, Spec};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::ErrorKind;
@@ -20,15 +20,16 @@ pub const FIXTURE_DIR: &str = "tests/conformance/testdata";
 pub const GRAMMAR_SECTION: &str = "Grammar productions";
 
 /// What a compiler must provide to run fixtures. A method returns `None` when that mode isn't
-/// implemented yet, and the fixture then fails rather than being skipped.
+/// implemented yet, and the fixture then fails rather than being skipped. `path` is the fixture's
+/// path relative to the repo root, and `source` its bytes as read from disk, which need not be
+/// valid UTF-8.
 pub trait Backend {
-    /// The parser's diagnostics for one file, and nothing from later stages. `path` is the
-    /// fixture's path relative to the repo root.
-    fn parse(&self, path: &str, source: &str) -> Option<Vec<Diagnostic>>;
+    /// The parser's diagnostics for one file, and nothing from later stages.
+    fn parse(&self, path: &str, source: &[u8]) -> Option<Vec<Diagnostic>>;
     /// Every diagnostic for one file, from every stage that exists.
-    fn check(&self, path: &str, source: &str) -> Option<Vec<Diagnostic>>;
+    fn check(&self, path: &str, source: &[u8]) -> Option<Vec<Diagnostic>>;
     /// Builds and runs one file as a program. `Err` holds the build's error diagnostics.
-    fn run(&self, path: &str, source: &str) -> Option<Result<RunOutput, Vec<Diagnostic>>>;
+    fn run(&self, path: &str, source: &[u8]) -> Option<Result<RunOutput, Vec<Diagnostic>>>;
 }
 
 pub struct RunOutput {
@@ -40,15 +41,15 @@ pub struct RunOutput {
 pub struct NoBackend;
 
 impl Backend for NoBackend {
-    fn parse(&self, _path: &str, _source: &str) -> Option<Vec<Diagnostic>> {
+    fn parse(&self, _path: &str, _source: &[u8]) -> Option<Vec<Diagnostic>> {
         None
     }
 
-    fn check(&self, _path: &str, _source: &str) -> Option<Vec<Diagnostic>> {
+    fn check(&self, _path: &str, _source: &[u8]) -> Option<Vec<Diagnostic>> {
         None
     }
 
-    fn run(&self, _path: &str, _source: &str) -> Option<Result<RunOutput, Vec<Diagnostic>>> {
+    fn run(&self, _path: &str, _source: &[u8]) -> Option<Result<RunOutput, Vec<Diagnostic>>> {
         None
     }
 }
@@ -140,7 +141,7 @@ pub struct FixtureFile {
     pub name: String,
     /// Relative to the repo root.
     pub path: String,
-    pub source: String,
+    pub source: Vec<u8>,
     pub stdout: Option<String>,
 }
 
@@ -185,7 +186,7 @@ fn discover_in(dir: &Path, relative_dir: &str) -> Result<Vec<FixtureFile>, Vec<S
             continue;
         }
         let name = name_of(path);
-        let source = match std::fs::read_to_string(path) {
+        let source = match std::fs::read(path) {
             Ok(source) => source,
             Err(e) => {
                 errors.push(format!("can't read {}: {e}", path.display()));
@@ -300,7 +301,9 @@ pub fn run_fixture(
                 (backend.parse(path, &fixture.source), "parse")
             };
             match diagnostics {
-                Some(diagnostics) => failures.extend(match_diagnostics(fixture, &diagnostics)),
+                Some(diagnostics) => {
+                    failures.extend(match_diagnostics(fixture, path, &diagnostics));
+                }
                 None => failures.push(no_backend(what)),
             }
         }
@@ -340,14 +343,18 @@ pub fn run_fixture(
 }
 
 /// Pairs each expectation with a diagnostic of the same code starting on its line. Unmatched
-/// expectations and unexpected errors or warnings are failures. A diagnostic that starts at the
-/// end of input after a trailing newline counts as starting on the last line.
-fn match_diagnostics(fixture: &Fixture, diagnostics: &[Diagnostic]) -> Vec<String> {
-    let last_line = u32::try_from(fixture.source.lines().count()).expect("lines fit in u32");
+/// expectations and unexpected errors or warnings are failures, and so is a malformed fix. A
+/// diagnostic that starts at the end of input after a trailing line break counts as starting on
+/// the last line. `path` is the fixture's file, the only one that exists for a fix to edit.
+fn match_diagnostics(fixture: &Fixture, path: &str, diagnostics: &[Diagnostic]) -> Vec<String> {
+    let index = LineIndex::new(&fixture.text);
+    // After a trailing line break, the last line is the empty one at the end of input.
+    let end_line = index.line_count();
+    let ends_with_line_break = fixture.text.ends_with(['\n', '\r']);
     let line_of = |d: &Diagnostic| {
         let line = d.span.start.line();
-        if line == last_line + 1 && fixture.source.ends_with('\n') {
-            last_line
+        if line == end_line && ends_with_line_break {
+            line - 1
         } else {
             line
         }
@@ -373,7 +380,10 @@ fn match_diagnostics(fixture: &Fixture, diagnostics: &[Diagnostic]) -> Vec<Strin
     }
     for d in diagnostics {
         for fix in &d.fixes {
-            if let Err(why) = fix.check(&d.span.file) {
+            let checked = fix.check(&d.span.file).and_then(|()| {
+                fix.check_positions(&d.span.file, |file| (file == path).then_some(&index))
+            });
+            if let Err(why) = checked {
                 failures.push(format!(
                     "the fix \"{}\" on {} at line {} is malformed: {why}",
                     fix.description,
@@ -432,7 +442,7 @@ mod tests {
     }
 
     impl Backend for Fake {
-        fn parse(&self, path: &str, _source: &str) -> Option<Vec<Diagnostic>> {
+        fn parse(&self, path: &str, _source: &[u8]) -> Option<Vec<Diagnostic>> {
             Some(
                 self.diagnostics
                     .iter()
@@ -441,12 +451,12 @@ mod tests {
             )
         }
 
-        fn check(&self, path: &str, _source: &str) -> Option<Vec<Diagnostic>> {
+        fn check(&self, path: &str, _source: &[u8]) -> Option<Vec<Diagnostic>> {
             let all = self.diagnostics.iter().chain(&self.check_only);
             Some(all.map(|&d| diagnostic(path, d)).collect())
         }
 
-        fn run(&self, path: &str, _source: &str) -> Option<Result<RunOutput, Vec<Diagnostic>>> {
+        fn run(&self, path: &str, _source: &[u8]) -> Option<Result<RunOutput, Vec<Diagnostic>>> {
             self.run.map(|result| match result {
                 Ok((exit, stdout)) => Ok(RunOutput {
                     exit,
@@ -564,6 +574,19 @@ mod tests {
         let source = "// rule: bind.let-var\nfn f() {\n}\nx\ny //~ E0002\n";
         assert!(run(source, None, &fake(vec![("E0002", 6)])).passed());
         assert!(!run(source, None, &fake(vec![("E0002", 7)])).passed());
+        for ending in ["\r\n", "\r"] {
+            let source = source.replace('\n', ending);
+            assert!(
+                run(&source, None, &fake(vec![("E0002", 6)])).passed(),
+                "{ending:?}"
+            );
+            assert!(
+                !run(&source, None, &fake(vec![("E0002", 7)])).passed(),
+                "{ending:?}"
+            );
+        }
+        let no_newline = "// rule: bind.let-var\nx //~ E0002";
+        assert!(run(no_newline, None, &fake(vec![("E0002", 2)])).passed());
     }
 
     #[test]
@@ -657,15 +680,18 @@ mod tests {
         );
     }
 
-    /// Reports one E0100 on line 2 with the given fix edits.
-    struct FixBackend(Vec<((u32, u32), (u32, u32))>);
+    /// An edit's start, end and file, as `(line, column)` pairs.
+    type FakeEdit = ((u32, u32), (u32, u32), Option<&'static str>);
+
+    /// Reports one E0100 on line 2 with one fix made of the given edits.
+    struct FixBackend(Vec<FakeEdit>);
 
     impl Backend for FixBackend {
-        fn parse(&self, path: &str, source: &str) -> Option<Vec<Diagnostic>> {
+        fn parse(&self, path: &str, source: &[u8]) -> Option<Vec<Diagnostic>> {
             self.check(path, source)
         }
 
-        fn check(&self, path: &str, _source: &str) -> Option<Vec<Diagnostic>> {
+        fn check(&self, path: &str, _source: &[u8]) -> Option<Vec<Diagnostic>> {
             let mut d = diagnostic(path, ("E0100", 2, 1));
             d.fixes.push(quince_diagnostics::Fix {
                 description: "rename".into(),
@@ -673,8 +699,8 @@ mod tests {
                 edits: self
                     .0
                     .iter()
-                    .map(|&(start, end)| quince_diagnostics::Edit {
-                        file: None,
+                    .map(|&(start, end, file)| quince_diagnostics::Edit {
+                        file: file.map(str::to_string),
                         start: Position(start.0, start.1),
                         end: Position(end.0, end.1),
                         text: "y".into(),
@@ -684,7 +710,7 @@ mod tests {
             Some(vec![d])
         }
 
-        fn run(&self, _path: &str, _source: &str) -> Option<Result<RunOutput, Vec<Diagnostic>>> {
+        fn run(&self, _path: &str, _source: &[u8]) -> Option<Result<RunOutput, Vec<Diagnostic>>> {
             None
         }
     }
@@ -694,9 +720,9 @@ mod tests {
         let source = "// rule: bind.let-var
 let x = 1 //~ E0100
 ";
-        let good = FixBackend(vec![((2, 5), (2, 6))]);
+        let good = FixBackend(vec![((2, 5), (2, 6), None)]);
         assert!(run(source, None, &good).passed());
-        let overlapping = FixBackend(vec![((2, 1), (2, 6)), ((2, 3), (2, 9))]);
+        let overlapping = FixBackend(vec![((2, 1), (2, 6), None), ((2, 3), (2, 9), None)]);
         let r = run(source, None, &overlapping);
         assert_eq!(r.failures.len(), 1, "{:?}", r.failures);
         assert!(
@@ -705,6 +731,26 @@ let x = 1 //~ E0100
             "{:?}",
             r.failures
         );
+    }
+
+    #[test]
+    fn fix_positions_must_be_in_the_fixture() {
+        let source = "// rule: bind.let-var\r\nlet x = 1 //~ E0100\r\n";
+        let line_end = FixBackend(vec![((2, 20), (2, 20), None)]);
+        assert!(run(source, None, &line_end).passed());
+        let past_line_end = FixBackend(vec![((2, 5), (2, 21), None)]);
+        assert_eq!(
+            run(source, None, &past_line_end).failures,
+            [
+                "the fix \"rename\" on E0100 at line 2 is malformed: edit in \
+                 tests/conformance/testdata/t.qnc ends at Position(2, 21), which isn't in the \
+                 file: line 2 has columns 1 to 20"
+            ]
+        );
+        let new_file = FixBackend(vec![((1, 1), (1, 1), Some("src/new.qnc"))]);
+        assert!(run(source, None, &new_file).passed());
+        let into_missing_file = FixBackend(vec![((2, 1), (2, 3), Some("src/new.qnc"))]);
+        assert_eq!(run(source, None, &into_missing_file).failures.len(), 1);
     }
 
     #[test]
@@ -745,6 +791,54 @@ let x = 1 //~ E0100
                 ("hello", "selftest/hello.qnc", Some("hi\n")),
             ]
         );
+    }
+
+    /// Reports E0001 at every `$`, at the position `LineIndex` gives, as a lexer would.
+    struct DollarBackend;
+
+    impl Backend for DollarBackend {
+        fn parse(&self, path: &str, source: &[u8]) -> Option<Vec<Diagnostic>> {
+            let text = fixture::decode(source);
+            let index = LineIndex::new(&text);
+            let dollar = |(offset, _)| {
+                let span = Span {
+                    file: path.to_string(),
+                    start: index.position(offset),
+                    end: index.position(offset + 1),
+                };
+                let code = Code::parse("E0001").unwrap();
+                Diagnostic::new(code, Severity::Error, "a `$`", span)
+            };
+            Some(text.match_indices('$').map(dollar).collect())
+        }
+
+        fn check(&self, path: &str, source: &[u8]) -> Option<Vec<Diagnostic>> {
+            self.parse(path, source)
+        }
+
+        fn run(&self, _path: &str, _source: &[u8]) -> Option<Result<RunOutput, Vec<Diagnostic>>> {
+            None
+        }
+    }
+
+    /// The `lines/` fixtures hold a byte order mark, each line ending, no final line break and
+    /// invalid UTF-8. The runner's line numbers must agree with the positions a backend reports.
+    #[test]
+    fn line_numbers_agree_with_positions() {
+        let files = discover_in(&selftest("lines"), "selftest").unwrap();
+        let names: Vec<_> = files.iter().map(|f| f.name.as_str()).collect();
+        assert_eq!(
+            names,
+            ["bom", "crlf", "invalid_utf8", "lone_cr", "no_final_newline"]
+        );
+        for file in &files {
+            let expected = fixture::parse(&file.name, &file.source, None)
+                .unwrap()
+                .expectations;
+            assert!(expected.len() >= 2, "{}: {expected:?}", file.name);
+            let r = run_file(file, &rules(), &DollarBackend);
+            assert!(r.passed(), "{}: {:?}", file.name, r.failures);
+        }
     }
 
     #[test]

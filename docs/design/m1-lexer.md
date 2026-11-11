@@ -328,15 +328,15 @@ Found while writing this. None of them block the lexer.
 Rule IDs in brackets are what each task's fixtures cite. Rules added by spec questions are cited only once approved.
 
 **Layer 1: `m1/lexer-harness`**
-- [ ] `LineIndex` in `quince_diagnostics`, with the position rules' unit tests.
-- [ ] `Backend` takes `&[u8]`; the runner reads fixture bytes, decodes them with `String::from_utf8_lossy`, strips a BOM before the header, and numbers lines with `LineIndex`.
-- [ ] Fix-position checks in the runner.
-- [ ] Fixture README: `parse` fixtures are valid syntax apart from their expectations.
+- [x] `LineIndex` in `quince_diagnostics`, with the position rules' unit tests.
+- [x] `Backend` takes `&[u8]`; the runner reads fixture bytes, decodes them with `String::from_utf8_lossy`, strips a BOM before the header, and numbers lines with `LineIndex`.
+- [x] Fix-position checks in the runner.
+- [x] Fixture README: `parse` fixtures are valid syntax apart from their expectations.
 
 **Layer 2: `m1/lexer-tokens`**
 - [ ] Spec: the approved wording from questions 1, 4 and 6, the `source` construct, and a minor version bump.
 - [ ] `SyntaxKind`, `Token`, `Lexed`, `lex`, trivia and the lossless invariant; unit tests for keywords, `continues_line()` and the grammar sync.
-- [ ] `decode_source`, `Decoded`, BOM and line endings; E0013, E0014; the replacement-column rule in `compiler/diagnostics/README.md`; switch the runner to `decode_source`. [`lex.source.utf8`, `lex.source.bom`, `lex.source.line-end`, `lex.source.whitespace`, `lex.source.ascii`]
+- [ ] `decode_source`, `Decoded`, BOM and line endings; E0013, E0014; the replacement-column rule in `compiler/diagnostics/README.md`; switch the runner to `decode_source`, and update the fixture README's sentence on how invalid UTF-8 decodes (one U+FFFD per run, not per sequence). [`lex.source.utf8`, `lex.source.bom`, `lex.source.line-end`, `lex.source.whitespace`, `lex.source.ascii`]
 - [ ] Punctuation, `>` alone, `;`, unknown characters; E0001, E0002. [`lex.braces`]
 - [ ] Comments, doc comments and block comments; E0003. [`lex.comment.line`]
 - [ ] Numbers, the tuple-index rule, `literal::int_value` and `float_value`; E0008. [`lex.lit.int.forms`, `lex.lit.float.forms`, `lex.lit.underscore`, `lex.lit.int.prefix`, `lex.lit.int.leading-zero`, `lex.lit.float.shape`, `lex.lit.no-suffix`]
