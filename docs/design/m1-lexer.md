@@ -331,7 +331,7 @@ Found while writing this. None of them block the lexer.
 - **Coverage ratchet.** M0 left this for M1. Decide it once the parser adds real coverage.
 - **Adjacent literals** (layer 6b). A quote in a string that isn't escaped can leave two literals side by side with no lexical error: `"press "b" now"` is a string and then a bytes literal, and `"the "r" key"` a string and then a raw string. With an unknown tag, as in `"say "hi" now"`, the lexer reports E0010. The parser reports two adjacent literals as it reports any two expressions with nothing between them, with no hint for this shape (decision 9). Likewise `r"a\"b"` is a raw string, `r"a\"`, then an unclosed bytes literal.
 
-- **The corpus doesn't parse.** Many `quince` blocks are fragments: API listings with no bodies (`impl Float { fn abs(self) -> Float }`), `{ ... }` placeholders, and top-level `let` statements. They lex, which is all layer 7 checks. A parser corpus needs a rule for them, such as parsing a block as items or as statements, or another label, which is a spec question.
+- **The corpus doesn't parse.** Many `quince` blocks are fragments: API listings with no bodies (`impl Float { fn abs(self) -> Float }`), `{ ... }` placeholders, and top-level `let` statements. They lex, which is all layer 7 checks. M1's exit criterion now says every `quince` block parses as a file or, when it isn't one, as statements (decided by David, 2026-11-11). Statements cover the top-level `let`s. Bodiless signatures and `{ ... }` remain open: the parser accepts them as syntax, or those blocks get another label, which is a spec question.
 
 ## For later milestones
 
