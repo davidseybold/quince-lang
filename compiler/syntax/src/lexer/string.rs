@@ -65,7 +65,9 @@ impl Lexer<'_> {
                     if let Err(problem) = escape.value {
                         dangling = problem == BadEscape::Dangling;
                         let text = &rest[len..len + escape.len];
-                        self.errors.push(escape_error(text, start + len, problem));
+                        let after = &rest[len + escape.len..];
+                        self.errors
+                            .push(escape_error(text, after, start + len, problem));
                     }
                     len += escape.len;
                 }
@@ -194,7 +196,16 @@ fn interpolation_error(start: usize, body: &str, closed: bool) -> LexError {
         ));
     }
     let squeezed: String = body.chars().filter(|c| !matches!(c, ' ' | '\t')).collect();
-    if let Some(edits) = space_deletions(start + 1, body).filter(|_| is_path(&squeezed)) {
+    // A malformed tuple step would trade this error for an E0008.
+    let well_formed = |path: &str| {
+        is_path(path)
+            && path.split('.').skip(1).all(|step| {
+                !step.starts_with(|c: char| c.is_ascii_digit())
+                    || step == "0"
+                    || (step.bytes().all(|b| b.is_ascii_digit()) && !step.starts_with('0'))
+            })
+    };
+    if let Some(edits) = space_deletions(start + 1, body).filter(|_| well_formed(&squeezed)) {
         return error(format!(
             "an interpolation has no spaces: write `{{{squeezed}}}`"
         ))
@@ -202,10 +213,30 @@ fn interpolation_error(start: usize, body: &str, closed: bool) -> LexError {
     }
     let bind =
         |value: &str| format!("bind it first, as in `let value = {value}`, then write `{{value}}`");
-    if trimmed == "Self" || trimmed.starts_with("Self.") {
+    if trimmed == "Self" {
+        return error(
+            "`Self` is a type, not a value: an interpolation holds a name, `self` or a constant, \
+             as in `{self.name}`"
+                .to_string(),
+        );
+    }
+    // The body is quoted in the message only when it can't break the message's own quoting.
+    let quotable = !trimmed.contains(['`', '{']);
+    if trimmed.starts_with("Self.") && quotable {
         return error(format!(
             "a path in braces can't start with a type: {}",
             bind(trimmed)
+        ));
+    }
+    let words: Vec<&str> = (trimmed.split([' ', '\t']))
+        .filter(|w| !w.is_empty())
+        .collect();
+    if words.len() > 1 && words.iter().all(|w| is_path(w)) {
+        let each: Vec<String> = words.iter().map(|w| format!("{{{w}}}")).collect();
+        return error(format!(
+            "an interpolation holds one path, with no spaces: write each in its own braces, as \
+             in `{}`",
+            each.join(" ")
         ));
     }
     if let Some((value, spec)) = trimmed.split_once(':') {
@@ -214,9 +245,7 @@ fn interpolation_error(start: usize, body: &str, closed: bool) -> LexError {
             .strip_prefix('.')
             .map(|d| d.strip_suffix('f').unwrap_or(d));
         return error(match decimals {
-            Some(d)
-                if !value.is_empty() && !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit()) =>
-            {
+            Some(d) if is_path(value) && !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit()) => {
                 format!(
                     "Quince strings have no format specifiers: format the value first, as in \
                      `let value = {value}.to_fixed({d})`, then write `{{value}}`"
@@ -240,6 +269,13 @@ fn interpolation_error(start: usize, body: &str, closed: bool) -> LexError {
                  `{{id.0}}`"
             )
         });
+    }
+    if !quotable {
+        return error(
+            "only a path can go in braces, such as `{user.name}`: bind an expression with `let` \
+             first, and write its name in the braces"
+                .to_string(),
+        );
     }
     error(format!(
         "only a path can go in braces, such as `{{user.name}}`: to show `{trimmed}`, {}",
@@ -270,8 +306,8 @@ fn space_deletions(at: usize, body: &str) -> Option<Vec<(Range<usize>, String)>>
     (!edits.is_empty()).then_some(edits)
 }
 
-/// The E0006 for the escape `text`, at `at`.
-fn escape_error(text: &str, at: usize, problem: BadEscape) -> LexError {
+/// The E0006 for the escape `text`, at `at`, which the text `after` follows.
+fn escape_error(text: &str, after: &str, at: usize, problem: BadEscape) -> LexError {
     let error =
         |message: String| LexError::new(at..at + text.len(), codes::INVALID_ESCAPE, message);
     let example = "as in `\\u{1F600}`";
@@ -307,6 +343,14 @@ fn escape_error(text: &str, at: usize, problem: BadEscape) -> LexError {
         BadEscape::UnicodeUnclosed => {
             format!("this `\\u{{` escape needs a closing `}}`, {example}")
         }
+        BadEscape::UnicodeEscapedBrace(Some(c)) => format!(
+            "the `}}` that closes a `\\u{{` escape takes no backslash: write `\\u{{{:X}}}`",
+            u32::from(c)
+        ),
+        BadEscape::UnicodeEscapedBrace(None) => format!(
+            "the `}}` that closes a `\\u{{` escape takes no backslash, and the escape holds one \
+             to six hex digits naming a Unicode scalar value, {example}"
+        ),
         BadEscape::UnicodeEmpty => format!("`\\u{{}}` needs one to six hex digits, {example}"),
         BadEscape::UnicodeNotHex => format!(
             "`{text}` holds a character that isn't a hex digit: a `\\u` escape takes one to six \
@@ -338,7 +382,20 @@ fn escape_error(text: &str, at: usize, problem: BadEscape) -> LexError {
                 };
                 format!("`{text}` isn't a Quince escape: write the character as `\\u{{{code:X}}}`")
             }
-            '(' => "`\\(` isn't an escape: Quince interpolates with `{name}`".to_string(),
+            '(' => {
+                // Swift's `\(name)`.
+                let path = after
+                    .find(')')
+                    .map(|end| &after[..end])
+                    .filter(|p| is_path(p));
+                match path {
+                    Some(path) => format!(
+                        "`\\(` isn't an escape: Quince interpolates with braces, so write \
+                         `{{{path}}}`"
+                    ),
+                    None => "`\\(` isn't an escape: Quince interpolates with `{name}`".to_string(),
+                }
+            }
             _ => format!(
                 "`{text}` isn't an escape: a string's escapes are `\\n`, `\\t`, `\\r`, `\\0`, \
                  `\\\\`, `\\\"`, `\\{{` and `\\u{{...}}`, so a backslash is written `\\\\`"

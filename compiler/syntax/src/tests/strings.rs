@@ -143,6 +143,8 @@ fn escapes() {
         ]
     );
     assert_eq!(errors(r#""\u0041 \u""#), ["E0006 1..7", "E0006 8..10"]);
+    // One error with no fix: deleting the backslash would make a valid escape, changing the value.
+    assert_eq!(errors(r#""\u{ab\}""#), ["E0006 1..8"]);
     assert_eq!(
         lex_str(r#""\'""#).errors[0].fixes[0].applicability,
         Applicability::Safe
@@ -164,7 +166,10 @@ fn escape_messages() {
     assert!(message(r#""\u{12""#).starts_with("this `\\u{` escape needs a closing `}`"));
     assert!(message(r#""\a""#).ends_with("write the character as `\\u{7}`"));
     assert!(message(r#""\e""#).ends_with("write the character as `\\u{1B}`"));
-    assert!(message(r#""\(x)""#).contains("Quince interpolates with `{name}`"));
+    assert!(message(r#""\(total)""#).ends_with("so write `{total}`"));
+    assert!(message(r#""\(a + b)""#).contains("Quince interpolates with `{name}`"));
+    assert!(message(r#""\u{ab\}""#).ends_with("takes no backslash: write `\\u{AB}`"));
+    assert!(message(r#""\u{D800\}""#).contains("one to six hex digits naming"));
     assert_eq!(
         lex_str("\"a\\").errors[1].message,
         "a `\\` at the end of a line escapes nothing: a backslash is written `\\\\`"
@@ -229,6 +234,8 @@ fn spaces_in_braces() {
     );
     assert_eq!(errors(r#""{a b}""#), ["E0007 1..6"]);
     assert_eq!(errors(r#""{ a + b }""#), ["E0007 1..10"]);
+    // Deleting the space would trade the E0007 for an E0008 on `01`.
+    assert_eq!(errors(r#""{a.01 }""#), ["E0007 1..8"]);
     assert_eq!(
         message(r#""{ a }""#),
         "an interpolation has no spaces: write `{a}`"
@@ -253,6 +260,21 @@ fn interpolation_messages() {
     );
     assert!(message(r#""{total:.2}""#).contains("`let value = total.to_fixed(2)`"));
     assert!(message(r#""{x:?}""#).contains("such as `to_fixed` or `pad_start`"));
+    // Only a path gets the `to_fixed` form: `a + b.to_fixed(2)` would round only `b`.
+    assert!(message(r#""{a + b:.2}""#).contains("such as `to_fixed` or `pad_start`"));
+    assert_eq!(
+        message(r#""{ a b }""#),
+        "an interpolation holds one path, with no spaces: write each in its own braces, as in \
+         `{a} {b}`"
+    );
+    assert!(message(r#""{Self}""#).starts_with("`Self` is a type, not a value"));
+    // A body that would break the message's quoting isn't quoted.
+    for text in [r#""{a{b}""#, "\"{a`b}\""] {
+        assert!(
+            message(text).ends_with("and write its name in the braces"),
+            "{text}"
+        );
+    }
     assert!(message(r#""{0}""#).contains("no positional placeholders"));
     assert!(message(r#""{a.}""#).starts_with("`{a.}` isn't a path"));
     assert_eq!(

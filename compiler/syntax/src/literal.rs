@@ -86,6 +86,8 @@ pub(crate) enum BadEscape {
     /// `\u` with no braces, with what `\u` and four hex digits would mean in other languages.
     UnicodeNoBraces(Option<char>),
     UnicodeUnclosed,
+    /// `\u{...\}`, with the scalar value the digits name, if they name one.
+    UnicodeEscapedBrace(Option<char>),
     UnicodeEmpty,
     UnicodeNotHex,
     /// More than six digits, with the scalar value they name, if they name one.
@@ -144,27 +146,30 @@ fn unicode_escape(text: &str) -> Escape {
         .find(['}', '"', '{', '\\', '\n', '\r'])
         .unwrap_or(inner.len());
     let digits = &inner[..end];
-    if !inner[end..].starts_with('}') {
-        return bad(3 + end, BadEscape::UnicodeUnclosed);
-    }
-    let len = 3 + end + 1;
+    // `\u{AB\}` is one bad escape, so that deleting the `\` of a `\}` can't complete it.
+    let close = match &inner[end..] {
+        rest if rest.starts_with('}') => 1,
+        rest if rest.starts_with("\\}") => 2,
+        _ => return bad(3 + end, BadEscape::UnicodeUnclosed),
+    };
+    let len = 3 + end + close;
     let value = || u32::from_str_radix(digits, 16).ok();
-    let problem = if digits.is_empty() {
-        BadEscape::UnicodeEmpty
+    let scalar = if digits.is_empty() {
+        Err(BadEscape::UnicodeEmpty)
     } else if !digits.bytes().all(|b| b.is_ascii_hexdigit()) {
-        BadEscape::UnicodeNotHex
+        Err(BadEscape::UnicodeNotHex)
     } else if digits.len() > 6 {
-        BadEscape::UnicodeTooLong(value().and_then(char::from_u32))
+        Err(BadEscape::UnicodeTooLong(value().and_then(char::from_u32)))
     } else {
         match value().expect("six hex digits fit in a u32") {
-            0xD800..=0xDFFF => BadEscape::UnicodeSurrogate,
-            n => match char::from_u32(n) {
-                Some(c) => return Escape { len, value: Ok(c) },
-                None => BadEscape::UnicodeTooBig,
-            },
+            0xD800..=0xDFFF => Err(BadEscape::UnicodeSurrogate),
+            n => char::from_u32(n).ok_or(BadEscape::UnicodeTooBig),
         }
     };
-    bad(len, problem)
+    match close {
+        1 => Escape { len, value: scalar },
+        _ => bad(len, BadEscape::UnicodeEscapedBrace(scalar.ok())),
+    }
 }
 
 /// How many of the first `max` characters of `text` are hex digits, stopping at the first that
@@ -250,6 +255,7 @@ mod tests {
             r"\x41 \u{D800} \u{} \u41 \u{12"
         );
         assert_eq!(string_value("a\\"), "a\\");
+        assert_eq!(string_value(r"\u{ab\}"), r"\u{ab\}");
         assert_eq!(string_value("\\\u{e9}"), "\\\u{e9}");
     }
 }
