@@ -155,12 +155,18 @@ impl Spec {
             found.sort();
             for file in found {
                 if !chapters.iter().any(|chapter| chapter.file == file) {
+                    // A chapter file sits directly in its folder, so a nested one can't be listed.
+                    let fix = if file[dir.len() + 1..].contains('/') {
+                        format!(
+                            "move it directly into {SPEC_DIR}/{dir}/ and list it, or move it out"
+                        )
+                    } else {
+                        format!("list it as a chapter, or move it out of {SPEC_DIR}/{dir}")
+                    };
                     errors.push(FileError {
                         path: spec_path(&file),
                         line: 0,
-                        message: format!(
-                            "this file isn't listed in {CHAPTERS_PATH}; list it as a chapter, or move it out of {SPEC_DIR}/{dir}"
-                        ),
+                        message: format!("this file isn't listed in {CHAPTERS_PATH}; {fix}"),
                     });
                 }
             }
@@ -323,13 +329,15 @@ mod tests {
                 (README_PATH, "# Spec\n"),
                 ("spec/reference/lexical.md", "# Lexical structure\n"),
                 ("spec/reference/extra/stray.md", "# Stray\n"),
+                ("spec/tooling/extra.md", "# Extra\n"),
                 ("spec/tooling/notes.txt", "not Markdown\n"),
             ],
         );
         assert_eq!(
             messages(Spec::load(&root).unwrap_err()),
             [
-                "spec/reference/extra/stray.md: this file isn't listed in spec/chapters.txt; list it as a chapter, or move it out of spec/reference"
+                "spec/reference/extra/stray.md: this file isn't listed in spec/chapters.txt; move it directly into spec/reference/ and list it, or move it out",
+                "spec/tooling/extra.md: this file isn't listed in spec/chapters.txt; list it as a chapter, or move it out of spec/tooling",
             ]
         );
     }
