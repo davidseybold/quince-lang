@@ -1,10 +1,12 @@
 //! The lexer: source text to a lossless token stream (`README.md` has the contract).
 
 use crate::{Decoded, LexError, SyntaxKind, codes};
+use control::ControlIn;
 use quince_diagnostics::{Applicability, Diagnostic, LineIndex};
 use std::ops::Range;
 
 mod chars;
+mod control;
 mod multiline;
 mod number;
 mod prefixed;
@@ -160,7 +162,9 @@ impl<'a> Lexer<'a> {
                 } else {
                     SyntaxKind::Comment
                 };
-                self.bump(kind, self.to_line_end());
+                let len = self.to_line_end();
+                self.control_characters(start..start + len, ControlIn::Comment);
+                self.bump(kind, len);
             }
             '/' if rest.starts_with("/*") => self.block_comment(),
             'a'..='z' | 'A'..='Z' | '_' => {
@@ -239,11 +243,15 @@ impl<'a> Lexer<'a> {
         let comment = &self.text[start..end];
         self.errors.push(error);
         // A lone CR inside the comment is still a line ending, and still an error.
+        let mut from = start;
         for (i, _) in comment.match_indices('\r') {
             if !comment[i..].starts_with("\r\n") {
+                self.control_characters(from..start + i, ControlIn::Comment);
                 self.lone_carriage_return(start + i);
+                from = start + i + 1;
             }
         }
+        self.control_characters(from..end, ControlIn::Comment);
         self.bump(SyntaxKind::BlockComment, end - start);
     }
 

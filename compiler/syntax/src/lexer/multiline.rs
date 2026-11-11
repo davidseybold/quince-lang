@@ -2,6 +2,7 @@
 //! missing closing line (E0005) and layout errors (E0012).
 
 use super::Lexer;
+use super::control::ControlIn;
 use crate::literal::escape;
 use crate::{LexError, SyntaxKind, codes};
 use quince_diagnostics::Applicability;
@@ -238,6 +239,7 @@ impl Lexer<'_> {
     fn line_text(&mut self, end: usize, raw: bool, interpolates: bool) {
         if raw {
             if self.pos < end {
+                self.control_characters(self.pos..end, ControlIn::Raw);
                 self.bump(SyntaxKind::StringText, end - self.pos);
             }
             return;

@@ -38,6 +38,9 @@ Within a line, spaces and tabs are the only whitespace.
 r[lex.source.ascii]
 Outside literals and comments, source text is ASCII, so identifiers are ASCII letters, digits and underscores.
 
+r[lex.source.control]
+Apart from tabs and line endings, a literal or comment can't contain a control character (U+0000 to U+001F, and U+007F) or a bidirectional-format character (U+202A to U+202E, U+2066 to U+2069). A `"` or `"""` string writes one as an escape. Raw and tagged literals and comments can't hold them.
+
 ## Keywords
 
 r[lex.keywords]

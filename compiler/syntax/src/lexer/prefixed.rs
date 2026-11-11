@@ -2,6 +2,7 @@
 //! a non-ASCII character in bytes (E0011).
 
 use super::Lexer;
+use super::control::{ControlIn, is_control};
 use super::string::{EscapeIn, escape_error, opens_unicode};
 use crate::literal::{BadEscape, TAGS, byte_escape};
 use crate::{LexError, SyntaxKind, codes};
@@ -48,6 +49,11 @@ impl<'a> Lexer<'a> {
                 // A raw body: up to the next `"` on the line (`r[lex.lit.tagged.raw]`).
                 let len = (self.text[self.pos..end].find('"')).unwrap_or(end - self.pos);
                 if len > 0 {
+                    let within = match form {
+                        Form::Raw => ControlIn::Raw,
+                        _ => ControlIn::Tagged,
+                    };
+                    self.control_characters(self.pos..self.pos + len, within);
                     self.bump(SyntaxKind::StringText, len);
                 }
                 false
@@ -83,15 +89,18 @@ impl<'a> Lexer<'a> {
     }
 
     /// A bytes literal's text up to `end`, which is a line ending or the end of input, or up to
-    /// a `"`, as one `StringText`, with an E0006 for each invalid escape and an E0011 for each
-    /// run of non-ASCII characters. True when it ends with a `\` that escapes nothing.
+    /// a `"`, as one `StringText`, with an E0006 for each invalid escape, an E0011 for each
+    /// run of non-ASCII characters and an E0015 for each run of control characters. True when
+    /// it ends with a `\` that escapes nothing.
     fn bytes_text(&mut self, end: usize) -> bool {
         let start = self.pos;
         let rest = &self.text[start..end];
         let mut len = 0;
         let mut dangling = false;
         let mut open_unicode_end = None;
-        while let Some(at) = rest[len..].find(|c: char| matches!(c, '\\' | '"') || !c.is_ascii()) {
+        let stops = |c: char| matches!(c, '\\' | '"') || !c.is_ascii() || is_control(c);
+        let ascii_control = |c: char| c.is_ascii() && is_control(c);
+        while let Some(at) = rest[len..].find(stops) {
             len += at;
             if rest[len..].starts_with('"') {
                 break;
@@ -112,6 +121,11 @@ impl<'a> Lexer<'a> {
                     self.errors.push(error);
                 }
                 len += escape.len;
+            } else if rest[len..].starts_with(ascii_control) {
+                let run = (rest[len..].find(|c| !ascii_control(c))).unwrap_or(rest.len() - len);
+                let range = start + len..start + len + run;
+                self.control_characters(range, ControlIn::Bytes);
+                len += run;
             } else {
                 let run = (rest[len..].find(|c: char| c.is_ascii())).unwrap_or(rest.len() - len);
                 self.non_ascii(start + len..start + len + run);

@@ -22,13 +22,14 @@ pub(super) fn message(text: &str) -> String {
 }
 
 /// Every text of up to four characters from those that matter to literals keeps the
-/// invariants, reports its errors in order, never puts two errors on one span, and decodes.
-/// A safe E0006, E0007 or E0011 fix, or E0009's fix, removes its error, leaves the others as
-/// they were, moved by its edits, and keeps the bytes of every bytes literal. E0009's fix
-/// makes a string whose value is the char's body.
+/// invariants, reports its errors in order, never puts two errors on one span, decodes, and
+/// has no message that holds a control or bidirectional-format character. A safe E0006, E0007,
+/// E0011 or E0015 fix, or E0009's fix, removes its error, leaves the others as they were,
+/// moved by its edits, and keeps the bytes of every bytes literal. E0009's fix makes a string
+/// whose value is the char's body, and E0015's keeps the value of every string and char.
 #[test]
 fn every_short_text() {
-    let alphabet: Vec<char> = "\"{}\\ux.0arb# '\u{e9}\n\r".chars().collect();
+    let alphabet: Vec<char> = "\"{}\\ux.0arb# '\u{e9}\u{7}\u{202E}\n\r".chars().collect();
     let mut texts = vec![String::new()];
     for _ in 0..4 {
         let longer: Vec<String> = texts
@@ -56,9 +57,12 @@ fn every_short_text() {
                     _ => {}
                 }
             }
+            for error in &lexed.errors {
+                assert!(!error.message.contains(is_control), "{text:?}: {error:?}");
+            }
             for (i, error) in lexed.errors.iter().enumerate() {
                 let char_fix = error.code == "E0009";
-                let string_code = ["E0006", "E0007", "E0011"].contains(&error.code);
+                let string_code = ["E0006", "E0007", "E0011", "E0015"].contains(&error.code);
                 let Some(fix) = error.fixes.first().filter(|_| string_code || char_fix) else {
                     continue;
                 };
@@ -90,6 +94,13 @@ fn every_short_text() {
                     all_bytes(text),
                     "{text:?} fixed to {fixed:?}"
                 );
+                if error.code == "E0015" {
+                    assert_eq!(
+                        all_values(&fixed),
+                        all_values(text),
+                        "{text:?} fixed to {fixed:?}"
+                    );
+                }
                 if char_fix {
                     let (start, end) = (error.range.start as usize, error.range.end as usize);
                     let body = char_body_value(&text[start + 1..end - 1]);
@@ -124,6 +135,42 @@ fn string_at(text: &str, at: usize) -> Option<String> {
         }
     }
     None
+}
+
+/// The characters `r[lex.source.control]` names, other than a tab and line endings.
+fn is_control(c: char) -> bool {
+    (c.is_ascii_control() && !matches!(c, '\t' | '\n' | '\r'))
+        || ('\u{202A}'..='\u{202E}').contains(&c)
+        || ('\u{2066}'..='\u{2069}').contains(&c)
+}
+
+/// Each `"` or `"""` string in `text`, as its tokens with each `StringText` decoded, and each
+/// char's value.
+fn all_values(text: &str) -> Vec<String> {
+    let mut values: Vec<String> = Vec::new();
+    let mut in_string = false;
+    for (kind, range) in lex_str(text).ranges() {
+        let token = &text[range];
+        match kind {
+            SyntaxKind::StringStart => {
+                in_string = token.starts_with('"');
+                if in_string {
+                    values.push(String::new());
+                }
+            }
+            SyntaxKind::Char => values.push(format!("{:?}", char_value(token))),
+            SyntaxKind::StringEnd | SyntaxKind::Newline => in_string = false,
+            _ if in_string => {
+                let value = values.last_mut().expect("after its start");
+                match kind {
+                    SyntaxKind::StringText => value.push_str(&string_value(token)),
+                    _ => value.push_str(token),
+                }
+            }
+            _ => {}
+        }
+    }
+    values
 }
 
 /// The values of the bytes literals in `text`, each its `StringText` decoded.

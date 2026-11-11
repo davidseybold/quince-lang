@@ -2,6 +2,7 @@
 //! missing closing quote (E0004), which raw, bytes and tagged literals share.
 
 use super::Lexer;
+use super::control::{ControlIn, code_point, is_control};
 use crate::literal::{BadEscape, escape};
 use crate::{LexError, SyntaxKind, codes};
 use quince_diagnostics::Applicability;
@@ -38,8 +39,8 @@ impl Lexer<'_> {
 
     /// The text up to `end`, which is a line ending or the end of input, or up to a `{` when
     /// the string `interpolates`, or a `"` when a `quote_ends` it, if there is any, as one
-    /// `StringText`, with an E0006 for each invalid escape. True when it ends with a `\` that
-    /// escapes nothing.
+    /// `StringText`, with an E0006 for each invalid escape and an E0015 for each run of control
+    /// characters outside them. True when it ends with a `\` that escapes nothing.
     pub(super) fn string_text(&mut self, end: usize, interpolates: bool, quote_ends: bool) -> bool {
         let start = self.pos;
         let rest = &self.text[start..end];
@@ -55,6 +56,7 @@ impl Lexer<'_> {
         loop {
             match rest[len..].find(ends) {
                 Some(at) if rest[len + at..].starts_with('\\') => {
+                    self.control_characters(start + len..start + len + at, ControlIn::String);
                     len += at;
                     let escape = escape(&rest[len..]);
                     if let Err(problem) = escape.value {
@@ -76,8 +78,14 @@ impl Lexer<'_> {
                     }
                     len += escape.len;
                 }
-                Some(at) => break len += at,
-                None => break len = rest.len(),
+                Some(at) => {
+                    self.control_characters(start + len..start + len + at, ControlIn::String);
+                    break len += at;
+                }
+                None => {
+                    self.control_characters(start + len..end, ControlIn::String);
+                    break len = rest.len();
+                }
             }
         }
         if len > 0 {
@@ -99,6 +107,8 @@ impl Lexer<'_> {
         let closed = rest[end..].starts_with('}');
         if !(closed && is_path(body)) {
             self.errors.push(interpolation_error(start, body, closed));
+            let braces = start + 1..start + 1 + end;
+            self.control_characters(braces, ControlIn::Interpolation);
             return self.bump(SyntaxKind::Error, 1 + end + usize::from(closed));
         }
         self.bump(SyntaxKind::InterpStart, 1);
@@ -263,6 +273,11 @@ pub(super) fn escape_error(
     let error =
         |message: String| LexError::new(at..at + text.len(), codes::INVALID_ESCAPE, message);
     let example = "as in `\\u{1F600}`";
+    // An unknown escape, which shows a control character by its code point, never as itself.
+    let escaped = match problem {
+        BadEscape::Unknown(c) if is_control(c) => format!("a `\\` before {}", code_point(c)),
+        _ => format!("`{text}`"),
+    };
     let bytes = within == EscapeIn::Bytes;
     let literal = match within {
         EscapeIn::String { .. } => "a string",
@@ -319,6 +334,11 @@ pub(super) fn escape_error(
              to six hex digits naming a Unicode scalar value, {example}"
         ),
         BadEscape::UnicodeEmpty => format!("`\\u{{}}` needs one to six hex digits, {example}"),
+        BadEscape::UnicodeNotHex if text.contains(is_control) => format!(
+            "this `\\u{{` escape holds {}, which isn't a hex digit: a `\\u` escape takes one \
+             to six hex digits, {example}",
+            code_point(text.chars().find(|&c| is_control(c)).expect("it holds one"))
+        ),
         BadEscape::UnicodeNotHex => format!(
             "`{text}` holds a character that isn't a hex digit: a `\\u` escape takes one to six \
              hex digits, {example}"
@@ -338,15 +358,15 @@ pub(super) fn escape_error(
             format!("`{text}` is above `\\u{{10FFFF}}`, the largest Unicode scalar value")
         }
         BadEscape::Unknown(_) if bytes => format!(
-            "`{text}` isn't an escape: a bytes literal's escapes are `\\x` with two hex digits, \
+            "{escaped} isn't an escape: a bytes literal's escapes are `\\x` with two hex digits, \
              `\\n`, `\\t`, `\\r`, `\\0`, `\\\\` and `\\\"`, so a backslash is written `\\\\`"
         ),
         BadEscape::Unknown(_) if within == EscapeIn::Char => format!(
-            "`{text}` isn't an escape: a char literal's escapes are `\\n`, `\\t`, `\\r`, `\\0`, \
+            "{escaped} isn't an escape: a char literal's escapes are `\\n`, `\\t`, `\\r`, `\\0`, \
              `\\\\`, `\\'`, `\\\"`, `\\{{` and `\\u{{...}}`, so a backslash is written `\\\\`"
         ),
         BadEscape::Unknown(_) => format!(
-            "`{text}` isn't an escape: a string's escapes are `\\n`, `\\t`, `\\r`, `\\0`, `\\\\`, \
+            "{escaped} isn't an escape: a string's escapes are `\\n`, `\\t`, `\\r`, `\\0`, `\\\\`, \
              `\\\"`, `\\{{` and `\\u{{...}}`, so a backslash is written `\\\\`"
         ),
     };

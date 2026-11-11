@@ -1,6 +1,7 @@
 //! Char literals: their one token, invalid escapes (E0006) and an invalid char (E0009).
 
 use super::Lexer;
+use super::control::{ControlIn, is_control};
 use super::string::{EscapeIn, escape_error, opens_unicode};
 use crate::literal::{char_body_len, char_escape};
 use crate::{LexError, SyntaxKind, codes};
@@ -26,6 +27,15 @@ impl Lexer<'_> {
         let mut open_unicode_end = None;
         let mut i = 0;
         while let Some(c) = body[i..].chars().next() {
+            if is_control(c) {
+                let run = (body[i..].find(|c| !is_control(c))).unwrap_or(body.len() - i);
+                let range = body_start + i..body_start + i + run;
+                self.control_characters(range, ControlIn::Char);
+                valid = false;
+                chars += body[i..i + run].chars().count();
+                i += run;
+                continue;
+            }
             if c != '\\' {
                 i += c.len_utf8();
             } else {
@@ -78,9 +88,10 @@ impl Lexer<'_> {
 }
 
 /// The E0009 for the char literal at `range` of `text`, whose `body` holds more than one
-/// character. Its fix makes it a string, unless the body has an invalid escape, which `valid`
-/// is false for, or the `"` would join what comes before it: a name character, which would
-/// make it a literal's prefix, or a `"`.
+/// character. Its fix makes it a string, unless the body has an invalid escape or a control
+/// character, which `valid` is false for, since the fix for those errors comes first, or the
+/// `"` would join what comes before it: a name character, which would make it a literal's
+/// prefix, or a `"`.
 fn too_many_error(text: &str, range: Range<usize>, body: &str, valid: bool) -> LexError {
     let error = LexError::new(
         range.clone(),
