@@ -2,3 +2,4 @@
 # again (compiler/spec/README.md). When a rule's meaning changes, retire its old ID here and give
 # the new rule a new ID. One ID per line.
 lex.lit.string.interp-path
+lex.lit.multiline-close

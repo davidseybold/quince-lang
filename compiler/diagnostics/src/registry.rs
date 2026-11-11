@@ -36,6 +36,11 @@ pub const REGISTRY: &[CodeInfo] = &[
         include_str!("../explain/E0004.md"),
     ),
     error(
+        "E0005",
+        "unclosed multi-line string",
+        include_str!("../explain/E0005.md"),
+    ),
+    error(
         "E0006",
         "invalid escape",
         include_str!("../explain/E0006.md"),
@@ -49,6 +54,11 @@ pub const REGISTRY: &[CodeInfo] = &[
         "E0008",
         "malformed number",
         include_str!("../explain/E0008.md"),
+    ),
+    error(
+        "E0012",
+        "multi-line string layout",
+        include_str!("../explain/E0012.md"),
     ),
     error(
         "E0013",

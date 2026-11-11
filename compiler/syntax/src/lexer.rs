@@ -4,6 +4,7 @@ use crate::{Decoded, LexError, SyntaxKind, codes};
 use quince_diagnostics::{Applicability, Diagnostic, LineIndex};
 use std::ops::Range;
 
+mod multiline;
 mod number;
 mod string;
 
@@ -153,6 +154,7 @@ impl<'a> Lexer<'a> {
                 self.bump(kind, self.to_line_end());
             }
             '/' if rest.starts_with("/*") => self.block_comment(),
+            'r' if rest.starts_with("r\"\"\"") => self.multiline_string(true, false),
             'a'..='z' | 'A'..='Z' | '_' => {
                 let len = self.run_of(|c| c.is_ascii_alphanumeric() || c == '_');
                 let kind = match &rest[..len] {

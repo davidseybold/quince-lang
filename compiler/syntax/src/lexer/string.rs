@@ -12,29 +12,33 @@ impl Lexer<'_> {
     /// interpolate (`r[test.name]`), but takes a string's escapes (`r[test.name-escapes]`).
     pub(super) fn string(&mut self) {
         let prefixed = self.tokens.last().map(|t| t.kind) == Some(SyntaxKind::Ident);
-        if prefixed || self.rest().starts_with("\"\"\"") {
+        if prefixed {
             return self.unchecked_string();
         }
         let test_name = (self.tokens.iter().rev())
             .find(|t| t.kind != SyntaxKind::Whitespace)
             .is_some_and(|t| t.kind == SyntaxKind::TestKw);
+        if self.rest().starts_with("\"\"\"") {
+            return self.multiline_string(false, !test_name);
+        }
         let open = self.pos;
         let first_error = self.errors.len();
+        let end = self.pos + self.to_line_end();
         self.bump(SyntaxKind::StringStart, 1);
         loop {
-            let dangling = self.string_text(!test_name);
+            let dangling = self.string_text(end, !test_name, true);
             match self.rest().chars().next() {
                 Some('"') => return self.bump(SyntaxKind::StringEnd, 1),
-                Some('{') => self.interpolation(),
+                Some('{') if self.pos < end => self.interpolation(end, true),
                 _ => return self.unclosed_string(open, first_error, dangling),
             }
         }
     }
 
-    /// Until raw, bytes, tagged and multi-line strings have their own rules: from a `"` to the
-    /// next `"` on the line, with no escapes or interpolation. So `"""` is an empty string and
-    /// then another, as `r"""` is after its `r`. The `"` rules would report false errors in
-    /// both: an E0004 on every `"""` line, and escapes in `r"C:\path"`.
+    /// Until raw, bytes and tagged strings have their own rules: from a `"` to the next `"` on
+    /// the line, with no escapes or interpolation, so `b"""` is an empty string and then
+    /// another. The `"` rules would report false errors in them, such as escapes in
+    /// `r"C:\path"`.
     fn unchecked_string(&mut self) {
         loop {
             self.bump(SyntaxKind::StringStart, 1);
@@ -54,17 +58,20 @@ impl Lexer<'_> {
         }
     }
 
-    /// The text up to the next `"` or line ending, or `{` when the string `interpolates`, if
-    /// there is any, as one `StringText`, with an E0006 for each invalid escape. True when it
-    /// ends with a `\` that escapes nothing.
-    fn string_text(&mut self, interpolates: bool) -> bool {
+    /// The text up to `end`, which is a line ending or the end of input, or up to a `{` when
+    /// the string `interpolates`, or a `"` when a `quote_ends` it, if there is any, as one
+    /// `StringText`, with an E0006 for each invalid escape. True when it ends with a `\` that
+    /// escapes nothing.
+    pub(super) fn string_text(&mut self, end: usize, interpolates: bool, quote_ends: bool) -> bool {
         let start = self.pos;
-        let rest = self.rest();
+        let rest = &self.text[start..end];
         let mut len = 0;
         let mut dangling = false;
-        let ends: &[char] = match interpolates {
-            true => &['\\', '{', '"', '\n', '\r'],
-            false => &['\\', '"', '\n', '\r'],
+        let ends: &[char] = match (interpolates, quote_ends) {
+            (true, true) => &['\\', '{', '"'],
+            (true, false) => &['\\', '{'],
+            (false, true) => &['\\', '"'],
+            (false, false) => &['\\'],
         };
         loop {
             match rest[len..].find(ends) {
@@ -97,11 +104,13 @@ impl Lexer<'_> {
 
     /// An interpolation, at its `{`: `InterpStart`, the path's tokens and `InterpEnd`. Anything
     /// else in the braces is one `Error` token and one E0007, up to and including the next `}`,
-    /// or up to the next `"` or line ending, and the string goes on after it.
-    fn interpolation(&mut self) {
+    /// or up to the next `"` when a `quote_ends` the string, or up to `line_end`, and the
+    /// string goes on after it.
+    pub(super) fn interpolation(&mut self, line_end: usize, quote_ends: bool) {
         let start = self.pos;
-        let rest = &self.rest()[1..];
-        let end = rest.find(['}', '"', '\n', '\r']).unwrap_or(rest.len());
+        let rest = &self.text[start + 1..line_end];
+        let stops: &[char] = if quote_ends { &['}', '"'] } else { &['}'] };
+        let end = rest.find(stops).unwrap_or(rest.len());
         let body = &rest[..end];
         let closed = rest[end..].starts_with('}');
         if !(closed && is_path(body)) {

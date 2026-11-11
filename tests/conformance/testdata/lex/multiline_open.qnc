@@ -1,0 +1,14 @@
+// rule: lex.lit.multiline-open
+// mode: parse
+// After the opening """, only spaces and tabs may come before the line break.
+fn f() -> List<String> {
+  let a = """  	
+    spaces and a tab follow the opening quotes
+    """
+  let b = """text
+    more
+    """
+  //~^^^ E0012
+  let c = """one line""" //~ E0012
+  [a, b, c]
+}

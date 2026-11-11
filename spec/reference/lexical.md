@@ -111,6 +111,21 @@ r[lex.lit.string.multiline]
 r[lex.lit.string.raw-multiline]
 - r""" ... """ is its raw form, which may contain " and { freely
 
+r[lex.lit.multiline-open]
+- After the opening `"""`, only spaces and tabs may come before the line break.
+
+r[lex.lit.multiline-quotes]
+- The closing `"""` is the first thing on its line after its indentation, and code may follow it on that line (`""")`). Elsewhere in the string, `"` and `""` are text, but `"""` is a compile error: a `"""` string writes it `\"""`, and an `r"""` string can't hold it.
+
+r[lex.lit.multiline-indent]
+- Every line between must start with exactly the closing line's indentation, the same spaces and tabs, except a line that holds only whitespace, which becomes empty. Otherwise it is a compile error.
+
+r[lex.lit.multiline-value]
+- The value doesn't include the line break before the closing line, and every line break in it is a line feed, whatever the file uses.
+
+r[lex.lit.multiline-forms]
+- Only `"""` and `r"""` are multi-line. A `"""` string takes the same escapes as a `"` string. `b"""` and tagged multi-line literals don't exist.
+
 r[lex.lit.raw-string]
 - Raw string: `r"C:\path"`. No escapes, no interpolation; it can't contain a quote, so text with quotes uses r"""
 

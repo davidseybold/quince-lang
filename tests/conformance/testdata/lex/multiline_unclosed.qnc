@@ -1,0 +1,7 @@
+// rule: lex.lit.string.multiline
+// mode: parse
+// A multi-line string ends at a """ line. With none, it runs to the end of the file, so
+// the rest of this file, this comment's expectation included, is its text.
+const NOTE: String = """
+  some text
+//~^^ E0005

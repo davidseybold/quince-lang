@@ -1,5 +1,5 @@
 //! One-line strings: their tokens, the fallback for forms not lexed yet, and E0004, E0006 and
-//! E0007.
+//! E0007. Multi-line strings are in `multiline.rs`.
 
 use super::errors::errors;
 use crate::literal::string_value;
@@ -7,7 +7,7 @@ use crate::{SyntaxKind, lex_str};
 use quince_diagnostics::Applicability;
 
 /// The tokens, as `Kind:text`, separated by spaces.
-fn tokens(text: &str) -> String {
+pub(super) fn tokens(text: &str) -> String {
     let lexed = lex_str(text);
     let shown: Vec<String> = (lexed.ranges())
         .map(|(kind, range)| format!("{kind:?}:{}", &text[range]))
@@ -15,7 +15,7 @@ fn tokens(text: &str) -> String {
     shown.join(" ")
 }
 
-fn message(text: &str) -> String {
+pub(super) fn message(text: &str) -> String {
     let lexed = lex_str(text);
     assert_eq!(lexed.errors.len(), 1, "{text}: {:?}", lexed.errors);
     lexed.errors[0].message.clone()
@@ -26,7 +26,7 @@ fn message(text: &str) -> String {
 /// removes its error and adds none.
 #[test]
 fn every_short_text() {
-    let alphabet: Vec<char> = "\"{}\\ux.0a '\n\r".chars().collect();
+    let alphabet: Vec<char> = "\"{}\\ux.0ar '\n\r".chars().collect();
     let mut texts = vec![String::new()];
     for _ in 0..4 {
         let longer: Vec<String> = texts
@@ -294,23 +294,16 @@ fn interpolation_messages() {
     assert!(message(r#""{a + b""#).starts_with("this `{` is never closed, and only a path"));
 }
 
-/// Raw, bytes, tagged and multi-line strings keep the fallback until their own layer, so `"`
-/// rules don't report false errors in them.
+/// Raw, bytes and tagged strings keep the fallback until their own layer, so `"` rules don't
+/// report false errors in them.
 #[test]
 fn forms_not_lexed_yet_are_not_checked() {
-    for text in [
-        "r\"C:\\path\"",
-        "re\"a{2}\"",
-        "b\"\\x00\"",
-        "s = \"\"\"\n  {a + b}\n  \"\"\"\n",
-        "r\"\"\"\n  \"\"\"",
-        "\"\"\"\"",
-    ] {
+    for text in ["r\"C:\\path\"", "re\"a{2}\"", "b\"\\x00\""] {
         assert_eq!(errors(text), Vec::<String>::new(), "{text:?}");
     }
     assert_eq!(
-        tokens("\"\"\"x"),
-        r#"StringStart:" StringEnd:" StringStart:" StringText:x"#
+        tokens("b\"\"\"x"),
+        r#"Ident:b StringStart:" StringEnd:" StringStart:" StringText:x"#
     );
     // A keyword is never a prefix, so its string is checked.
     assert_eq!(errors("test\"\\q\""), ["E0006 5..7"]);

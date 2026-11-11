@@ -134,7 +134,7 @@ StringStart  ( StringText | StringIndent | StringNewline | Interp... )*  [ Strin
 - `StringStart` is the opening delimiter with its prefix: `"`, `"""`, `r"`, `r"""`, `b"`, or a tag such as `re"`. The parser reads the form from it.
 - `StringText` is literal text, escapes included. Escapes are validated here and decoded later by `literal::string_value`.
 - In the multi-line forms (`"""` and `r"""`), each line break inside the string is a `StringNewline` token. That keeps the parser's line-end logic out of strings, while the formatter still sees the string's lines.
-- Each line's stripped indentation is a `StringIndent` token: the closing line's indentation on each content line (`r[lex.lit.string.multiline]`), the closing line's own indentation before `"""`, and all of any line that holds only whitespace, whatever its length, since such a line becomes empty. The formatter re-indents a multi-line string by rewriting those tokens, which leaves its value unchanged.
+- Each line's stripped indentation is a `StringIndent` token: the closing line's indentation on each content line (`r[lex.lit.string.multiline]`), the closing line's own indentation before `"""`, and all of any line that holds only whitespace, whatever its length, since such a line becomes empty. Spaces and tabs after the opening `"""` aren't part of the value either, so they are a `StringIndent` too, which keeps every token inside a string one of the kinds above. The formatter re-indents a multi-line string by rewriting those tokens, which leaves its value unchanged.
 - **Interpolation is tokenized**, in the forms that interpolate (`"` and `"""`): `InterpStart` (`{`), then the path as ordinary `Ident`, `SelfKw`, `Dot` and `Int` tokens, then `InterpEnd` (`}`). Since only a name, `self` or a constant followed by field steps is allowed (`r[lex.lit.string.interp-root]`, which replaced `interp-path` after spec question 2), the lexer never has to lex an expression or a nested string, so this is one extra lexer state, not recursion. Names in strings are then real tokens in the CST, and rename, find-references and `query` treat them like any other name.
 - **A test's name doesn't interpolate** (`r[test.name]`), but it takes a string's escapes (`r[test.name-escapes]`, decided by David, 2026-11-11). So a `"` string whose previous token, skipping spaces, is `test` has no interpolation tokens, and its `{` is text.
 - `}` alone is text (`r[lex.lit.string.lone-brace]`).
@@ -149,7 +149,10 @@ StringStart  ( StringText | StringIndent | StringNewline | Interp... )*  [ Strin
 - A broken interpolation (`{a + b}`, `{}`, `{ name }`, a `{` never closed) becomes an `Error` token up to and including the next `}`, or up to but excluding the next `"` or line ending, and the string goes on. So `"{"` reports one E0007, and its closing quote still ends the string.
 - A char literal with no closing `'` ends before its line ending.
 - A lone CR is a line ending here too (decision 3), so it ends a one-line string or char literal. Only E0013 is reported then, not E0004 or E0009, since the missing quote is the CR's fault.
-- A multi-line string with no closing `"""` line runs to the end of the file. That one does swallow the file, and Risks covers it.
+- A multi-line string with no closing `"""` line runs to the end of the file. That one does swallow the file, and Risks covers it. Its lines aren't checked for escapes or interpolation, since they are more likely code than text, so one missing line is one E0005, not an error for every backslash and brace after it.
+- A string ends at its first `"""` that an escape doesn't take. After text on a line, as Java and Kotlin close a string, that is an E0012 (`r[lex.lit.multiline-quotes]`), with a `needs-review` fix that moves the quotes to a line of their own, and the code after them is still checked. So the habit agents bring from those languages neither swallows the file nor joins the next string into this one.
+- Text after the opening `"""` is one E0012 and one unchecked `StringText`. A `"""` later on that line closes the string, so Python's `"""text"""` is one E0012 and can't swallow the file.
+- A line that doesn't start with the closing line's indentation is an E0012 at its indentation. When no line starts with it, the closing `"""` is what is out of place, so that is one E0012, at the closing line, not one per line.
 
 ### 9. Diagnostics
 
@@ -170,7 +173,7 @@ Codes are numbered in the order they are registered, from E0001, skipping the re
 | E0009 | An invalid char literal: empty, more than one scalar value, or unclosed | For more than one character, use `"` (`needs-review`) | |
 | E0010 | An unknown literal tag | None. The message lists the tags | |
 | E0011 | A non-ASCII character in a bytes literal | Replace it with the `\x` escapes of its UTF-8 bytes (`safe`) | |
-| E0012 | A multi-line string layout error | None | Q3 |
+| E0012 | A multi-line string layout error | For `"""` after text, move it to a line of its own (`needs-review`) | Q3 |
 | E0013 | A carriage return not followed by a line feed | Outside a literal, replace it with a line feed (`safe`). None inside a one-line literal, which the CR ends (decision 8) | Q1 |
 | E0014 | A file that isn't valid UTF-8 | None | Q1 |
 | E0015 | A control or bidirectional-format character in a literal or comment | In a `"` or `"""` string, replace it with its `\u{...}` escape (`safe`). None in raw and tagged bodies or comments | Q8 |
@@ -233,12 +236,14 @@ Each layer builds and passes `cargo xtask ci` on its own:
 3. `m1/lexer-errors`: spec question 1, and a bump; `LexError`, `decode_source` and `lex`; `SyntaxBackend`; E0001 to E0003, E0013 and E0014; the error contract in the README.
 4. `m1/lexer-numbers`: spec question 4, and a bump; numbers, the tuple-index rule and `literal`'s number values; E0008.
 5. `m1/lexer-strings`: spec questions 2 and 7, and a bump; one-line strings, escapes and interpolation; E0004, E0006 and E0007.
-6. `m1/lexer-literals`: spec questions 3 and 8, and a bump; multi-line, raw, bytes, tagged and char literals; E0005, E0009 to E0012 and E0015.
+6a. `m1/lexer-multiline`: spec question 3, and a bump; multi-line and raw multi-line strings; E0005 and E0012.
+6b. `m1/lexer-literals`: raw, bytes, tagged and char literals; E0009 to E0011; the fallback rule is removed.
+6c. `m1/lexer-control`: spec question 8, and a bump; control and bidirectional characters; E0015.
 7. `m1/lexer-corpus`: spec question 5 (labels, no bump); the corpus and mutation tests.
 
-Each layer should come in at around 500 to 900 changed lines. Layer 2 was first planned to hold layers 2 to 4, but it would have run to about 1,600 lines, so it is split into the token stream, its errors, and numbers. The codes keep the numbers the table gives, so E0008 is registered after E0013 and E0014.
+Each layer should come in at around 500 to 900 changed lines. Layer 2 was first planned to hold layers 2 to 4, but it would have run to about 1,600 lines, so it is split into the token stream, its errors, and numbers. Layer 6 was planned as one layer with six codes, but layer 5 alone, with three, came to about 1,200 lines, so it is split into 6a to 6c (decided by David, 2026-11-11). The codes keep the numbers the table gives, so E0008 is registered after E0013 and E0014.
 
-**Literals before their layer.** Layers 2 to 5 must stand alone, so they lex the literal forms they don't handle yet by a fallback rule. Everything from a `"` to the next `"` on the same line is `StringStart`, `StringText` and `StringEnd`, with no validation. Everything from a `'` to the next `'` on the line is a `Char`. A prefix is a separate `Ident`. Until layer 4, a digit and the letters, digits and underscores after it are one `Int`. Until layer 6, `"""` lexes as an empty string followed by another string, so a multi-line string lexes wrongly. Nothing depends on that: no fixture uses those forms, and no command lexes user code until the parser lands.
+**Literals before their layer.** Layers 2 to 5 must stand alone, so they lex the literal forms they don't handle yet by a fallback rule. Everything from a `"` to the next `"` on the same line is `StringStart`, `StringText` and `StringEnd`, with no validation. Everything from a `'` to the next `'` on the line is a `Char`. A prefix is a separate `Ident`. Until layer 4, a digit and the letters, digits and underscores after it are one `Int`. Until layer 6a, `"""` lexes as an empty string followed by another string, so a multi-line string lexes wrongly. Nothing depends on that: no fixture uses those forms, and no command lexes user code until the parser lands.
 
 ## Spec questions (decided by David, 2026-11-11)
 
@@ -262,9 +267,10 @@ All eight are approved: question 1 in its strict form, the other seven as propos
 - Retire `lex.lit.string.interp-path`, and add `r[lex.lit.string.interp-root]`: "Inside braces only a path is allowed, never another expression: a name, `self` or a constant name, followed by any number of field names or tuple positions, with no spaces: `{name}`, `{user.name}`, `{self.email}`, `{id.0}`, `{MAX_RETRIES}`."
 - A path can't start with a type (`{Config.MAX}`, `{Self.X}`). Bind the value first.
 
-**3. Multi-line strings (layer 6).** `r[lex.lit.string.multiline]` leaves open what may follow the opening `"""`, where the closing one may sit, and what happens to a line indented less than the closing line. Approved, following Swift:
+**3. Multi-line strings (layer 6a).** `r[lex.lit.string.multiline]` leaves open what may follow the opening `"""`, where the closing one may sit, and what happens to a line indented less than the closing line. Approved, following Swift:
 - `r[lex.lit.multiline-open]` After the opening `"""`, only spaces and tabs may come before the line break.
-- `r[lex.lit.multiline-close]` The closing `"""` is the first thing on its line after its indentation, and code may follow it on that line (`""")`). Elsewhere, `"`, `""` and `"""` are text. So a content line can't start with `"""`: a `"""` string writes it `\"""`, and an `r"""` string can't hold it.
+- `r[lex.lit.multiline-quotes]` The closing `"""` is the first thing on its line after its indentation, and code may follow it on that line (`""")`). Elsewhere in the string, `"` and `""` are text, but `"""` is a compile error: a `"""` string writes it `\"""`, and an `r"""` string can't hold it.
+  - This replaced `r[lex.lit.multiline-close]`, retired, which made `"""` after text plain text (decided by David, 2026-11-11, in review of layer 6a). Under it, a Java-style close such as `usage"""` was valid, and joined the next string into this one with no error. Allowing that close instead was rejected, since it would give a second way to write the same string. Python, Java and Kotlin also bar `"""` inside the text.
 - `r[lex.lit.multiline-indent]` Every line between must start with exactly the closing line's indentation, the same spaces and tabs, except a line that holds only whitespace, which becomes empty. Otherwise it is a compile error.
 - `r[lex.lit.multiline-value]` The value doesn't include the line break before the closing line, and every line break in it is a line feed, whatever the file uses.
 - `r[lex.lit.multiline-forms]` Only `"""` and `r"""` are multi-line. A `"""` string takes the same escapes as a `"` string. `b"""` and tagged multi-line literals don't exist.
@@ -285,7 +291,7 @@ All eight are approved: question 1 in its strict form, the other seven as propos
 - `r[lex.lit.string.unicode-escape]` "`\u{...}` holds one to six hex digits naming a Unicode scalar value, so `\u{}`, surrogates (`\u{D800}`) and values above `\u{10FFFF}` are errors."
 - `r[lex.lit.bytes.hex-escape]` "`\x` takes exactly two hex digits, and appears only in bytes literals."
 
-**8. Control and bidirectional characters (layer 6).** The spec doesn't say which characters may appear raw inside literals and comments. The Trojan Source attack (CVE-2021-42574) hides code in bidirectional-format characters, and rustc denies them by default. Approved:
+**8. Control and bidirectional characters (layer 6c).** The spec doesn't say which characters may appear raw inside literals and comments. The Trojan Source attack (CVE-2021-42574) hides code in bidirectional-format characters, and rustc denies them by default. Approved:
 - `r[lex.source.control]` "Apart from tabs and line endings, a literal or comment can't contain a control character (U+0000 to U+001F, and U+007F) or a bidirectional-format character (U+202A to U+202E, U+2066 to U+2069). A `"` or `"""` string writes one as an escape. Raw and tagged literals and comments can't hold them."
 - A carriage return not followed by a line feed falls under `r[lex.source.line-end]` (E0013), not this rule, so one character never gets both codes.
 
@@ -293,7 +299,7 @@ All eight are approved: question 1 in its strict form, the other seven as propos
 
 ## Risks and trade-offs
 
-- [A multi-line string with no closing line swallows the rest of the file, so the parser reports nothing after it] → E0005 points at the opening `"""`, and fixing it restores everything. A heuristic close (the first line that looks like code) would guess wrong in strings that hold code, which is a common use. Accepted.
+- [A multi-line string with no closing line swallows the rest of the file, so the parser reports nothing after it] → E0005 points at the opening `"""`, and fixing it restores everything. Quotes after text end the string with an E0012 (decision 8), which covers the common slip. A heuristic close (the first line that looks like code) would guess wrong in strings that hold code, which is a common use. Accepted.
 - [An unclosed `/*` swallows the rest of the file in the same way] → E0003 points at it. Quince has no block comments, so this only happens to code written from habit, and the message says to use `//`.
 - [`parse` fixtures pass against a lexer-only backend even when they aren't valid syntax] → Layer 1 puts the rule in the fixture README, review checks it, and the parser layer reruns every fixture.
 - [Acceptance-only fixtures mark a rule covered before its value is tested] → Decision 11 limits what a lexer fixture may cite. Values are unit-tested now, and `run` fixtures cite the same rules from M6. The coverage report can't show the difference. Accepted until a test kind marks partial coverage.
@@ -363,13 +369,21 @@ Rule IDs in brackets are what each task's fixtures cite. Rules added by spec que
 - [x] String shape and escapes, `literal::string_value`; E0004, E0006. [`lex.lit.string.escapes`, `lex.lit.string.one-line`, `lex.lit.string.unicode-escape`]
 - [x] Interpolation tokens; E0007. [`lex.lit.string.interp`, `lex.lit.string.interp-root`, `lex.lit.string.lone-brace`]
 
-**Layer 6: `m1/lexer-literals`**
-- [ ] Spec: questions 3 and 8, and a bump.
-- [ ] Multi-line and raw multi-line strings, `StringNewline`, `StringIndent`; E0005, E0012. [`lex.lit.string.multiline`, `lex.lit.multiline-open`, `lex.lit.multiline-close`, `lex.lit.multiline-indent`, `lex.lit.multiline-forms`, `lex.lit.string.raw-multiline`]
+**Layer 6a: `m1/lexer-multiline`**
+- [x] Spec: question 3, and a bump.
+- [x] Multi-line and raw multi-line strings, `StringNewline`, `StringIndent`; E0005, E0012. [`lex.lit.string.multiline`, `lex.lit.multiline-open`, `lex.lit.multiline-quotes`, `lex.lit.multiline-indent`, `lex.lit.multiline-forms`, `lex.lit.string.raw-multiline`]
+- [x] `r[lex.lit.multiline-value]` in unit tests, through the README's rule for reading the value from the tokens. A `parse` fixture can't see values.
+
+**Layer 6b: `m1/lexer-literals`**
 - [ ] Raw strings. [`lex.lit.raw-string`]
 - [ ] Bytes; E0011. [`lex.lit.bytes`, `lex.lit.bytes.hex-escape`]
 - [ ] Tagged literals; E0010. [`lex.lit.tagged`, `lex.lit.tagged.raw`]
 - [ ] Char literals; E0009. [`lex.lit.char`, `lex.lit.char.escapes`]
+- [ ] `b"""` and tagged multi-line literals don't exist. [`lex.lit.multiline-forms`]
+- [ ] Remove the fallback rule (decision 12) and the README's "Literals not lexed yet".
+
+**Layer 6c: `m1/lexer-control`**
+- [ ] Spec: question 8, and a bump.
 - [ ] Control and bidirectional characters; E0015. [`lex.source.control`]
 
 **Layer 7: `m1/lexer-corpus`**
