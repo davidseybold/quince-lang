@@ -27,11 +27,11 @@ Header lines of the form `// <word>:`, where the word is lowercase ASCII letters
 - Lines are numbered as diagnostic positions count them (`compiler/diagnostics/README.md`): LF, CR LF and a lone CR each end a line, and a leading byte order mark isn't part of line 1, so it doesn't hide the header.
 - Every fix a backend reports is checked with `Fix::check` and `Fix::check_positions` (`compiler/diagnostics/README.md`), and a malformed fix fails the fixture. Every edit position must exist in the fixture. A fixture is the only file there is, so an edit to any other file must create it, with an insertion at `[1, 1]`.
 
-The runner reads a fixture as bytes and gives the backend those bytes unchanged, so a fixture can hold any line ending, a byte order mark or invalid UTF-8 on purpose (`.gitattributes` keeps them). The header and expectations are read from the bytes decoded as UTF-8, with each invalid sequence replaced by U+FFFD.
+The runner reads a fixture as bytes and gives the backend those bytes unchanged, so a fixture can hold any line ending, a byte order mark or invalid UTF-8 on purpose (`.gitattributes` keeps them). The header and expectations are read from the bytes decoded as the compiler decodes source (`quince_syntax::decode_source`), with each maximal run of invalid bytes replaced by one U+FFFD.
 
 A `.stdout` file with no `.qnc` file of the same name is an error, because it's usually left behind by a rename. So is any failure to read a `.stdout` file other than "not found".
 
-Write the fixture from the spec text alone, before the code that makes it pass. Until a compiler backend is wired into the runner, every fixture fails with "no backend", never a skip, so a fixture lands in the same PR as the code that makes it pass.
+Write the fixture from the spec text alone, before the code that makes it pass. The runner's backend is `SyntaxBackend`, and only `parse` is wired: it runs the lexer, and the parser once that lands. A `check` fixture fails with "no backend" until M2 wires the checker, and a `run` fixture until M6, never a skip, so a fixture lands in the same PR as the code that makes it pass.
 
 ## Coverage report
 

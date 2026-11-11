@@ -1,0 +1,7 @@
+// rule: lex.source.utf8
+// mode: parse
+// Bytes that aren't UTF-8 are one error per line, wherever they are.
+// café //~ E0014
+fn f() {
+  let a = 1 ÿþ À //~ E0014
+}

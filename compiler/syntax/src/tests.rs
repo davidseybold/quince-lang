@@ -3,6 +3,8 @@
 use crate::{Lexed, SyntaxKind, lex_str};
 use std::path::Path;
 
+mod errors;
+
 /// `Kind "text"`, one token per line, after checking the invariants.
 fn dump(text: &str) -> String {
     let lexed = lex_str(text);
@@ -218,6 +220,7 @@ fn repo_root() -> std::path::PathBuf {
 
 fn single_token(text: &str) -> SyntaxKind {
     let lexed = lex_str(text);
+    assert!(lexed.errors.is_empty(), "{text}: {:?}", lexed.errors);
     assert_eq!(lexed.tokens.len(), 1, "{text} lexes as {:?}", lexed.tokens);
     lexed.tokens[0].kind
 }

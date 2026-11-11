@@ -1,0 +1,8 @@
+// rule: lex.braces
+// mode: parse
+// Statements end at line breaks, so a `;` is an error, at a line end or between
+// statements.
+fn f() {
+  let a = 1; //~ E0002
+  let b = 2; let c = 3 //~ E0002
+}

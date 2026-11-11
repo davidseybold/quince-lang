@@ -17,9 +17,40 @@ pub struct CodeInfo {
     pub retired: bool,
 }
 
-/// Empty until M1 emits the first diagnostic. `E0412` is reserved for a non-exhaustive match,
-/// so the example in spec section 8 stays true.
-pub const REGISTRY: &[CodeInfo] = &[];
+/// `E0412` is reserved for a non-exhaustive match, so the spec's example diagnostic stays true.
+pub const REGISTRY: &[CodeInfo] = &[
+    error(
+        "E0001",
+        "character that starts no token",
+        include_str!("../explain/E0001.md"),
+    ),
+    error("E0002", "semicolon", include_str!("../explain/E0002.md")),
+    error(
+        "E0003",
+        "block comment",
+        include_str!("../explain/E0003.md"),
+    ),
+    error(
+        "E0013",
+        "carriage return without a line feed",
+        include_str!("../explain/E0013.md"),
+    ),
+    error(
+        "E0014",
+        "source file isn't UTF-8",
+        include_str!("../explain/E0014.md"),
+    ),
+];
+
+const fn error(code: &'static str, title: &'static str, explain: &'static str) -> CodeInfo {
+    CodeInfo {
+        code,
+        severity: Severity::Error,
+        title,
+        explain,
+        retired: false,
+    }
+}
 
 pub fn lookup(code: &Code) -> Option<&'static CodeInfo> {
     REGISTRY.iter().find(|info| info.code == code.as_str())

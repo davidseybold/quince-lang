@@ -6,6 +6,9 @@ edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
+[dependencies]
+quince_diagnostics = { path = "../diagnostics" }
+
 [dev-dependencies]
 quince_spec = { path = "../spec" }
 

@@ -16,6 +16,7 @@ The error-code registry, the JSON diagnostic types and their schema, and fix che
 - `column` counts Unicode scalar values from the start of the line, and a tab is one column. So `café` at the start of line 3 spans `[3, 1]` to `[3, 5]`.
 - A line ends at LF, at CR LF (one line ending), or at a CR not followed by LF, as in LSP. Which line endings the lexer accepts is the spec's business. This only fixes how positions count.
 - A UTF-8 byte order mark at the start of a file isn't counted, so the character after it is `[1, 1]`.
+- Positions in a file that isn't valid UTF-8 count in its decoded text, where each maximal run of invalid bytes is one U+FFFD (`quince_syntax::decode_source`). So each run is one column, however many bytes it holds.
 - The end of input is the position after the last character. After a trailing newline, that's `[last line + 1, 1]`.
 - `LineIndex` converts byte offsets to positions and back by these rules. Code that reports or checks positions uses it rather than counting lines itself.
 

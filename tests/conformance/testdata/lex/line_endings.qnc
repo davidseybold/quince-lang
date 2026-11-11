@@ -1,0 +1,8 @@
+// rule: lex.source.line-end
+// mode: parse
+// CR LF ends a line, and so does LF. A CR on its own is an error.
+fn f() {
+  let a = 1
+  let b = 2  let c = 3
+//~^^ E0013
+}

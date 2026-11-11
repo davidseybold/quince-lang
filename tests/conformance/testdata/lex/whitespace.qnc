@@ -1,0 +1,8 @@
+// rule: lex.source.whitespace
+// mode: parse
+// Tabs and spaces are whitespace. A no-break space or a form feed is not.
+fn f() {
+	let a = 1
+  let b = 2 //~ E0001
+  let c = 3  //~ E0001
+}

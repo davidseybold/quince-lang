@@ -11,7 +11,6 @@
 //! ends a line, and a leading byte order mark isn't part of line 1.
 
 use quince_diagnostics::{Code, LineIndex};
-use std::borrow::Cow;
 
 const DIRECTIVES: [&str; 3] = ["rule", "mode", "exit"];
 
@@ -51,14 +50,17 @@ pub struct Fixture {
     pub text: String,
 }
 
-/// The one place fixture bytes become text. Each invalid UTF-8 sequence becomes U+FFFD.
-pub fn decode(source: &[u8]) -> Cow<'_, str> {
-    String::from_utf8_lossy(source)
+/// Fixture bytes as text, decoded as the compiler decodes source: each maximal run of invalid
+/// UTF-8 becomes one U+FFFD.
+pub fn decode(source: &[u8]) -> Result<String, String> {
+    quince_syntax::decode_source(source)
+        .map(|decoded| decoded.text)
+        .map_err(|e| e.to_string())
 }
 
 /// Parses a fixture. Every problem is reported, not just the first.
 pub fn parse(name: &str, source: &[u8], stdout: Option<String>) -> Result<Fixture, Vec<String>> {
-    let text = decode(source);
+    let text = decode(source).map_err(|e| vec![e])?;
     let mut errors = Vec::new();
     let mut rules: Vec<String> = Vec::new();
     let mut mode = None;
@@ -161,7 +163,7 @@ pub fn parse(name: &str, source: &[u8], stdout: Option<String>) -> Result<Fixtur
         expectations,
         stdout,
         source: source.to_vec(),
-        text: text.into_owned(),
+        text,
     })
 }
 
@@ -405,9 +407,9 @@ mod tests {
     }
 
     #[test]
-    fn invalid_utf8_is_read_as_replacement_characters() {
+    fn each_run_of_invalid_utf8_is_one_replacement_character() {
         let f = super::parse("x", b"// rule: a.b\n// \xFF\xFE\nx //~ E0001\n", None).unwrap();
-        assert_eq!(f.text, "// rule: a.b\n// \u{FFFD}\u{FFFD}\nx //~ E0001\n");
+        assert_eq!(f.text, "// rule: a.b\n// \u{FFFD}\nx //~ E0001\n");
         assert_eq!(lines_and_codes(&f), [(3, "E0001")]);
     }
 }

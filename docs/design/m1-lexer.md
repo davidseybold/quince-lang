@@ -343,12 +343,12 @@ Rule IDs in brackets are what each task's fixtures cite. Rules added by spec que
 - [x] `compiler/syntax/README.md`: the token contract (decisions 2 to 8). Update `AGENTS.md`'s map.
 
 **Layer 3: `m1/lexer-errors`**
-- [ ] Spec: the approved wording from question 1, the `source` construct, and a minor version bump.
-- [ ] `LexError`, `lex(&Decoded)` and `Lexed::diagnostics`; `SyntaxBackend` in place of `NoBackend`, and a runner check that each diagnostic names the fixture's file.
-- [ ] `decode_source`, `Decoded`; E0013, E0014; the replacement-column rule in `compiler/diagnostics/README.md`; switch the runner to `decode_source`, and update the fixture README's sentence on how invalid UTF-8 decodes (one U+FFFD per run, not per sequence). [`lex.source.utf8`, `lex.source.bom`, `lex.source.line-end`, `lex.source.whitespace`, `lex.source.ascii`]
-- [ ] `;` and unknown characters; E0001, E0002. [`lex.braces`]
-- [ ] Block comments; E0003. [`lex.comment.line`]
-- [ ] `compiler/syntax/README.md`: the error contract (decisions 2 and 9).
+- [x] Spec: the approved wording from question 1, the `source` construct, and a minor version bump.
+- [x] `LexError`, `lex(&Decoded)` and `Lexed::diagnostics`; `SyntaxBackend` in place of `NoBackend`, and a runner check that each diagnostic names the fixture's file.
+- [x] `decode_source`, `Decoded`; E0013, E0014; the replacement-column rule in `compiler/diagnostics/README.md`; switch the runner to `decode_source`, and update the fixture README's sentence on how invalid UTF-8 decodes (one U+FFFD per run, not per sequence). [`lex.source.utf8`, `lex.source.bom`, `lex.source.line-end`, `lex.source.whitespace`, `lex.source.ascii`]
+- [x] `;` and unknown characters; E0001, E0002. [`lex.braces`]
+- [x] Block comments; E0003. [`lex.comment.line`]
+- [x] `compiler/syntax/README.md`: the error contract (decisions 2 and 9).
 
 **Layer 4: `m1/lexer-numbers`**
 - [ ] Spec: the approved wording from question 4, `r[tool.fmt.hex-digits]`, and a minor version bump.

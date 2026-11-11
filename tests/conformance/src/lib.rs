@@ -37,7 +37,27 @@ pub struct RunOutput {
     pub stdout: String,
 }
 
-/// The backend until M1 wires in the parser: it can't do anything.
+/// The compiler as far as it exists: `parse` runs the lexer, and the parser once it lands.
+/// `check` waits for M2, which decides how to wire the type checker, and `run` for M6.
+pub struct SyntaxBackend;
+
+impl Backend for SyntaxBackend {
+    fn parse(&self, path: &str, source: &[u8]) -> Option<Vec<Diagnostic>> {
+        // The runner rejects a fixture too large to decode before it calls a backend.
+        let decoded = quince_syntax::decode_source(source).ok()?;
+        Some(quince_syntax::lex(&decoded).diagnostics(&decoded.text, path))
+    }
+
+    fn check(&self, _path: &str, _source: &[u8]) -> Option<Vec<Diagnostic>> {
+        None
+    }
+
+    fn run(&self, _path: &str, _source: &[u8]) -> Option<Result<RunOutput, Vec<Diagnostic>>> {
+        None
+    }
+}
+
+/// A backend that can't do anything, for testing the runner.
 pub struct NoBackend;
 
 impl Backend for NoBackend {
@@ -290,7 +310,7 @@ pub fn run_fixture(
         .collect();
     let no_backend = |what: &str| {
         format!(
-            "no backend: the compiler can't {what} fixtures yet (nothing is wired into the runner)"
+            "no backend: the compiler can't {what} fixtures yet (only `parse` is wired; `check` comes in M2 and `run` in M6)"
         )
     };
     match fixture.mode {
@@ -361,6 +381,15 @@ fn match_diagnostics(fixture: &Fixture, path: &str, diagnostics: &[Diagnostic]) 
     };
     let mut used = vec![false; diagnostics.len()];
     let mut failures = Vec::new();
+    // A fix's edits default to the span's file, so a wrong one would fail as a missing file.
+    for d in diagnostics.iter().filter(|d| d.span.file != path) {
+        failures.push(format!(
+            "{} on line {} names the file `{}`, but the fixture is `{path}`",
+            d.code,
+            d.span.start.line(),
+            d.span.file
+        ));
+    }
     for expectation in &fixture.expectations {
         let found = diagnostics.iter().enumerate().position(|(i, d)| {
             !used[i] && d.code == expectation.code && line_of(d) == expectation.line
@@ -643,6 +672,44 @@ mod tests {
     }
 
     #[test]
+    fn syntax_backend_lexes_parse_fixtures_only() {
+        let source = "// rule: bind.let-var\n// mode: parse\nfn f() {\n  let x = 1; //~ E0002\n}\n";
+        let r = run(source, None, &SyntaxBackend);
+        assert!(r.passed(), "{:?}", r.failures);
+        let r = run("// rule: bind.let-var\nx\n", None, &SyntaxBackend);
+        assert!(r.failures[0].starts_with("no backend:"), "{:?}", r.failures);
+    }
+
+    /// Reports one E0100 on line 2, in another file.
+    struct WrongFile;
+
+    impl Backend for WrongFile {
+        fn parse(&self, _path: &str, _source: &[u8]) -> Option<Vec<Diagnostic>> {
+            Some(vec![diagnostic("src/elsewhere.qnc", ("E0100", 2, 1))])
+        }
+
+        fn check(&self, path: &str, source: &[u8]) -> Option<Vec<Diagnostic>> {
+            self.parse(path, source)
+        }
+
+        fn run(&self, _path: &str, _source: &[u8]) -> Option<Result<RunOutput, Vec<Diagnostic>>> {
+            None
+        }
+    }
+
+    #[test]
+    fn a_diagnostic_in_another_file_fails() {
+        let r = run("// rule: bind.let-var\nx //~ E0100\n", None, &WrongFile);
+        assert_eq!(
+            r.failures,
+            [
+                "E0100 on line 2 names the file `src/elsewhere.qnc`, but the fixture is \
+                 `tests/conformance/testdata/t.qnc`"
+            ]
+        );
+    }
+
+    #[test]
     fn run_mode_compares_exit_and_stdout() {
         let source = "// rule: main.signature\n// mode: run\nfn main() {}\n";
         assert!(run(source, Some("hi\n"), &ran(0, "hi\n")).passed());
@@ -798,7 +865,7 @@ let x = 1 //~ E0100
 
     impl Backend for DollarBackend {
         fn parse(&self, path: &str, source: &[u8]) -> Option<Vec<Diagnostic>> {
-            let text = fixture::decode(source);
+            let text = fixture::decode(source).ok()?;
             let index = LineIndex::new(&text);
             let dollar = |(offset, _)| {
                 let span = Span {
@@ -878,6 +945,6 @@ let x = 1 //~ E0100
             rules.sections.last().map(String::as_str),
             Some(GRAMMAR_SECTION)
         );
-        assert_eq!(rules.spec_version, "0.6");
+        assert_eq!(rules.spec_version, "0.7");
     }
 }

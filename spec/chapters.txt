@@ -10,6 +10,7 @@
 intro      reference/introduction.md      Introduction
   excl        Features deliberately excluded
 lex        reference/lexical.md           Lexical structure
+  source      Source text: encoding, line endings, whitespace
   continue    Line continuation
   name        Naming conventions
   lit         Literals

@@ -18,6 +18,26 @@ r[lex.else-same-line]
 r[lex.continue.signature]
 Inside a `fn` signature, a line that starts with `->`, `uses`, `requires`, `ensures` or `{` continues the signature, so `quince` `fmt` breaks a long signature before those words, as in [Effects](effects.md) and [Contracts](contracts.md).
 
+## Source text
+
+r[lex.source.utf8]
+A source file is UTF-8 text. A file that isn't valid UTF-8 is a compile error.
+
+r[lex.source.bom]
+A byte order mark at the start of a file is ignored by the compiler.
+
+r[lex.source.line-end]
+A line ends at a line feed, or at a carriage return followed by a line feed. A carriage return anywhere else is a compile error.
+
+r[lex.source.canonical]
+`quince` `fmt` writes every line ending as a line feed and removes a byte order mark. So, like any unformatted code, a file with CR LF line endings or a byte order mark compiles but fails `quince` `check` ([Toolchain](../tooling/toolchain.md)).
+
+r[lex.source.whitespace]
+Within a line, spaces and tabs are the only whitespace.
+
+r[lex.source.ascii]
+Outside literals and comments, source text is ASCII, so identifiers are ASCII letters, digits and underscores.
+
 ## Keywords
 
 r[lex.keywords]

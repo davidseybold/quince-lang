@@ -41,6 +41,7 @@ version = "0.0.0"
 dependencies = [
  "quince_diagnostics",
  "quince_spec",
+ "quince_syntax",
  "serde",
  "serde_json",
 ]
@@ -89,6 +90,7 @@ version = "0.0.0"
 name = "quince_syntax"
 version = "0.0.0"
 dependencies = [
+ "quince_diagnostics",
  "quince_spec",
 ]
 
