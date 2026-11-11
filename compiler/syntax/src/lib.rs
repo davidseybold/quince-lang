@@ -7,11 +7,13 @@ mod cst;
 mod kind;
 mod lexer;
 pub mod literal;
+mod parser;
 mod source;
 
 pub use cst::{QuinceLanguage, SyntaxElement, SyntaxNode, SyntaxToken};
 pub use kind::SyntaxKind;
 pub use lexer::{Lexed, Token, lex, lex_str};
+pub use parser::{Parse, parse, parse_str};
 pub use source::{Decoded, decode_source};
 
 use quince_diagnostics::{Applicability, Code, Diagnostic, Edit, Fix, LineIndex, Span};
@@ -34,6 +36,7 @@ pub mod codes {
     pub const LONE_CARRIAGE_RETURN: &str = "E0013";
     pub const INVALID_UTF8: &str = "E0014";
     pub const CONTROL_CHARACTER: &str = "E0015";
+    pub const UNEXPECTED_TOKEN: &str = "E0016";
     /// The codes the lexer and `decode_source` report. The lexer's mutation test requires
     /// every one of them from its mutants.
     pub const LEXER: &[&str] = &[
@@ -53,7 +56,8 @@ pub mod codes {
         INVALID_UTF8,
         CONTROL_CHARACTER,
     ];
-    /// The codes the parser reports.
+    /// The codes the parser reports. Each joins this list when its conformance fixture can
+    /// run, once the parser is wired into the runner, since a registered code needs one.
     pub const PARSER: &[&str] = &[];
 
     /// Every code this crate reports.

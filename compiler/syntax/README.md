@@ -1,12 +1,12 @@
 # quince_syntax
 
-The lexer and the CST's tree builder now, and the parser and formatter later. This file holds the contracts the spec leaves to the implementation: what a token is, which errors the lexer owns, and where trivia sits in the CST. The designs are in [`docs/design/m1-lexer.md`](../../docs/design/m1-lexer.md) and [`docs/design/m1-parser.md`](../../docs/design/m1-parser.md). The language rules are in the spec's [Lexical structure](../../spec/reference/lexical.md) chapter, and aren't restated here.
+The lexer, the parser and its CST now, and the formatter later. This file holds the contracts the spec leaves to the implementation: what a token is, which errors the lexer owns, the shape of the CST and where trivia sits in it, and how the parser recovers from errors. The designs are in [`docs/design/m1-lexer.md`](../../docs/design/m1-lexer.md) and [`docs/design/m1-parser.md`](../../docs/design/m1-parser.md). The language rules are in the spec's [Lexical structure](../../spec/reference/lexical.md) chapter, and aren't restated here.
 
 ## Source text
 
 - `decode_source(&[u8])` is the one place source bytes become text. Every caller that reads a file uses it before lexing.
 - Each maximal run of invalid UTF-8 becomes one U+FFFD in `Decoded::text`, and `Decoded::replaced` records where. Each line that holds invalid bytes gets one E0014, at its first run.
-- When `Decoded::is_lossy()` is true, the text isn't the file, so no tool may write it back. Every writer checks it: `fmt`, `fix` and the language server. For the same reason, `lex` gives no error in a lossy text a fix, and the parser must follow the same rule.
+- When `Decoded::is_lossy()` is true, the text isn't the file, so no tool may write it back. Every writer checks it: `fmt`, `fix` and the language server. For the same reason, `lex` gives no error in a lossy text a fix, and `parse` clears every fix in a lossy text, once, after all its stages, so the rule covers each of them.
 - A file over 4 GiB, more than a `u32` offset can address, is an I/O error, not a diagnostic.
 
 ## Tokens
@@ -73,7 +73,7 @@ Messages describe Quince, the same way for every input. An error says what Quinc
 
 ## The CST
 
-The tree is a `rowan` tree, in the `cst` module. The parser's layer 1 completes this section with the shapes of the nodes.
+The tree is a `rowan` tree, in the `cst` module. `parse(&Decoded)`, or `parse_str` for text that never came from bytes, gives a `Parse`: the root, a `File` node, and every error the lexer and the parser found, in source order. `Parse::diagnostics` turns them into `Diagnostic`s, as `Lexed::diagnostics` does.
 
 - `SyntaxKind` holds the node kinds after the token kinds, and `QuinceLanguage` maps it to `rowan`. A node kind is named after the grammar production it holds, where there is one. `File` is the root, and `Skipped` holds the tokens the parser skipped while recovering from an error.
 - The tree is lossless: its text is the input, and its tokens are the lexer's, in order, with their kinds. The exceptions are `GtGt` and `GtEq`, CST-only tokens that each hold a `>` and the token right after it, which the parser joins. No token is empty, and no node is, except the root of an empty file.
@@ -84,3 +84,44 @@ The tree is a `rowan` tree, in the `cst` module. The parser's layer 1 completes 
   - The exception: comment lines directly above a node whose kind `attaches_comments()` (a declaration, field, enum variant, member or match arm) go inside the node, with their line endings and the indentation of the node's own line. A comment line starts a line, holds only comments and whitespace, and ends with a line ending. The run stops at a blank line, or at a line with anything else on it, such as code or a `;`. The indentation before the first comment stays outside.
   - For that rule, a comment is a `Comment`, a `BlockComment`, an `Error` token or a doc comment the parser left as trivia. So a comment at the end of a line of code never goes in the node below it. The byte order mark never goes inside a node: it belongs to the file.
   - Comments go in the outermost node that starts at the token below them, and only when that node's kind takes them. The builder writes them as soon as it opens that node, so a node opened inside it at the same token finds none left.
+
+### Node shapes
+
+A node holds its tokens and child nodes in source order. A part the code leaves out, or that an error stopped the parser before, is simply absent: there are no placeholder nodes. The kinds the parser builds so far:
+
+| Kind | Holds |
+| --- | --- |
+| `File` | The declarations. |
+| `FnDecl` | `pub` if present, `fn`, a `Name`, a `ParamList`, a `RetType` if present, and a `Block`. |
+| `ParamList` | `(`, `Param`s and their commas, and `)`. |
+| `Param` | `var` if present, then `self`, or a `Name` or `_` followed by `:`, a type, and `=` and an expression for a default. |
+| `RetType` | `->` and a type. |
+| `TypePath` | Its names and the `.` tokens between them, whatever their case, then its `TypeArgs` if present. |
+| `TypeArgs` | `<`, types and their commas, and `>`. |
+| `Block` | `{`, its statements, and `}`. An expression statement is the expression's own node. |
+| `LetStmt` | `let`, a `Name`, `:` and a type if present, `=` and an expression. |
+| `Name` | The `Ident` of a name being declared. |
+| `NameRef` | The `Ident`, `self` or `Self` of a name being used. |
+| `Literal` | One `Int`, `Float` or `Char`, or a whole string: its `StringStart`, text, `Interp`s and `StringEnd`, which an unclosed string lacks. |
+| `Interp` | An interpolation's `InterpStart`, the tokens of its path, and its `InterpEnd`. |
+| `Call` | The callee, any expression, and an `ArgList`. A method call is a `Call` whose callee is a `Field`, and a struct literal or a variant is a `Call` too, since only name resolution can tell them apart. |
+| `ArgList` | `(`, expressions and their commas, and `)`. |
+| `Field` | An expression, `.`, and a `NameRef` or a tuple position's `Int`. |
+| `Skipped` | The tokens the parser skipped after an error, a bracket and what it holds included. |
+
+Postfix forms nest to the left: `a.b(c)` is a `Call` of a `Field` of a `NameRef`. The parser opens such a node after its left side is parsed. The parser's own steps say which node a later one wraps, as rust-analyzer's `forward_parent` does, and one pass turns them into the builder's events, so the builder never sees a node opened out of order.
+
+## Parsing
+
+The parser reads the significant tokens: every token but the trivia and the doc comments, which are all trivia until doc comments get their own parsing. Each records the break before it: none, a line break, or a hard break, when a `;` comes between it and the token before. Nothing comes before the first token, so it has no break.
+
+- **Where a break ends a construct.** In a line context (the file and a block), a break ends the statement or declaration unless the token before it continues the line (`SyntaxKind::continues_line()`), the next token is `.`, or the parser is in a `fn` header and the next token is `->`, `uses`, `requires`, `ensures` or `{`. A hard break always ends it. Inside brackets, a break before a `,` or a closing bracket is spacing, but an expression in brackets still ends at a break, as a statement does.
+- **Errors.** Every syntax error is reported once, and then the parser skips to a sync point, reporting nothing more until it next takes a token as part of a construct. The skipped tokens go in a `Skipped` node, and a bracket the skip meets is skipped up to its closing bracket.
+  - A list syncs at its next `,` and at its closing bracket. A line context syncs at its next break, which ends the member that went wrong.
+  - A closing bracket that matches a bracket further out closes everything inside it, and the end of the file closes everything still open. Each bracket closed that way expects its closing bracket, an E0016 unless the slip is already reported. A closing bracket that matches nothing open is skipped as an E0016.
+  - An E0016 after a list item, at an item that starts the next line, has a fix that inserts the `,` (`needs-review`).
+- **Loop safety.** Every parser loop takes a token, closes a construct or exits. Debug and fuzz builds panic when the parser looks at the tokens 256 times without taking one, closing a construct or completing a node.
+
+| Code | Reported for | Fix |
+| --- | --- | --- |
+| E0016 | A token that can't go here: "expected X, found Y", where Y can be a line break or the end of the file. A keyword where a name goes is one, which the message names | Insert the missing `,` between list items on separate lines (`needs-review`). Otherwise none |

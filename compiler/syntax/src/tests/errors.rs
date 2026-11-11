@@ -24,7 +24,7 @@ pub(super) fn check_error_ranges(text: &str, lexed: &Lexed) {
     }
 }
 
-fn describe(text: &str, e: &SyntaxError) -> String {
+pub(super) fn describe(text: &str, e: &SyntaxError) -> String {
     let mut out = format!("{} {:?}", e.code, e.range);
     if let [fix] = e.fixes.as_slice() {
         let mut fixed = text.to_string();
