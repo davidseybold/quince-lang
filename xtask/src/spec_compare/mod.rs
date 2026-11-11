@@ -22,6 +22,11 @@ pub const ID_MAP: &str = "docs/design/spec-restructure/id-map.tsv";
 pub const REMOVED: &str = "docs/design/spec-restructure/removed.tsv";
 /// Where the spec's library material went, relative to the repo root.
 pub const STD_API: &str = "std/API.md";
+/// Where the baseline's design principles and open questions went, relative to the repo root.
+pub const DESIGN_PRINCIPLES: &str = "docs/design-principles.md";
+/// Where the baseline's Pipeline list went, relative to the repo root, and the heading of its
+/// section there.
+pub const REPO_PLAN: (&str, &str) = ("docs/repo-plan.md", "## Pipeline");
 /// Positional references rewritten as links, relative to the repo root.
 pub const REFS: &str = "docs/design/spec-restructure/refs.tsv";
 /// Tagged sentences whose wording changed, relative to the repo root.
@@ -60,7 +65,8 @@ pub enum Role {
     /// The chapter file being split.
     Legacy,
     /// A file that may take units from the baseline, and whose other text isn't compared,
-    /// such as `spec/README.md`, which took the version header.
+    /// such as `spec/README.md`, which took the version header, and the docs that take the
+    /// baseline's design principles and Pipeline list.
     Landing,
 }
 
@@ -378,6 +384,17 @@ pub fn check(root: &Path) -> Result<(), String> {
             Err(e) => Err(format!("can't read {path}: {e}")),
         }
     };
+    sources.push(Source {
+        path: DESIGN_PRINCIPLES.to_string(),
+        units: segment(&optional(DESIGN_PRINCIPLES)?),
+        role: Role::Landing,
+    });
+    let (plan_path, plan_heading) = REPO_PLAN;
+    sources.push(Source {
+        path: plan_path.to_string(),
+        units: section(&segment(&optional(plan_path)?), plan_heading),
+        role: Role::Landing,
+    });
     let (mut tables, mut table_errors) = Tables::parse(&optional(ID_MAP)?, &optional(REMOVED)?);
     table_errors.extend(tables.parse_rewrites(
         &optional(REFS)?,
@@ -438,6 +455,23 @@ pub fn check(root: &Path) -> Result<(), String> {
             outcome.problems.len()
         ))
     }
+}
+
+/// The units of the section under `heading`, up to the next heading of the same or a higher
+/// level, without the heading itself. Empty when there is no such heading.
+fn section(units: &[Unit], heading: &str) -> Vec<Unit> {
+    let level = |text: &str| text.chars().take_while(|&c| c == '#').count();
+    let Some(start) = units
+        .iter()
+        .position(|u| u.kind == Kind::Heading && u.text == heading)
+    else {
+        return Vec::new();
+    };
+    units[start + 1..]
+        .iter()
+        .take_while(|u| u.kind != Kind::Heading || level(&u.text) > level(heading))
+        .cloned()
+        .collect()
 }
 
 /// Applies the tables to the baseline's units: removes the text `removed.tsv` lists, takes out
@@ -1684,6 +1718,19 @@ file = { expr }
                 "docs/design/spec-restructure/refs.tsv:1: the new phrase has 1 link(s) but 2 final target(s)"
             ]
         );
+    }
+
+    #[test]
+    fn sections_end_at_the_next_heading_of_their_level() {
+        let units = segment(
+            "# Plan\n\nIntro.\n\n## Pipeline\n\n1. Parse.\n\n### Notes\n\nA note.\n\n## Next\n\nLater.\n",
+        );
+        let texts: Vec<_> = section(&units, "## Pipeline")
+            .into_iter()
+            .map(|u| u.text)
+            .collect();
+        assert_eq!(texts, ["1. Parse.", "### Notes", "A note."]);
+        assert_eq!(section(&units, "## Missing"), Vec::new());
     }
 
     #[test]
