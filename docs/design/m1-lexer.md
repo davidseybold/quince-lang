@@ -4,7 +4,7 @@ Status: approved. Passed design review (three passes). David decided the spec qu
 
 ## Why
 
-M1 ends with every code block in the spec parsing, `quince fmt` idempotent, and a lossless CST that prints back the input byte for byte ([milestones](../milestones.md)). Every one of those needs a token stream first, and so does every later stage that reads source. The lexer is also where most of the spec's [Lexical structure](../../spec/reference/lexical.md) chapter is enforced, and where the first diagnostic codes and the first conformance backend arrive.
+M1 ends with every `quince` code block in the spec and the std API doc parsing, `quince fmt` idempotent, and a lossless CST that prints back the input byte for byte ([milestones](../milestones.md)). Every one of those needs a token stream first, and so does every later stage that reads source. The lexer is also where most of the spec's [Lexical structure](../../spec/reference/lexical.md) chapter is enforced, and where the first diagnostic codes and the first conformance backend arrive.
 
 Getting the token contract right now matters more than the code, which is small. The parser, the formatter, `fix`, `query` and the language server all read tokens. Changing what a token is later means changing all of them, and every fixture and CST test that depends on token boundaries.
 
