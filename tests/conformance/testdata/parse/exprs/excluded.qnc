@@ -1,7 +1,6 @@
 // rule: expr.op.excluded
 // mode: parse
-// Quince has no ternary, `++`, `**`, `??`, pipe operator or `as` cast. Each is a token that
-// can't go where it is.
+// Quince has no ternary, `++`, `**`, `??`, pipe operator or `as` cast, so each is an error.
 fn f(c: Bool, a: Int, b: Int, x: Option<Int>) {
   let t = c ? a : b //~ E0016
   let p = a ** b //~ E0016

@@ -342,19 +342,44 @@ fn chains() {
     assert_eq!(errors("0..1..2..3"), ["E0020 4..6"]);
     assert_eq!(messages("a < b > c"), ["comparisons don't chain"]);
     assert_eq!(messages("0..n..10"), ["ranges don't chain"]);
-    // A chain that is itself an operand is reported with that operand's own error.
+    // As an operand of `&&` the fixed chain needs no parentheses, and as one of `||` it does,
+    // since `&&` can't be mixed with `||`.
     assert_eq!(
         errors("a < b < c && d"),
         ["E0020 6..7 => a < b && b < c && d"]
     );
+    assert_eq!(
+        errors("x || a < b < c"),
+        ["E0020 11..12 => x || (a < b && b < c)"]
+    );
+    assert_eq!(
+        errors("a < b < c || x"),
+        ["E0020 6..7 => (a < b && b < c) || x"]
+    );
+    // A middle operand that needs parentheses has its own E0019 and fix, so the chain has
+    // none.
+    assert_eq!(
+        errors("a < b..c < d"),
+        ["E0019 4..8 => a < (b..c) < d", "E0020 9..10"]
+    );
+    assert_eq!(
+        errors("x < a & b < y"),
+        ["E0019 4..9 => x < (a & b) < y", "E0020 10..11"]
+    );
 }
 
-/// A missing operand is the one error, so nothing about the operators around it is reported.
+/// A syntax error in an operand, such as a missing operand, is the one error, so nothing about
+/// the operators around it is reported.
 #[test]
-fn a_missing_operand_is_the_error() {
+fn a_syntax_error_is_the_one_error() {
     assert_eq!(errors("a & == b"), ["E0016 4..6"]);
     // `<` continues the line, so what is missing is found at the block's `}`.
     assert_eq!(errors("a < b <"), ["E0016 8..9"]);
     assert_eq!(errors("a ** b"), ["E0016 3..4"]);
     assert_eq!(errors("(a b) & c"), ["E0016 3..4"]);
+    assert_eq!(errors("(a b) & c | d"), ["E0016 3..4"]);
+    // A frame that closes at the missing operand reports its E0017 instead.
+    assert_eq!(errors("g(a && b |"), ["E0017 1..2"]);
+    assert_eq!(errors("g(1 << n -"), ["E0017 1..2"]);
+    assert_eq!(errors("a < b < c <"), ["E0016 12..13"]);
 }

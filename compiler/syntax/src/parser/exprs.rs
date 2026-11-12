@@ -62,20 +62,22 @@ fn let_rest(p: &mut Parser) {
 /// operators chain.
 pub(super) fn expr(p: &mut Parser) {
     if let Some(operand) = binary(p, 0) {
-        report_chain(p, operand.chain);
+        report_chain(p, operand.chain, operand.tokens, None);
     }
 }
 
 /// An expression whose operators all bind tighter than `min_power`.
 fn binary(p: &mut Parser, min_power: u8) -> Option<Operand> {
-    let first = p.pos;
+    let (first, slips) = (p.pos, p.slips);
     let done = prefix(p)?;
     let mut lhs = Operand {
         done,
         op: None,
         tokens: (first, p.pos - 1),
         right: (first, p.pos - 1),
+        right_op: None,
         chain: None,
+        broken: p.slips != slips,
     };
     while let Some((op, power)) = binary_op(p)
         && power > min_power
@@ -88,24 +90,26 @@ fn binary(p: &mut Parser, min_power: u8) -> Option<Operand> {
         }
         p.after_operator = true;
         let op_range = p.input.tokens[at].range.start..p.input.tokens[p.pos - 1].range.end;
+        let slips = p.slips;
         let rhs = binary(p, power);
         let kind = match op {
             DotDot | DotDotEq => SyntaxKind::Range,
             _ => Binary,
         };
         let done = p.complete(marker, kind);
-        let Some(rhs) = rhs else {
-            // The missing operand is the error, so nothing about the operators is reported.
+        let Some(mut rhs) = rhs else {
             return Some(Operand {
                 done,
                 op: Some(op),
                 tokens: (first, p.pos - 1),
                 right: (p.pos - 1, p.pos - 1),
+                right_op: None,
                 chain: None,
+                broken: true,
             });
         };
-        let checked = !p.recovering && !p.closed_early;
-        lhs = combine(p, lhs, op, op_range, rhs, done, checked);
+        rhs.broken |= p.slips != slips;
+        lhs = combine(p, lhs, op, op_range, rhs, done);
         if p.recovering {
             break;
         }
@@ -170,11 +174,15 @@ struct Operand {
     /// Its first and last significant tokens.
     tokens: (usize, usize),
     /// Its right operand's first and last significant tokens, or its own when it has no
-    /// operator: the middle operand of a chain it starts.
+    /// operator, and that operand's operator: the middle operand of a chain it starts.
     right: (usize, usize),
+    right_op: Option<SyntaxKind>,
     /// The E0020 of the chain of comparisons or ranges this operand is, reported once the
     /// chain is complete.
     chain: Option<Chain>,
+    /// It holds a syntax error, which is the slip, so the operator checks skip it and every
+    /// operand that holds it.
+    broken: bool,
 }
 
 /// A chain of comparisons or of ranges: where its second operator is, and for comparisons
@@ -185,8 +193,8 @@ struct Chain {
     edits: Option<Vec<(Range<usize>, String)>>,
 }
 
-/// The node `done`, `lhs op rhs`, as an operand. With `checked`, reports an operand that needs
-/// parentheses, and starts or extends a chain.
+/// The node `done`, `lhs op rhs`, as an operand. Unless an operand is broken, reports an
+/// operand that needs parentheses, and starts or extends a chain.
 fn combine(
     p: &mut Parser,
     mut lhs: Operand,
@@ -194,10 +202,10 @@ fn combine(
     op_range: Range<usize>,
     rhs: Operand,
     done: Completed,
-    checked: bool,
 ) -> Operand {
+    let broken = lhs.broken || rhs.broken;
     let mut chain = None;
-    if checked {
+    if !broken {
         let chains = lhs.op.is_some_and(|inner| {
             group(inner) == group(op) && matches!(group(op), Group::Compare | Group::Range)
         });
@@ -205,17 +213,19 @@ fn combine(
             chain = Some(extend_chain(p, &mut lhs, op, op_range));
         } else {
             needs_parens(p, &lhs, op, true);
-            report_chain(p, lhs.chain);
+            report_chain(p, lhs.chain, lhs.tokens, Some(op));
         }
         needs_parens(p, &rhs, op, false);
-        report_chain(p, rhs.chain);
+        report_chain(p, rhs.chain, rhs.tokens, Some(op));
     }
     Operand {
         done,
         op: Some(op),
         tokens: (lhs.tokens.0, rhs.tokens.1),
         right: rhs.tokens,
+        right_op: rhs.op,
         chain,
+        broken,
     }
 }
 
@@ -265,7 +275,8 @@ fn needs_parens(p: &mut Parser, operand: &Operand, op: SyntaxKind, left: bool) {
 /// The chain that `lhs`, a comparison or a range, and `op` after it make
 /// (`r[expr.op.compare.no-chain]`, `r[expr.op.range.no-chain]`). A comparison chain's fix
 /// repeats each middle operand, so `a < b < c` becomes `a < b && b < c`. There is none when a
-/// middle operand holds a comment or a line break, which repeating it would copy.
+/// middle operand holds a comment or a line break, which repeating it would copy, or needs
+/// parentheses itself, whose E0019 has its own fix.
 fn extend_chain(p: &Parser, lhs: &mut Operand, op: SyntaxKind, op_range: Range<usize>) -> Chain {
     let mut chain = lhs.chain.take().unwrap_or_else(|| match group(op) {
         Group::Compare => Chain {
@@ -284,7 +295,10 @@ fn extend_chain(p: &Parser, lhs: &mut Operand, op: SyntaxKind, op_range: Range<u
         let plain = p.lexed.tokens[first.index..=last.index]
             .iter()
             .all(|t| t.kind == Whitespace || !(t.kind.is_trivia() || t.kind == DocComment));
-        if plain {
+        let bare = lhs
+            .right_op
+            .is_none_or(|op| !matches!(group(op), Group::Bit | Group::Shift | Group::Range));
+        if plain && bare {
             let middle = &p.text[first.range.start..last.range.end];
             let end = last.range.end;
             edits.push((end..end, format!(" && {middle}")));
@@ -295,12 +309,24 @@ fn extend_chain(p: &Parser, lhs: &mut Operand, op: SyntaxKind, op_range: Range<u
     chain
 }
 
-fn report_chain(p: &mut Parser, chain: Option<Chain>) {
+/// Reports the E0020 of `chain`, the operand whose tokens are `tokens`, if it is one. As an
+/// operand of `||` its fix puts the chain in parentheses, since `&&` can't be mixed with `||`.
+fn report_chain(
+    p: &mut Parser,
+    chain: Option<Chain>,
+    tokens: (usize, usize),
+    outer: Option<SyntaxKind>,
+) {
     let Some(chain) = chain else {
         return;
     };
     let mut error = SyntaxError::new(chain.at, codes::CHAINED_OPERATOR, chain.message.into());
-    if let Some(edits) = chain.edits {
+    if let Some(mut edits) = chain.edits {
+        if outer == Some(PipePipe) {
+            let range = text_range(p, tokens);
+            edits.insert(0, (range.start..range.start, "(".to_string()));
+            edits.push((range.end..range.end, ")".to_string()));
+        }
         error = error.with_fix(
             "join the comparisons with `&&`",
             Applicability::NeedsReview,

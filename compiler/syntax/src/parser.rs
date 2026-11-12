@@ -226,6 +226,10 @@ struct Parser<'t> {
     /// The parser has just taken a binary operator, so a line break after it is spacing,
     /// after `*` and `>` too (`r[lex.line-end]`).
     after_operator: bool,
+    /// How many slips the parser has met: each error it reports or would report, and each
+    /// bracket closed without its closing bracket. The operator checks skip an operand that
+    /// holds one.
+    slips: u32,
     /// The file has had a declaration, so an import is out of place.
     imports_closed: bool,
     lookahead: Cell<u32>,
@@ -246,6 +250,7 @@ impl<'t> Parser<'t> {
             in_fn_header: false,
             after_attributes: false,
             after_operator: false,
+            slips: 0,
             imports_closed: false,
             lookahead: Cell::new(0),
         }
@@ -435,6 +440,7 @@ impl<'t> Parser<'t> {
     /// Closes the innermost frame without its closing bracket, with an E0017 at its opening
     /// one unless the slip is already reported.
     fn close_frame(&mut self, stop: Stop) {
+        self.slip();
         let frame = self.frames.pop().expect("a frame to close");
         self.lookahead.set(0);
         self.closed_early = true;
@@ -572,6 +578,7 @@ impl<'t> Parser<'t> {
         }
         let brk = self.current().map_or(self.input.eof_brk, |t| t.brk);
         if self.at_break() && brk == Break::Hard {
+            self.slip();
             self.recovering = true;
             return;
         }
@@ -660,6 +667,7 @@ impl<'t> Parser<'t> {
     /// Reports `error` unless the slip it is part of is already reported, and starts error
     /// recovery either way.
     fn report(&mut self, error: SyntaxError) {
+        self.slip();
         let after_error = self
             .current()
             .map_or(self.input.eof_after_error, |t| t.after_error);
@@ -677,6 +685,10 @@ impl<'t> Parser<'t> {
         if !swallowed && !self.input.on_unclosed_line(start) {
             self.steps.push(Step::Error(error));
         }
+    }
+
+    fn slip(&mut self) {
+        self.slips += 1;
     }
 
     // Recovery.
