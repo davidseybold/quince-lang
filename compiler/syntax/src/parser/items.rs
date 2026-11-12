@@ -254,7 +254,7 @@ fn const_decl(p: &mut Parser) {
     if !name(p, "a constant name") {
         return;
     }
-    if !p.at(Colon) {
+    if !p.at_or_join(Colon) {
         return p.expected("`:`");
     }
     p.bump();
@@ -356,7 +356,7 @@ fn struct_decl(p: &mut Parser) -> SyntaxKind {
         newtype_body(p);
         return NewtypeDecl;
     }
-    if p.at(LBrace) {
+    if p.at_or_join(LBrace) {
         if p.nth_kind(1) == RBrace {
             empty_braces(p);
         } else {

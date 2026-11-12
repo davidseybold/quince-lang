@@ -1,8 +1,10 @@
 // rule: lex.continue.lists
 // mode: parse
 // Inside parentheses, square brackets, angle brackets and the braces of a comma-separated
-// list, a line break is only spacing. A block inside them is a line context again, and `else`
-// still goes on the line of the closing `}`.
+// list, a line break before a `,` or the closing bracket is only spacing. Elsewhere in them a
+// line break works as it does in a block: a line that starts with `-` or `(` is a new item,
+// which needs a `,` before it. A block inside them is a line context again, and `else` still
+// goes on the line of the closing `}`.
 struct Point {
   x: Int,
   y: Int
@@ -16,8 +18,20 @@ fn f(
   Int
 > {
   let sum = g(
+    a +
+    b
+  )
+  let early = g(
     a
-    + b
+    + b //~^ E0018
+  )
+  let items = [
+    a
+    -1 //~ E0016
+  ]
+  let called = g(
+    a
+    (b) //~ E0016
   )
   let list = [
     a

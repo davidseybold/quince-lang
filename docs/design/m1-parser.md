@@ -105,12 +105,12 @@ The parser reads a list of significant tokens: everything but `Whitespace`, `New
 
 The parser checks that one function, `at_break()`, wherever a construct may end or go on: before a binary operator, a postfix operator, `else`, an optional part of a signature, and the operand of `return`. So `let x = a` followed by a line `- b` is two statements, and `return` on a line of its own is a bare return.
 
-**Line contexts and list contexts** (spec question 3). Breaks matter only in line contexts: the file, a block, and the bodies of `impl`, `interface`, `effect` and `foreign`. Elsewhere a break is spacing: inside parentheses, square brackets, type arguments and generics, and the braces of a comma-separated list (fields, variants, map entries, import names, match and select arms, a `concurrent` spawn list). A `;` there is spacing too, apart from its E0002. A block inside a list is a line context again. So `f(\n  a,\n  b\n)` parses without its trailing comma, as `r[tool.fmt.check]` requires, since unformatted code compiles.
+**Line contexts and list contexts** (spec question 3, revised by David, 2026-11-12). Inside parentheses, square brackets, type arguments and generics, and the braces of a comma-separated list (fields, variants, map entries, import names, match and select arms, a `concurrent` spawn list), a break before a `,` or the closing bracket is spacing. Elsewhere in a list the line-context rules apply: a line that starts with `-` or `(` is a new item, so a missing `,` before it is an E0016 whose fix inserts it, and a line that starts with `+` is an E0018. So one rule covers the whole language, and a missing comma never silently joins two items into one expression. A block inside a list is a line context again. So `f(\n  a,\n  b\n)` parses without its trailing comma, as `r[tool.fmt.check]` requires, since unformatted code compiles.
 
 **A break that ends a statement too early** is one error, E0018, not two. The parser reports E0018 at the break and parses on as though the lines were joined when the next line starts with:
-- a token that can't start a statement but would continue the construct the break ended: `=`, a compound assignment, `=>`, a binary operator that can't also start an expression, or `?`;
-- `else` after an `if`'s block (`r[lex.else-same-line]`). This applies in list contexts too, where breaks are otherwise spacing, since the spec's rule has no exception;
-- `{` where the construct the break ended needs its body next, as in `if x` followed by a line `{`. Outside a `fn` header, which `r[lex.continue.fn-header]` continues, a body's `{` sits on its construct's line.
+- a token that can't start a statement but would continue the construct the break ended: `=`, a compound assignment, `=>`, a binary operator that can't also start an expression, `?`, or `:` after the name in `let`, `var` or `const` (decided by David, 2026-11-12);
+- `else` after an `if`'s block (`r[lex.else-same-line]`). This applies in list contexts too;
+- `{` where the construct the break ended needs its body next, as in `if x` followed by a line `{`. A struct's `{` counts (decided by David, 2026-11-12): a struct with no fields has no braces, but at the top of a file a `{` can start nothing else. Outside a `fn` header, which `r[lex.continue.fn-header]` continues, a body's `{` sits on its construct's line.
 
 A line that starts with `- b` or `(x)` isn't one of these: it can start a statement, so it is one, as `r[lex.line-end]` says.
 
@@ -373,7 +373,9 @@ The grammar's `primary` and `alt` list `name` and `NAME` but no `c_name`, so tod
 **2. Booleans (layer 1).** `true` and `false` are keywords, and the grammar's `literal` doesn't say it includes them, but a pattern `true =>` needs it to. Approved: `r[lex.lit.bool]` "`true` and `false` are the literals of `Bool`", in Literals, so `literal` covers them.
 
 **3. Line breaks inside lists (layer 4).** `r[lex.line-end]` is Go's rule. But `r[tool.fmt.check]` says unformatted code compiles, so `f(\n  a,\n  b\n)` without its trailing comma must parse. The spec doesn't say what a line break means where no statement can end. Approved, after `r[lex.continue.fn-header]` (question 12):
-- `r[lex.continue.lists]` "Inside parentheses, square brackets, angle brackets and the braces of a comma-separated list, such as fields, variants, map entries and match arms, a line break is only spacing. A block inside them is a line context again, where the rules above apply. `else` still goes on the line of the closing `}`."
+- `r[lex.continue.lists]` "Inside parentheses, square brackets, angle brackets and the braces of a comma-separated list, such as fields, variants, map entries and match arms, a line break before a `,` or the closing bracket is only spacing. Elsewhere in them the rules above apply, so a line that starts with `-` or `(` starts a new item, which needs a `,` before it. A block inside them is a line context again. `else` still goes on the line of the closing `}`."
+
+*Revised by David, 2026-11-12,* after layer 4's review. The first approved wording made every line break in a list spacing, so a missing comma silently joined two items: `[a` then a line `-1]` read as `[a - 1]`, and `g(a` then a line `(b))` as `g(a(b))`. The revision keeps what `r[tool.fmt.check]` needs, and is one rule with line contexts.
 
 *Alternative:* Go's rule, which makes `f(a\n)` an error. Rejected because of `r[tool.fmt.check]`.
 
@@ -406,7 +408,7 @@ and the same for `effect_decl`'s `fn_sig` and `foreign_decl`'s items.
 
 This gives one way to write it.
 
-**12. Line breaks in closure headers and function types (layer 4).** `r[lex.continue.signature]` says "inside a `fn` signature". Approved: retire it, and add `r[lex.continue.fn-header]` "Inside any `fn` header, whether a declaration's signature, a closure's or a function type, a line that starts with `->`, `uses`, `requires`, `ensures` or `{` continues the header." So `fn(x: Int)` followed by a line `-> Int {` works the same in a closure as in a declaration, and there is one rule.
+**12. Line breaks in closure headers and function types (layer 4).** `r[lex.continue.signature]` says "inside a `fn` signature". Approved: retire it, and add `r[lex.continue.fn-header]` "Inside any `fn` header, whether a declaration's signature, a closure's or a function type, a line that starts with `->`, `uses`, `requires`, `ensures` or `{` continues the header." So `fn(x: Int)` followed by a line `-> Int {` works the same in a closure as in a declaration, and there is one rule. The rule keeps the old rule's sentence on how `quince fmt` breaks a long signature (decided by David, 2026-11-12).
 
 **13. Tuple positions as places (layer 4).** `grammar.place` allows field names and indexes, but not tuple positions. So `t.0 = 1` on a `var` tuple, or `id.0 = 2` on a `var` newtype (`r[item.newtype.access]`), is a syntax error, while `r[stmt.assign.place]` says "a field path from one". Decided by David, 2026-11-11: allow it. A position counts as a field, so the prose's "field path" already covers it. `r[stmt.assign.place]` keeps its ID, and only the grammar changes, to match it:
 ```
@@ -532,7 +534,7 @@ Layer 4 is three PRs (decided by David, 2026-11-12), since together they would r
 
 **Layer 4b: `m1/parser-lines`**
 - [x] Spec: questions 3 and 12, and a bump (v0.17).
-- [x] Line and list contexts, E0018. 3c already treats a line break before a `,` or a closing bracket, after `name:` and before an entry's `:` as spacing, and a block closed by a `let`, `var` or `while` line as one E0016 at its `{` (3c's `block_at`). This layer makes every line break in a list spacing, and adds the bare-block cases 3c misses. [`lex.line-end`, `lex.continue.more`, `lex.continue.fn-header`, `lex.continue.lists`, `lex.else-same-line`, `expr.block.no-bare`]
+- [x] Line and list contexts, E0018. 3c already treats a line break before a `,` or a closing bracket, after `name:` and before an entry's `:` as spacing, and a block closed by a `let`, `var` or `while` line as one E0016 at its `{` (3c's `block_at`). This layer applies the line-context rules elsewhere in a list (question 3 as revised), with E0018, and adds the bare-block cases 3c misses. [`lex.line-end`, `lex.continue.more`, `lex.continue.fn-header`, `lex.continue.lists`, `lex.else-same-line`, `expr.block.no-bare`]
 
 **Layer 4c: `m1/parser-member-peek`**
 - [ ] `member_holder` peeks the line's leading kinds once, so its cost doesn't grow with the number of open frames; a deep-nesting test of valid blocks stays under `LOOKAHEAD_LIMIT`. Blocks first nest in this layer, and today each open block costs a look on every `stop()` (found in layer 1's review).

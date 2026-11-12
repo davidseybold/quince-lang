@@ -347,9 +347,10 @@ impl<'t> Parser<'t> {
     }
 
     /// A break before the current token ends the construct the parser is in (decision 4):
-    /// there is one, and the token before it doesn't continue the line. In a list, a break is
-    /// only spacing (`r[lex.continue.lists]`), a `;` included, apart from its E0002. Right after
-    /// frames closed early, at a member start, every line break ends it: the token before
+    /// there is one, and the token before it doesn't continue the line. A list reads its `,`
+    /// and its closing bracket by kind, whatever the break before them, so a break there is
+    /// only spacing (`r[lex.continue.lists]`); elsewhere in a list the same rules apply. Right
+    /// after frames closed early, at a member start, every line break ends it: the token before
     /// belongs to a construct that is already closed. Right after attributes, a line break
     /// doesn't: an attribute goes on its own line. Nor does one right after a binary operator,
     /// or one reported as an E0018.
@@ -360,16 +361,11 @@ impl<'t> Parser<'t> {
         if self.joined == Some(self.pos) {
             return false;
         }
-        let in_list = self
-            .frames
-            .last()
-            .is_some_and(|frame| frame.holds.is_list());
         match token.brk {
             Break::None => false,
-            Break::Hard => !in_list,
+            Break::Hard => true,
             Break::Line if self.after_attributes || self.after_operator => false,
             Break::Line if self.closed_early => true,
-            Break::Line if in_list => false,
             Break::Line => {
                 let previous = self.input.tokens[self.pos - 1].kind;
                 let header_continues = self.in_fn_header

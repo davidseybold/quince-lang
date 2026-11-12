@@ -204,7 +204,7 @@ fn condition_and_block(p: &mut Parser) -> bool {
 
 fn let_rest(p: &mut Parser) {
     let mut what = "`:` or `=`";
-    if p.at(Colon) {
+    if p.at_or_join(Colon) {
         p.bump();
         if !types::type_(p) {
             return;

@@ -349,6 +349,18 @@ fn a_line_break_too_early() {
         ("test \"t\"\n{}", "test \"t\" {}", 8..9),
         ("const N: Int\n  = 1", "const N: Int = 1", 12..13),
         ("type T\n  = Int", "type T = Int", 6..7),
+        (
+            "fn f() {\n  let x\n  : Int = 1\n}",
+            "fn f() {\n  let x : Int = 1\n}",
+            16..17,
+        ),
+        ("const N\n  : Int = 1", "const N : Int = 1", 7..8),
+        ("struct S\n{ a: Int }", "struct S { a: Int }", 8..9),
+        (
+            "fn f() {\n  g(\n    a\n    + b\n  )\n}",
+            "fn f() {\n  g(\n    a + b\n  )\n}",
+            19..20,
+        ),
     ];
     for (text, joined, at) in cases {
         assert_eq!(
@@ -401,9 +413,19 @@ fn no_join_across_a_comment() {
 #[test]
 fn what_doesnt_join() {
     assert_eq!(errors("fn f() {\n  a\n  -b\n  (c)\n}"), [] as [String; 0]);
+    // In a list, a line break before a `,` or the closing bracket is spacing, and a line that
+    // starts with `-` or `(` is a new item, which needs its `,` (`r[lex.continue.lists]`).
     assert_eq!(
-        tree("fn f() {\n  g(\n    a\n    + b\n    - c\n  )\n}"),
-        tree("fn f() {\n  g(a + b - c)\n}")
+        tree("fn f() {\n  g(\n    a\n    , b\n  )\n}"),
+        tree("fn f() {\n  g(a, b)\n}")
+    );
+    assert_eq!(
+        errors("fn f() {\n  g(\n    a\n    -1\n  )\n}"),
+        [r#"E0016 24..25 => "fn f() {\n  g(\n    a,\n    -1\n  )\n}""#]
+    );
+    assert_eq!(
+        errors("fn f() {\n  g(\n    a\n    (b)\n  )\n}"),
+        [r#"E0016 24..25 => "fn f() {\n  g(\n    a,\n    (b)\n  )\n}""#]
     );
     assert_eq!(codes("fn f() {\n  a;\n  .b()\n}"), ["E0002", "E0016"]);
     assert_eq!(codes("fn f() {\n  a;\n  + b\n}"), ["E0002", "E0016"]);
@@ -411,8 +433,8 @@ fn what_doesnt_join() {
         codes("fn f() {\n  if a {};\n  else {}\n}"),
         ["E0002", "E0016"]
     );
-    // In a list a `;` is spacing too, apart from its E0002.
-    assert_eq!(codes("fn f() {\n  g(a;\n    + b)\n}"), ["E0002"]);
+    // In a list a `;` ends the item too: `+` after it is an E0016.
+    assert_eq!(codes("fn f() {\n  g(a;\n    + b)\n}"), ["E0002", "E0016"]);
 }
 
 /// A keyword can't be a name, and the error names it (`r[lex.keyword-not-name]`).

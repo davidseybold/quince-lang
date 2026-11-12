@@ -4,6 +4,11 @@
 // opening bracket. A line that starts with `- b` is a new statement. A line that starts with
 // something that can't start a statement but continues the one above, such as a binary
 // operator other than `-`, `?` or a body's `{`, is an error whose fix joins the lines.
+struct Point
+{ //~^ E0018
+  x: Int,
+}
+
 fn f(a: Int, b: Int) -> Int {
   let sum = a +
     b
@@ -25,6 +30,8 @@ fn f(a: Int, b: Int) -> Int {
     ..b //~^ E0018
   let tried = load(a)
     ? //~^ E0018
+  let typed
+    : Int = 1 //~^ E0018
   if sum > 0
   { //~^ E0018
     log("positive")
