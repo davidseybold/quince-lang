@@ -394,6 +394,11 @@ fn a_brace_in_a_condition_is_one_error() {
     assert_eq!(fixes("  if m == {\"a\": 1, // c\n    \"b\": 2} {}"), [0]);
     // Right after an error token, the map is part of that slip.
     assert_eq!(errors("  if a == $ {\"a\": 1} {}"), ["E0001 10..11"]);
+    // The map is whole, not a slip, so the operators around it are still checked.
+    assert_eq!(
+        errors("  if {\"a\": 1} == m == n {}"),
+        ["E0016 5..6", "E0020 19..21"]
+    );
 }
 
 /// Blocks nest, and a missing `}` is one E0017 at the `{` the next declaration closes.
