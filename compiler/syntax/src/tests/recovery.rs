@@ -276,6 +276,8 @@ fn a_semicolon_ends_a_statement() {
     assert_eq!(errors("fn f() ->;"), [r#"E0002 9..10 => "fn f() ->""#]);
     assert_eq!(errors("fn f() ->;\n"), [r#"E0002 9..10 => "fn f() ->\n""#]);
     assert_eq!(codes("const A: Int =; // done\n"), ["E0002"]);
+    // An unclosed bracket still gets its E0017 there.
+    assert_eq!(codes("fn f() {\n  let a =;"), ["E0017", "E0002"]);
 }
 
 /// Two expressions on one line are an E0016 that expects a line break.

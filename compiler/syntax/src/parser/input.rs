@@ -37,7 +37,8 @@ pub(super) struct Input {
     pub unclosed_lines: Vec<Range<usize>>,
     /// An `Error` token lies after the last significant token.
     pub eof_after_error: bool,
-    /// The break between the last significant token and the end of the file.
+    /// The break between the last significant token, or the start of a file with none, and
+    /// the end of the file.
     pub eof_brk: Break,
     /// A multi-line string or a block comment runs to the end of the file unclosed, so what
     /// the parser would report there is part of that slip.
