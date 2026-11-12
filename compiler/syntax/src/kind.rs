@@ -119,7 +119,11 @@ syntax_kinds! {
         /// `uses` and its list of effects.
         Effects,
         Generics, GenericParam,
-        Block, LetStmt,
+        Block, LetStmt, VarStmt, WhileStmt,
+        /// A place, `=` or a compound assignment, and an expression.
+        AssignStmt,
+        /// `if`, its condition and block, and `else` with an `IfExpr` or a block.
+        IfExpr,
         /// A name being declared.
         Name,
         /// A name being used, `self` or `Self`.

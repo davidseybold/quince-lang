@@ -123,6 +123,10 @@ A node holds its tokens and child nodes in source order. A part the code leaves 
 | `GenericParam` | A `Name`, then `:` and bounds joined by `+` if present, or `uses` and a `Name`. |
 | `Block` | `{`, its statements, and `}`. An expression statement is the expression's own node. |
 | `LetStmt` | `let`, a `Name`, `:` and a type if present, `=` and an expression. |
+| `VarStmt` | `var`, then the rest as for `LetStmt`. |
+| `WhileStmt` | `while`, an expression, and a `Block`. |
+| `AssignStmt` | An expression, `=` or a compound assignment, and an expression. The left one is a place unless the statement has an E0026. |
+| `IfExpr` | `if`, an expression and a `Block`, then `else` and an `IfExpr` or a `Block` if present. |
 | `Name` | The `Ident` of a name being declared. |
 | `NameRef` | The `Ident`, `self` or `Self` of a name being used, then, in an expression, the `TypeArgs` after an `Ident` when its `<` starts them. |
 | `Literal` | One `Int`, `Float`, `Char`, `true` or `false`; a negative number, its `-` and its `Int` or `Float`; or a whole string: its `StringStart`, text, `Interp`s and `StringEnd`, which an unclosed string lacks. |
@@ -168,6 +172,8 @@ The parser reads the significant tokens: every token but the trivia and the doc 
   - A `<` after a name in an expression is examined by parsing ahead: the parser parses type arguments, and keeps them when they parse with no slip and the token after their `>` is one that may follow them. Otherwise it goes back to the `<`, dropping what it parsed and any error, and the `<` is less-than. While parsing ahead, the first slip makes the parser see the end of the file, so what it has open closes at once. It records the answer for every `<` it parses type arguments from, nested ones included, so no `<` is parsed ahead from twice and a file is parsed in linear time.
   - A `-` in prefix position, directly followed by an `Int` or `Float` that no postfix operator follows, is part of a `Literal` with it.
   - E0019 is reported at each operand that needs parentheses, and E0020 at the second operator of a chain, once per chain. Neither is reported for an operator any of whose operands holds a syntax error, a missing operand included, since that error is the slip.
+- **Assignment.** A statement that starts with an expression becomes an assignment when `=` or a compound assignment follows it on its line. The left side is parsed as an expression and then checked against `grammar.place`: a name or `self`, then `.` and a name or a tuple position, or an index, any number of times. Assignment is a statement, so a second `=` is an E0016 where the statement should end, and `=` in a condition or a list is an E0016 there.
+- **`if` and `else`.** `if` is an expression. `else` is taken only on the line of the `}` before it.
 - **Errors the parser leaves to the lexer.** Beyond the lexer's own list (above):
   - The parser drops an error it would report right after an `Error` token, with only trivia between, so `let x = $` is the E0001 alone.
   - An unclosed one-line string or char closes, at its line's end, the parentheses and square brackets opened on that line, with no E0017, and the parser reports nothing on that line. A block's `{` stays open.
@@ -182,3 +188,4 @@ The parser reads the significant tokens: every token but the trivia and the doc 
 | E0020 | A chained comparison or range, at its second operator | For comparisons, repeat each middle operand: `a < b && b < c` (`needs-review`), in parentheses when the chain is an operand of `\|\|`. None when a middle operand holds a comment or a line break or needs parentheses itself, and none for ranges |
 | E0024 | A struct with no fields written with braces, at the braces | Remove them (`safe`), unless a `requires` follows or a comment lies before or between them |
 | E0025 | `{}` where an expression is expected, over the braces | Insert `:` after the `{` (`needs-review`) |
+| E0026 | An assignment whose left side isn't a place, over the left side. Not reported when the left side holds a syntax error | None |

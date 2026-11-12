@@ -521,10 +521,17 @@ Layer 3 is three PRs (decided by David, 2026-11-12), since together they would r
 **Layer 3c: `m1/parser-postfix`**
 - [x] Postfix forms, tuples, maps, `{}` and E0025, named arguments (attribute arguments too), `..base`. [`lex.lit.collections`, `lex.lit.empty-map`, `expr.block.brace-map`, `item.struct.update`, `intro.excl.macros`, `grammar.postfix`, `grammar.args`, `grammar.arg`, `grammar.tuple`, `grammar.primary`, `grammar.map_lit`, `grammar.entry`]
 
-**Layer 4: `m1/parser-stmts`**
-- [ ] Spec: questions 3, 12 and 13, and a bump.
-- [ ] Statements, places, E0026. [`grammar.stmt`, `grammar.place`, `stmt.assign.stmt`, `stmt.assign.place`, `stmt.assign.no-chain`, `stmt.loop.forms`]
-- [ ] Line and list contexts, E0018, `if` and `else`. [`lex.line-end`, `lex.continue.more`, `lex.continue.fn-header`, `lex.continue.lists`, `lex.else-same-line`, `expr.block.no-bare`]
+Layer 4 is three PRs (decided by David, 2026-11-12), since together they would run past 1,000 lines: statements, then line breaks, then the `member_holder` fix. Each spec change lands with its own bump.
+
+**Layer 4a: `m1/parser-stmts`**
+- [x] Spec: question 13, and a bump (v0.16).
+- [x] `var`, `while`, `if` and `else` on one line; assignment, places, E0026. Until 4b, `else` at the start of a line is an E0016. [`grammar.stmt`, `grammar.place`, `grammar.if_expr`, `stmt.assign.stmt`, `stmt.assign.place`, `stmt.assign.no-chain`, `stmt.loop.forms`]
+
+**Layer 4b: `m1/parser-lines`**
+- [ ] Spec: questions 3 and 12, and a bump (v0.17).
+- [ ] Line and list contexts, E0018. A line break in argument lists and maps is already spacing (3c), and a bare block is already one E0016 at its `{` (3c's `block_at`), so this adds their fixtures and the cases 3c misses. [`lex.line-end`, `lex.continue.more`, `lex.continue.fn-header`, `lex.continue.lists`, `lex.else-same-line`, `expr.block.no-bare`]
+
+**Layer 4c: `m1/parser-member-peek`**
 - [ ] `member_holder` peeks the line's leading kinds once, so its cost doesn't grow with the number of open frames; a deep-nesting test of valid blocks stays under `LOOKAHEAD_LIMIT`. Blocks first nest in this layer, and today each open block costs a look on every `stop()` (found in layer 1's review).
 
 **Layer 5: `m1/parser-patterns`**

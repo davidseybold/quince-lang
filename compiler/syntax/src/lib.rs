@@ -42,6 +42,7 @@ pub mod codes {
     pub const CHAINED_OPERATOR: &str = "E0020";
     pub const EMPTY_STRUCT_BRACES: &str = "E0024";
     pub const EMPTY_BRACES: &str = "E0025";
+    pub const NOT_A_PLACE: &str = "E0026";
     /// The codes the lexer and `decode_source` report. The lexer's mutation test requires
     /// every one of them from its mutants.
     pub const LEXER: &[&str] = &[
@@ -69,6 +70,7 @@ pub mod codes {
         CHAINED_OPERATOR,
         EMPTY_STRUCT_BRACES,
         EMPTY_BRACES,
+        NOT_A_PLACE,
     ];
 
     /// Every code this crate reports.

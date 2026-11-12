@@ -1,5 +1,5 @@
-//! Blocks, statements and expressions: `let`, literals, names, collections, operators and
-//! postfix forms. Later layers of the parser add the rest.
+//! Blocks, statements and expressions: `let`, `var`, `while`, assignment, `if`, literals,
+//! names, collections, operators and postfix forms. Later layers of the parser add the rest.
 
 use super::input::Break;
 use super::{Completed, Holds, Parser, Sync, items, types};
@@ -17,28 +17,147 @@ pub(super) fn block(p: &mut Parser) {
     p.complete(marker, Block);
 }
 
-/// A statement: `let`, or an expression (`grammar.stmt`). Anything else is skipped as an
-/// error.
+/// A statement (`grammar.stmt`): `let`, `var`, `while`, an assignment, or an expression.
+/// Anything else is skipped as an error.
 fn stmt(p: &mut Parser) {
-    if p.kind() == LetKw {
-        return let_stmt(p);
+    match p.kind() {
+        LetKw => let_stmt(p),
+        VarKw => var_stmt(p),
+        WhileKw => while_stmt(p),
+        kind if starts_expr(kind) => expr_or_assign(p),
+        _ => {
+            p.expected_member("a statement or `}`");
+            p.recover(Sync::Line, true);
+        }
     }
-    if starts_expr(p.kind()) {
-        expr(p);
-    } else {
-        p.expected_member("a statement or `}`");
-        p.recover(Sync::Line, true);
+}
+
+/// An expression, or a place, `=` or a compound assignment, and an expression
+/// (`r[stmt.assign.stmt]`). The left side is parsed as an expression and then checked: when it
+/// isn't a place, and holds no syntax error, it is an E0026. Assignment is a statement, so a
+/// second `=` after the value is an E0016 at the end of the statement
+/// (`r[stmt.assign.no-chain]`).
+fn expr_or_assign(p: &mut Parser) {
+    let (first, slips) = (p.pos, p.slips);
+    let Some(left) = expr_node(p) else {
+        return;
+    };
+    if p.recovering || !is_assign_op(p.kind()) || p.at_break() {
+        return;
+    }
+    let marker = p.precede(left);
+    if p.slips == slips && !is_place(p, first) {
+        let range = text_range(p, (first, p.pos - 1));
+        let message = "the left side of an assignment must be a place: a name or `self`, \
+                       followed by fields, tuple positions and indexes";
+        p.emit(SyntaxError::new(range, codes::NOT_A_PLACE, message.into()));
+    }
+    p.bump();
+    expr(p);
+    p.complete(marker, AssignStmt);
+}
+
+fn is_assign_op(kind: SyntaxKind) -> bool {
+    matches!(kind, Eq | PlusEq | MinusEq | StarEq | SlashEq | PercentEq)
+}
+
+/// The significant tokens from `first` up to the current one are a place (`grammar.place`): a
+/// name or `self`, followed by `.` and a name or a tuple position, or an index in square
+/// brackets, any number of times. The tokens hold no syntax error, so their brackets match.
+fn is_place(p: &Parser, first: usize) -> bool {
+    let tokens = &p.input.tokens[first..p.pos];
+    let Some((head, mut rest)) = tokens.split_first() else {
+        return false;
+    };
+    if !matches!(head.kind, Ident | SelfKw) {
+        return false;
+    }
+    loop {
+        match rest {
+            [] => return true,
+            [dot, step, tail @ ..] if dot.kind == Dot && matches!(step.kind, Ident | Int) => {
+                rest = tail;
+            }
+            [open, ..] if open.kind == LBracket => {
+                let mut depth = 0usize;
+                let close = rest.iter().position(|token| {
+                    if super::closer_of(token.kind).is_some() {
+                        depth += 1;
+                    } else if super::is_closer(token.kind) {
+                        depth -= 1;
+                    }
+                    depth == 0
+                });
+                let Some(close) = close else {
+                    return false;
+                };
+                rest = &rest[close + 1..];
+            }
+            _ => return false,
+        }
     }
 }
 
 /// `let` name [ `:` type ] `=` expr. Layer 5 of the parser takes a pattern after `let`.
 fn let_stmt(p: &mut Parser) {
+    binding(p, LetStmt);
+}
+
+/// `var` name [ `:` type ] `=` expr. A `var` takes a name, never a pattern.
+fn var_stmt(p: &mut Parser) {
+    binding(p, VarStmt);
+}
+
+fn binding(p: &mut Parser, kind: SyntaxKind) {
     let marker = p.start();
     p.bump();
     if items::name(p, "a name") {
         let_rest(p);
     }
-    p.complete(marker, LetStmt);
+    p.complete(marker, kind);
+}
+
+/// `while` expr block (`grammar.stmt`).
+fn while_stmt(p: &mut Parser) {
+    let marker = p.start();
+    p.bump();
+    condition_and_block(p);
+    p.complete(marker, WhileStmt);
+}
+
+/// `if` expr block [ `else` ( if_expr | block ) ] (`grammar.if_expr`). The `else` is taken
+/// only on the line of the `}`.
+fn if_expr(p: &mut Parser) -> Completed {
+    let marker = p.start();
+    p.bump();
+    if condition_and_block(p) && p.at(ElseKw) {
+        p.bump();
+        match p.kind() {
+            IfKw if !p.at_break() => {
+                if_expr(p);
+            }
+            LBrace if !p.at_break() => block(p),
+            _ => p.expected("`if` or `{`"),
+        }
+    }
+    p.complete(marker, IfExpr)
+}
+
+/// The condition of an `if` or a `while`, and the block after it on its line. False when there
+/// is no block.
+fn condition_and_block(p: &mut Parser) -> bool {
+    if p.at_break() {
+        p.expected("an expression");
+        return false;
+    }
+    expr(p);
+    if p.at(LBrace) {
+        block(p);
+        true
+    } else {
+        p.expected("`{`");
+        false
+    }
 }
 
 fn let_rest(p: &mut Parser) {
@@ -62,9 +181,14 @@ fn let_rest(p: &mut Parser) {
 /// reports what the spec forbids: E0019 where parentheses are needed and E0020 where
 /// operators chain.
 pub(super) fn expr(p: &mut Parser) {
-    if let Some(operand) = binary(p, 0) {
-        report_chain(p, operand.chain, operand.tokens, None);
-    }
+    expr_node(p);
+}
+
+/// [`expr`], and the node it completed, if there is an expression.
+fn expr_node(p: &mut Parser) -> Option<Completed> {
+    let operand = binary(p, 0)?;
+    report_chain(p, operand.chain, operand.tokens, None);
+    Some(operand.done)
 }
 
 /// An expression whose operators all bind tighter than `min_power`.
@@ -470,8 +594,8 @@ fn postfix(p: &mut Parser) -> Option<Completed> {
     Some(done)
 }
 
-/// A literal, a name, `self`, `Self`, a list or map literal, a tuple, or an expression in
-/// parentheses (`grammar.primary`). A statement starts after a break, so this doesn't check
+/// A literal, a name, `self`, `Self`, a list or map literal, a tuple, an expression in
+/// parentheses, or an `if` (`grammar.primary`). A statement starts after a break, so this doesn't check
 /// for one: each caller has taken a token that continues the line, or is at the start of a
 /// statement.
 fn primary(p: &mut Parser) -> Option<Completed> {
@@ -501,6 +625,10 @@ fn primary(p: &mut Parser) -> Option<Completed> {
         LParen => {
             p.abandon(marker);
             return Some(paren(p));
+        }
+        IfKw => {
+            p.abandon(marker);
+            return Some(if_expr(p));
         }
         LBrace => {
             p.abandon(marker);
@@ -659,6 +787,7 @@ fn starts_expr(kind: SyntaxKind) -> bool {
             | LBracket
             | LParen
             | LBrace
+            | IfKw
             | Minus
             | Bang
             | Tilde

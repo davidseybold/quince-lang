@@ -1,0 +1,22 @@
+// rule: grammar.stmt
+// rule: stmt.loop.forms
+// mode: parse
+// `while`, a condition and a block is the one conditional loop. `loop` and `do` aren't
+// keywords, so each is a name, and a name followed by a block is an error.
+fn f(var n: Int) {
+  while n > 0 {
+    n -= 1
+  }
+  while n < 10 { n += 1 }
+  while ready() && n != 3 {
+    let m = n * 2
+    n = m
+  }
+  while n > 0 {
+    while n > 5 { n -= 2 }
+    n -= 1
+  }
+  loop { n = 1 } //~ E0016
+  do { n = 2 } while n > 0 //~ E0016
+  while n > 0 n -= 1 //~ E0016
+}

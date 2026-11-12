@@ -15,6 +15,7 @@ mod numbers;
 mod parser;
 mod prefixed;
 mod recovery;
+mod stmts;
 mod strings;
 mod types;
 

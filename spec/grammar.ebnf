@@ -99,7 +99,7 @@ stmt        = "let" pattern [ ":" type ] "=" expr
             | "for" pattern "in" expr block
             | "while" expr block
             | expr
-place       = ( name | "self" ) { "." name | "[" expr "]" }   // self only under var self
+place       = ( name | "self" ) { "." name | "." int | "[" expr "]" }   // self only under var self
 assign_op   = "=" | "+=" | "-=" | "*=" | "/=" | "%="
 
 pattern      = alt { "|" alt }
