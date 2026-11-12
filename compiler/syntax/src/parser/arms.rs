@@ -15,7 +15,8 @@ pub(super) fn match_expr(p: &mut Parser) -> Completed {
 
 /// The arms in braces, a comma-separated list (`r[lex.continue.lists]`). Every arm ends with
 /// a `,`, the last one included (`r[expr.match.arm-comma]`), so a `}` right after an arm is an
-/// E0016 whose fix inserts it.
+/// E0016 whose fix inserts it. After an arm whose line an unclosed string or char ends, the
+/// missing `,` is part of that slip, and may be inside the literal, so it isn't reported.
 fn arms(p: &mut Parser) {
     let marker = p.start();
     p.bump();
@@ -43,12 +44,16 @@ fn arms(p: &mut Parser) {
             Comma => p.bump(),
             RBrace => {
                 let end = p.input.tokens[p.pos - 1].range.end;
-                let error = p.unexpected("`,`", false).with_fix(
-                    "insert the missing `,`",
-                    Applicability::Safe,
-                    vec![(end..end, ",".to_string())],
-                );
-                p.report(error);
+                if p.input.on_unclosed_line(end) {
+                    p.slip();
+                } else {
+                    let error = p.unexpected("`,`", false).with_fix(
+                        "insert the missing `,`",
+                        Applicability::Safe,
+                        vec![(end..end, ",".to_string())],
+                    );
+                    p.report(error);
+                }
             }
             _ if p.stop().is_some() => {}
             _ if p.unmatched_closer() => {

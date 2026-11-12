@@ -178,6 +178,7 @@ syntax_kinds! {
         MatchExpr,
         /// A `match`'s arms in braces.
         MatchArmList,
+        /// A pattern, a `MatchGuard` if present, `=>`, and an expression or a block.
         MatchArm,
         /// `if` and an expression, between an arm's pattern and its `=>`.
         MatchGuard,

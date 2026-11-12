@@ -251,6 +251,9 @@ Doc comments and attributes aren't member starts: they belong to the declaration
 | `let` followed by a line `(a, b) = p` | E0016 at the line break (layer 5a) |
 | `x is A + 1` | E0016 at `+` (layer 5a) |
 | `let Shape. \| + = v` | E0016 at `\|` (layer 5a) |
+| `match x { 0 => a }` | E0016 at `}`, with a fix that inserts `,` (layer 5b) |
+| `match x {` then a line `0 => "abc` and a line `}` | E0004 (layer 5b) |
+| `for x xs { a }` | E0016 at `xs` (layer 5b) |
 
 ### 10. Diagnostics
 
@@ -557,11 +560,12 @@ Layer 5 is two PRs (decided by David, 2026-11-12), since patterns with `match` a
 **Layer 5b: `m1/parser-match`**
 - [x] Spec (decided by David, 2026-11-12): extend `r[expr.block.cond-brace]` to a `match` subject and a `for` loop's `in` expression, whose `{` has the same problem (found in layer 4a's review). Wording: "In the condition of an `if` or `while`, the subject of a `match`, and the iterable of a `for`, `{` always starts the block. A map literal there is written in parentheses." It lands in the same PR as the `match` and `for` parsing, with a spec bump (v0.20). [`expr.block.cond-brace`]
 - [x] Extend `parse/lexical/lists.qnc` with line breaks in match arms, which `r[lex.continue.lists]` covers (layer 4b).
-- [x] `match`, guards, `for`. Every arm ends with a `,`, so a `}` right after an arm is an E0016 whose fix inserts it (`safe`). The `{` after a `match` subject or a `for` iterable uses the condition's machinery, `condition_frames` and `map_close`, so all four places share one test. A pattern missing from the line of its `let` or `for` is taken from the next line, as a missing condition is. [`grammar.match_expr`, `grammar.arm`, `expr.match.arm-syntax`, `expr.match.arm-block`, `expr.match.arm-comma`, `expr.match.guard`, `stmt.loop.stmt`]
+- [x] `match`, guards, `for`. Every arm ends with a `,`, so a `}` right after an arm is an E0016 whose fix inserts it (`safe`). The `{` after a `match` subject or a `for` iterable uses the condition's machinery, `condition_frames` and `map_close`, so all four places share one test. A pattern missing from the line of its `for` is taken from the next line, as for `let` (layer 5a). After an arm whose line an unclosed string or char ends, a missing `,` is part of that slip (found in review). [`grammar.match_expr`, `grammar.arm`, `expr.match.arm-syntax`, `expr.match.arm-block`, `expr.match.arm-comma`, `expr.match.guard`, `stmt.loop.stmt`]
 
 **Layer 6: `m1/parser-keyword-forms`**
 - [ ] Spec: question 7, and a bump. `concurrent`'s arguments take an optional trailing `,` (layer 2a's trailing-comma decision).
 - [ ] Extend `parse/lexical/fn_header.qnc` with closure headers and `requires`/`ensures` lines, which `r[lex.continue.fn-header]` covers (layer 4b).
+- [ ] Extend `parse/stmts/for.qnc` with `break 1 //~ E0016`: it cites `r[stmt.loop.stmt]`, which also says `break` takes no value (layer 5b).
 - [ ] Closures, `concurrent`, `background`, `select`, `with`, `spawn`, `return`, contracts. [`grammar.closure`, `grammar.concurrent`, `grammar.background`, `grammar.select`, `grammar.with_expr`, `grammar.jump`, `grammar.contract`, `expr.op.keyword-forms`]
 
 **Layer 7: `m1/parser-items`**

@@ -545,12 +545,24 @@ fn match_and_for_slips() {
     assert_eq!(errors("  match x { 0 a, }"), ["E0016 14..15"]);
     assert_eq!(errors("  match x { => a, }"), ["E0016 12..14"]);
     assert_eq!(errors("  match x { a if => b, }"), ["E0016 17..19"]);
+    // A guard with a slip in it has no `=>` to report missing.
+    assert_eq!(errors("  match x { a if => , }"), ["E0016 17..19"]);
+    // After an arm whose string is unclosed, the missing `,` is part of that slip.
+    assert_eq!(
+        codes(&checked("fn f() {\n  match x {\n    0 => \"abc\n  }\n}\n")),
+        ["E0004"]
+    );
     assert_eq!(errors("  match { _ => a, }"), ["E0016 8..9"]);
     assert_eq!(
         errors("  match x {\n    0 => a,\n  let y = 1"),
         ["E0017 10..11"]
     );
     assert_eq!(errors("  for x xs { a }"), ["E0016 8..10"]);
+    // The block after the slip is still the block, so a slip in it is reported too.
+    assert_eq!(
+        errors("  for x xs {\n    a b\n  }"),
+        ["E0016 8..10", "E0016 19..20"]
+    );
     assert_eq!(errors("  for in xs { a }"), ["E0016 6..8"]);
     assert_eq!(errors("  for x in { a }"), ["E0016 11..12"]);
     // A pattern missing from the line of its `let` or `for` is taken from the next line.
