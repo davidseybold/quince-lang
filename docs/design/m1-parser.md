@@ -439,7 +439,7 @@ fn make_logged() -> (fn(Int) -> Int uses Io) uses Net { // both
 - An alias, `type Transform = fn(Int) -> Int uses Io`, as the only way. Rejected: it hides the effects from the signature, and the linter flags it in public APIs.
 - The innermost function type takes the `uses`, as a greedy parse would. Rejected: a declaration that returns a function would then need parentheses or an alias to state its own effects.
 
-**15. `{` in a condition (layer 4a).** Found in layer 4's review: in `while n > {`, `{` where an expression is expected starts a map (`r[expr.block.brace-map]`), so the block became the map's and the slip gave two errors. Decided by David, 2026-11-12: `r[expr.block.cond-brace]` "In the condition of an `if` or `while`, `{` always starts the block. A map literal there is written in parentheses." Rust restricts struct literals in conditions the same way. A `{` where an expression goes at the top of a condition is an E0016. When another `{` follows its braces on their line, they were meant as a map: the fix puts them in parentheses (`needs-review`), and the parser skips them, so the block after them is still the block. Inside brackets in a condition, `{` starts a map as anywhere else. Layer 5 applies the same rule to a `match` subject and a `for` loop's `in` expression.
+**15. `{` in a condition (layer 4a).** Found in layer 4's review: in `while n > {`, `{` where an expression is expected starts a map (`r[expr.block.brace-map]`), so the block became the map's and the slip gave two errors. Decided by David, 2026-11-12: `r[expr.block.cond-brace]` "In the condition of an `if` or `while`, `{` always starts the block. A map literal there is written in parentheses." Rust restricts struct literals in conditions the same way. A `{` where an expression goes at the top of a condition is an E0016. When more of the condition follows its braces on the line of their `}`, such as an operator, `.` or the block's `{`, they were meant as a map: the fix puts them in parentheses (`needs-review`), and the parser parses the map, so the rest of the condition and its block parse as written. Inside brackets in a condition, `{` starts a map as anywhere else. The rule names only `if` and `while`: a `match` subject and a `for` loop's `in` expression have the same problem, and taking the rule to them is a spec question for layer 5.
 
 ## Risks and trade-offs
 
@@ -538,6 +538,7 @@ Layer 4 is three PRs (decided by David, 2026-11-12), since together they would r
 - [ ] `member_holder` peeks the line's leading kinds once, so its cost doesn't grow with the number of open frames; a deep-nesting test of valid blocks stays under `LOOKAHEAD_LIMIT`. Blocks first nest in this layer, and today each open block costs a look on every `stop()` (found in layer 1's review).
 
 **Layer 5: `m1/parser-patterns`**
+- [ ] Spec question for David: does `r[expr.block.cond-brace]` extend to a `match` subject and a `for` loop's `in` expression, whose `{` has the same problem (found in layer 4a's review)?
 - [ ] Spec: `variant_pat` and `pfields` take an optional trailing `,` (layer 2a's trailing-comma decision).
 - [ ] Patterns, `match`, guards, `is`, `for`. [`grammar.pattern`, `grammar.match_expr`, `expr.match.arm-syntax`, `expr.match.arm-comma`, `pat.negative`, `pat.const`, `expr.range.pattern`, `lex.grammar-rules`]
 

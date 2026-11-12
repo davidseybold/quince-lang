@@ -330,6 +330,12 @@ fn a_brace_in_a_condition_is_the_block() {
         ["expected an expression, found `{`"]
     );
     assert_eq!(errors("  if { x }"), ["E0016 5..6"]);
+    // Braces that more of the condition follows on their line are a map, parsed as one, so the
+    // rest of the condition and the block are as written.
+    assert_eq!(errors("  if {\"a\": 1}.len() > 0 {}"), ["E0016 5..6"]);
+    assert_eq!(errors("  while {\"a\": 1} != m {}"), ["E0016 8..9"]);
+    assert_eq!(errors("  if m == {\"a\": 1} && ok {}"), ["E0016 10..11"]);
+    assert_eq!(errors("  if m == {\"a\":\n    1} {}"), ["E0016 10..11"]);
     assert_eq!(errors("  if m == {:} {}"), ["E0016 10..11"]);
     assert_eq!(errors("  if m == ({:}) {}"), [] as [String; 0]);
     assert_eq!(errors("  if f({\"a\": 1}) {}"), [] as [String; 0]);

@@ -651,8 +651,7 @@ fn primary(p: &mut Parser) -> Option<Completed> {
         // (`r[expr.block.cond-brace]`). Inside brackets in it, `{` starts a map.
         LBrace if p.condition_frames == Some(p.frames.len()) => {
             p.abandon(marker);
-            condition_map(p);
-            return None;
+            return condition_brace(p);
         }
         LBrace => {
             p.abandon(marker);
@@ -668,37 +667,30 @@ fn primary(p: &mut Parser) -> Option<Completed> {
 }
 
 /// A `{` where an expression goes at the top of a condition, which starts the block
-/// (`r[expr.block.cond-brace]`): an E0016. When another `{` follows its braces on their line,
-/// the braces were meant as a map, so the fix puts them in parentheses (`needs-review`), and they
-/// are skipped, so the block after them is still the block.
-fn condition_map(p: &mut Parser) {
-    let tokens = &p.input.tokens[p.pos..];
-    let mut open = 0usize;
-    let close = tokens.iter().position(|token| {
-        if super::closer_of(token.kind).is_some() {
-            open += 1;
-        } else if super::is_closer(token.kind) {
-            open = open.saturating_sub(1);
-        }
-        open == 0
-    });
-    let map_end = close.filter(|&close| {
-        tokens
-            .get(close + 1)
-            .is_some_and(|next| next.kind == LBrace && next.brk == Break::None)
-            && tokens[1..=close]
-                .iter()
-                .all(|token| token.brk == Break::None)
+/// (`r[expr.block.cond-brace]`). When more of the condition follows its braces on the line of
+/// their `}`, such as an operator, `.` or the block's `{`, the braces were meant as a map. That
+/// is an E0016 whose fix puts them in parentheses (`needs-review`), and the parser parses the map,
+/// so the rest of the condition and its block parse as written. Otherwise the braces are the
+/// block, and the expression is missing.
+fn condition_brace(p: &mut Parser) -> Option<Completed> {
+    let map_end = matching_brace(p).filter(|&close| {
+        p.input.tokens.get(close + 1).is_some_and(|next| {
+            next.brk == Break::None
+                && !matches!(next.kind, ElseKw | Comma)
+                && !super::is_closer(next.kind)
+        })
     });
     let Some(end) = map_end else {
-        return p.expected("an expression");
+        p.expected("an expression");
+        return None;
     };
-    let range = tokens[0].range.start..tokens[end].range.end;
-    let mut error = p.unexpected("an expression", false);
-    if p.lexed.tokens[tokens[0].index..tokens[end].index]
+    let (open, close) = (&p.input.tokens[p.pos], &p.input.tokens[end]);
+    let range = open.range.start..close.range.end;
+    let commented = p.lexed.tokens[open.index..close.index]
         .iter()
-        .all(|t| !matches!(t.kind, Comment | BlockComment | DocComment))
-    {
+        .any(|t| matches!(t.kind, Comment | BlockComment | DocComment));
+    let mut error = p.unexpected("an expression", false);
+    if !commented {
         error = error.with_fix(
             "put the map in parentheses",
             Applicability::NeedsReview,
@@ -708,12 +700,33 @@ fn condition_map(p: &mut Parser) {
             ],
         );
     }
-    p.report(error);
-    let marker = p.start();
-    for _ in 0..=end {
-        p.take();
+    // The map is whole, so it isn't a slip that hides the operators around it.
+    let after_error = p.current().is_some_and(|t| t.after_error);
+    if !(p.recovering || p.closed_early || after_error) {
+        p.emit(error);
     }
-    p.complete(marker, Skipped);
+    Some(map_lit(p))
+}
+
+/// The index among the significant tokens of the `}` that closes the current `{`. A line that
+/// starts with a member start, which no braces in a condition hold, ends the scan, so it reads
+/// no further than the braces' own lines. A direct scan, done once, at an error.
+fn matching_brace(p: &Parser) -> Option<usize> {
+    let mut open = 0usize;
+    for (i, token) in p.input.tokens.iter().enumerate().skip(p.pos) {
+        if i > p.pos && token.brk != Break::None && super::starts_member(token.kind) {
+            return None;
+        }
+        if super::closer_of(token.kind).is_some() {
+            open += 1;
+        } else if super::is_closer(token.kind) {
+            open = open.saturating_sub(1);
+            if open == 0 {
+                return (token.kind == RBrace).then_some(i);
+            }
+        }
+    }
+    None
 }
 
 /// One expression and the closing bracket after it, after the opening one, which the caller
