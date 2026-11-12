@@ -89,7 +89,22 @@ syntax_kinds! {
         File,
         /// Tokens the parser skipped while recovering from an error.
         Skipped,
-        FnDecl, ImplDecl, Block, Name,
+        FnDecl, ParamList, Param, RetType, ImplDecl,
+        /// A type path with its type arguments.
+        TypePath, TypeArgs,
+        Block, LetStmt,
+        /// A name being declared.
+        Name,
+        /// A name being used, `self` or `Self`.
+        NameRef,
+        Literal,
+        /// An interpolation in a string: its braces and the tokens of its path.
+        Interp,
+        /// A call of anything: a function, a method (`Field` as callee), a struct or a variant.
+        Call,
+        ArgList,
+        /// A field or a tuple position of the expression before the `.`.
+        Field,
     ],
 }
 

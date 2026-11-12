@@ -1,16 +1,19 @@
-//! Seeded mutations of the `lex/` fixtures, which check the invariants on inputs no test wrote.
+//! Seeded mutations of the `lex/` fixtures, which check the lexer's and the parser's invariants
+//! on inputs no test wrote.
 
+use super::cst::check_lossless;
 use super::errors::check_error_ranges;
 use super::repo_root;
-use crate::{codes, decode_source, lex};
+use crate::{codes, decode_source, lex, parse};
 use std::collections::BTreeSet;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 /// The conformance fixtures of the lexer, relative to the repo root.
 const LEX_FIXTURES_DIR: &str = "tests/conformance/testdata/lex";
 
-/// Mutants made from each fixture. With 38 fixtures, the test takes about 0.25 s in debug, so it
-/// adds nothing to the crate's run, which the exhaustive `every_short_*` tests set.
+/// Mutants made from each fixture. With 38 fixtures, lexing and parsing them takes about 1 s in
+/// debug, so the test adds nothing to the crate's run, which the exhaustive `every_short_*`
+/// tests set.
 const MUTANTS_PER_SEED: usize = 120;
 
 /// Each mutant applies between one and this many mutations to its seed.
@@ -43,9 +46,10 @@ const INSERTED: [&[u8]; 22] = [
     b"\xe2\x80\xae",
 ];
 
-/// Seeded mutations of the `lex/` fixtures keep the invariants. They are bytes, so they reach
-/// invalid UTF-8 through `decode_source` and `lex`. Together they report every code, which the
-/// fixtures guarantee, since every code has one and `cargo xtask diagnostics` requires it.
+/// Seeded mutations of the `lex/` fixtures keep the invariants, the lexer's and the parser's.
+/// They are bytes, so they reach invalid UTF-8 through `decode_source`, `lex` and `parse`.
+/// Together they report every lexer code, which the fixtures guarantee, since every code has
+/// one and `cargo xtask diagnostics` requires it.
 #[test]
 fn mutations_keep_the_invariants() {
     let dir = repo_root().join(LEX_FIXTURES_DIR);
@@ -73,6 +77,9 @@ fn mutations_keep_the_invariants() {
                 let decoded = decode_source(&bytes).unwrap();
                 let lexed = lex(&decoded);
                 check_error_ranges(&decoded.text, &lexed);
+                let parsed = parse(&decoded);
+                check_lossless(&decoded.text, &lexed, &parsed.syntax());
+                super::parser::check_error_ranges(&decoded.text, parsed.errors());
                 lexed.errors
             }));
             let Ok(errors) = checked else {

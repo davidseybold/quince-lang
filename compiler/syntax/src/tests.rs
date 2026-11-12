@@ -10,7 +10,9 @@ mod errors;
 mod multiline;
 mod mutations;
 mod numbers;
+mod parser;
 mod prefixed;
+mod recovery;
 mod strings;
 
 /// `Kind "text"`, one token per line, after checking the invariants.

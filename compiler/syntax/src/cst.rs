@@ -30,7 +30,7 @@ pub type SyntaxElement = rowan::SyntaxElement<QuinceLanguage>;
 #[derive(Debug)]
 #[cfg_attr(
     not(test),
-    expect(dead_code, reason = "the parser, in the next layer, emits these")
+    expect(dead_code, reason = "layer 2 of the parser joins tokens")
 )]
 pub(crate) enum Event {
     /// Opens a node of this kind inside the innermost open one.
@@ -51,10 +51,6 @@ pub(crate) enum Event {
 ///
 /// The first event starts the root and the last finishes it. Every significant token is taken,
 /// and every node but the root holds a token. Fuzz and debug builds check both.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the parser, in the next layer, calls the builder")
-)]
 pub(crate) fn build(
     text: &str,
     tokens: &[Token],
@@ -183,7 +179,7 @@ impl Builder<'_> {
     }
 
     /// Writes every lexer token from the cursor up to `end`, each as its own token. These are
-    /// trivia, so they don't count as content: a node that holds only trivia is empty.
+    /// trivia, so a node that holds only trivia doesn't count as holding a token.
     fn write_to(&mut self, end: usize) {
         while self.cursor < end {
             let len = self.tokens[self.cursor].len as usize;
