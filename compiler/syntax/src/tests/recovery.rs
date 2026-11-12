@@ -98,6 +98,23 @@ fn a_declaration_closes_a_block() {
     );
 }
 
+/// An `impl` header that goes wrong syncs at the `{` on its line, so its methods stay in its
+/// body, and `pub` on a line of its own there ends at the break.
+#[test]
+fn a_broken_impl_header_keeps_its_body() {
+    for text in ["impl  {\n  fn f() {}\n}\n", "impl A A {\n  fn f() {}\n}\n"] {
+        assert_eq!(codes(text), ["E0016"], "{text:?}");
+        assert_eq!(decls(text), [SyntaxKind::ImplDecl], "{text:?}");
+    }
+    assert_eq!(
+        messages("impl A A {\n  fn f() {}\n}\n"),
+        ["expected `{`, found the name `A`"]
+    );
+    let text = "impl A {\n  pub\n  fn f() {}\n}\n";
+    assert_eq!(messages(text), ["expected `fn`, found a line break"]);
+    assert_eq!(decls(text), [SyntaxKind::ImplDecl]);
+}
+
 /// A member start ends the constructs it closes even after a token that continues the line,
 /// so the next declaration is parsed, and its own slips reported.
 #[test]
@@ -131,6 +148,10 @@ fn a_statement_closes_a_list() {
 #[test]
 fn a_closing_bracket_further_out_closes_a_list() {
     assert_eq!(errors("fn f() {\n  g(a\n}\n"), ["E0017 12..13"]);
+    assert_eq!(
+        errors("fn f() {\n  g(h(a\n}\n"),
+        ["E0017 12..13", "E0017 14..15"]
+    );
     assert_eq!(
         errors("fn f() {\n  g([a\n}\n"),
         ["E0017 12..13", "E0017 13..14"]
@@ -180,6 +201,11 @@ fn the_end_of_the_file_closes_everything() {
         ["expected an expression, found the end of the file"]
     );
     assert_eq!(errors("const A: Int ="), ["E0016 14..14"]);
+    assert_eq!(
+        messages("fn f() ->"),
+        ["expected a type, found the end of the file"]
+    );
+    assert_eq!(errors("fn f() ->"), ["E0016 9..9"]);
     // What the constructs around an unclosed bracket lack is part of that slip.
     assert_eq!(errors("fn f(a:"), ["E0017 4..5"]);
     assert_eq!(errors("fn f(a: Int"), ["E0017 4..5"]);
@@ -192,6 +218,10 @@ fn an_unclosed_literal_ends_its_line() {
     assert_eq!(codes("fn f() {\n  log(\"done)\n}\n"), ["E0004"]);
     assert_eq!(
         codes("fn f() {\n  let a = [g(\"hello)\n  let b = 'c\n  h(x y\n}\n"),
+        ["E0004", "E0009", "E0016"]
+    );
+    assert_eq!(
+        codes("fn f() {\n  let a = g(h(\"hello)\n  let b = 'c\n  h(x y\n}\n"),
         ["E0004", "E0009", "E0016"]
     );
     assert_eq!(codes("fn f() { log(\"done)\n}\n"), ["E0004"]);

@@ -166,14 +166,31 @@ fn const_decl(p: &mut Parser) {
 /// (`grammar.impl_decl`).
 fn impl_decl(p: &mut Parser) {
     p.bump();
-    if !types::type_(p) {
-        return;
+    if types::type_(p) && !p.at(LBrace) {
+        p.expected("`{`");
     }
+    skip_to_brace(p);
     if !p.at(LBrace) {
-        return p.expected("`{`");
+        return;
     }
     p.bump();
     p.lines(Holds::Body, Some(RBrace), |p| decl(p, Holds::Body));
+}
+
+/// After a slip in a header, skips the rest of its line up to its `{`, so the body is still
+/// parsed as the body. A bracket that some frame closes stops the skip.
+fn skip_to_brace(p: &mut Parser) {
+    let marker = p.start();
+    let mut skipped = false;
+    while !p.at_break() && p.kind() != LBrace && p.frame_closed_by(p.kind()).is_none() {
+        p.take();
+        skipped = true;
+    }
+    if skipped {
+        p.complete(marker, Skipped);
+    } else {
+        p.abandon(marker);
+    }
 }
 
 /// A name being declared, as a `Name` node. A keyword can't be one (`r[lex.keyword-not-name]`).
