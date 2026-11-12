@@ -101,6 +101,11 @@ pub const REGISTRY: &[CodeInfo] = &[
         include_str!("../explain/E0017.md"),
     ),
     error(
+        "E0018",
+        "a line break that ends a statement too early",
+        include_str!("../explain/E0018.md"),
+    ),
+    error(
         "E0019",
         "an operand that needs parentheses",
         include_str!("../explain/E0019.md"),

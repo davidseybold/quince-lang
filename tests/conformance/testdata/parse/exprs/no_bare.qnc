@@ -1,0 +1,20 @@
+// rule: expr.block.no-bare
+// mode: parse
+// There are no bare blocks. `{` where an expression goes starts a map literal, so braces that
+// hold statements rather than entries are an error at the `{`.
+fn f() -> Int {
+  let x = { //~ E0016
+    let y = 1
+    y
+  }
+  let z = { //~ E0016
+    g()
+  }
+  { //~ E0016
+    g()
+    h()
+  }
+  { g() } //~ E0016
+  let m = {"a": 1}
+  0
+}

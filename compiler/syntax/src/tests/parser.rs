@@ -391,7 +391,7 @@ fn where_a_statement_ends() {
 }
 
 /// In a `fn` header, a line that starts with `->` or `{` continues it
-/// (`r[lex.continue.signature]`). Indentation means nothing (`r[lex.indentation]`).
+/// (`r[lex.continue.fn-header]`). Indentation means nothing (`r[lex.indentation]`).
 #[test]
 fn a_fn_header_continues_on_the_next_line() {
     assert_eq!(

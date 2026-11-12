@@ -1,0 +1,25 @@
+// rule: lex.continue.fn-header
+// mode: parse
+// In any `fn` header, a declaration's signature or a function type, a line that starts with
+// `->`, `uses` or `{` continues the header.
+fn load(path: String)
+  -> String
+  uses Fs
+{
+  read(path)
+}
+
+fn make() -> fn(Int)
+  -> Int
+  uses Io {
+  double
+}
+
+const HANDLER: fn(Int)
+  -> Int = double
+
+fn run() {
+  let handler: fn(String)
+    uses Io = log
+  handler("ready")
+}

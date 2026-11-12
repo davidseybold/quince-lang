@@ -688,7 +688,25 @@ fn maps() {
     assert_eq!(errors("{= 1}"), ["E0016 1..2"]);
     // A line break in the braces is spacing, before the `:` too.
     assert_eq!(tree("{\"a\"\n    : 1}"), tree("{\"a\": 1}"));
-    assert_eq!(errors("{\n    a + 1\n  }"), ["E0016 14..15"]);
+    // Braces whose first item has no `:`, and end or have a line after it, hold statements: a
+    // block, which can't go here (`r[expr.block.no-bare]`). On one line it is a map's.
+    assert_eq!(errors("{\n    a + 1\n  }"), ["E0016 0..1"]);
+    assert_eq!(errors("{ g() }"), ["E0016 0..1"]);
+    assert_eq!(errors("{\n    g()\n    h()\n  }"), ["E0016 0..1"]);
+    assert_eq!(
+        messages("{ g() }"),
+        ["expected an expression, found a block"]
+    );
+    assert_eq!(
+        messages("{\"a\"}"),
+        ["expected an expression, found a block"]
+    );
+    // Braces that hold an entry's `:` are a map, whose entry lacks its `:`.
+    assert_eq!(messages("{\"a\": 1, \"b\"}"), ["expected `:`, found `}`"]);
+    assert_eq!(
+        messages("{\n    \"a\"\n    \"b\": 2\n  }"),
+        ["expected `:`, found a string"]
+    );
 }
 
 /// E0025: `{}` where an expression is expected, whose fix writes `{:}`.

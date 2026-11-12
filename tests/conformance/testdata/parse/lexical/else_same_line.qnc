@@ -1,0 +1,21 @@
+// rule: lex.else-same-line
+// mode: parse
+// `else` goes on the line of the closing `}`. A line that starts with `else` is an error whose
+// fix joins it.
+fn f(n: Int) -> Int {
+  if n > 0 {
+    log("positive")
+  } else {
+    log("not positive")
+  }
+  if n > 0 {
+    log("positive")
+  }
+  else { //~^ E0018
+    log("not positive")
+  }
+  let sign = if n < 0 { -1 }
+    else if n == 0 { 0 } //~^ E0018
+    else { 1 } //~^ E0018
+  sign
+}

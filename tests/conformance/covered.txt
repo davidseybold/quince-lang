@@ -2,6 +2,7 @@ effect.uses-list
 expr.block.brace-map
 expr.block.cond-brace
 expr.block.last-newline
+expr.block.no-bare
 expr.op.bits.chain
 expr.op.bits.parens
 expr.op.compare.no-chain
@@ -71,10 +72,15 @@ item.struct.update
 lex.braces
 lex.comment.doc
 lex.comment.line
+lex.continue.fn-header
+lex.continue.lists
+lex.continue.more
+lex.else-same-line
 lex.ident-not-keyword
 lex.indentation
 lex.keyword-not-name
 lex.keywords
+lex.line-end
 lex.lit.bool
 lex.lit.bytes
 lex.lit.bytes.hex-escape
