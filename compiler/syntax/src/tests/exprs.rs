@@ -586,3 +586,225 @@ fn negative_literals() {
         "Literal\n  Minus \"-\"\n  Int \"1\"\nParen\n  LParen \"(\"\n  Literal\n    Int \"2\"\n  RParen \")\"\n"
     );
 }
+
+/// `grammar.postfix`: indexes and `?` group to the left with calls and fields, and bind
+/// tighter than prefix operators (`r[expr.op.levels]`: `-x?` is `-(x?)`).
+#[test]
+fn indexes_and_try() {
+    assert_eq!(
+        tree("-xs[i]?"),
+        r#"Prefix
+  Minus "-"
+  Try
+    Index
+      NameRef
+        Ident "xs"
+      LBracket "["
+      NameRef
+        Ident "i"
+      RBracket "]"
+    Question "?"
+"#
+    );
+    assert_eq!(
+        tree("load()?.rows"),
+        r#"Field
+  Try
+    Call
+      NameRef
+        Ident "load"
+      ArgList
+        LParen "("
+        RParen ")"
+    Question "?"
+  Dot "."
+  NameRef
+    Ident "rows"
+"#
+    );
+    // On the next line, `[` starts a statement and `?` can't.
+    assert_eq!(
+        stmts("  f\n  [x]"),
+        "NameRef\n  Ident \"f\"\nListLit\n  LBracket \"[\"\n  NameRef\n    Ident \"x\"\n  RBracket \"]\"\n"
+    );
+    assert_eq!(errors("xs[]"), ["E0016 3..4"]);
+}
+
+/// `grammar.tuple`: `()` and two or more expressions are tuples, and one is in parentheses.
+#[test]
+fn tuples() {
+    assert_eq!(tree("()"), "Tuple\n  LParen \"(\"\n  RParen \")\"\n");
+    assert_eq!(
+        tree("(a, b,)"),
+        r#"Tuple
+  LParen "("
+  NameRef
+    Ident "a"
+  Comma ","
+  NameRef
+    Ident "b"
+  Comma ","
+  RParen ")"
+"#
+    );
+    assert_eq!(errors("(a,)"), ["E0016 3..4"]);
+    assert_eq!(
+        messages("(a,)"),
+        ["expected a second expression, found `)`"]
+    );
+}
+
+/// `grammar.map_lit`: entries in braces, and `{:}`.
+#[test]
+fn maps() {
+    assert_eq!(
+        tree("{\"a\": 1,}"),
+        r#"MapLit
+  LBrace "{"
+  MapEntry
+    Literal
+      StringStart "\""
+      StringText "a"
+      StringEnd "\""
+    Colon ":"
+    Literal
+      Int "1"
+  Comma ","
+  RBrace "}"
+"#
+    );
+    assert_eq!(
+        tree("{:}"),
+        "MapLit\n  LBrace \"{\"\n  Colon \":\"\n  RBrace \"}\"\n"
+    );
+    // `{` that starts a statement is a map too (`r[expr.block.brace-map]`).
+    assert_eq!(
+        stmts("  {:}"),
+        "MapLit\n  LBrace \"{\"\n  Colon \":\"\n  RBrace \"}\"\n"
+    );
+    assert_eq!(errors("{\"a\" 1}"), ["E0016 5..6"]);
+    // With no expression there is no entry node, which would be empty (found by the lexer's
+    // mutation test).
+    assert_eq!(errors("{= 1}"), ["E0016 1..2"]);
+    // A line break in the braces is spacing, before the `:` too.
+    assert_eq!(tree("{\"a\"\n    : 1}"), tree("{\"a\": 1}"));
+    assert_eq!(errors("{\n    a + 1\n  }"), ["E0016 14..15"]);
+}
+
+/// E0025: `{}` where an expression is expected, whose fix writes `{:}`.
+#[test]
+fn empty_braces() {
+    assert_eq!(errors("{}"), ["E0025 0..2 => {:}"]);
+    assert_eq!(errors("{ }"), ["E0025 0..3 => {: }"]);
+    assert_eq!(errors("f({})"), ["E0025 2..4 => f({:})"]);
+    assert_eq!(
+        messages("{}"),
+        ["`{}` isn't a value: the empty map is `{:}`"]
+    );
+    // `{}` is whole, so the operators around it are still checked.
+    assert_eq!(
+        errors("{} & 1 | 2"),
+        ["E0025 0..2 => {:} & 1 | 2", "E0019 0..6 => ({} & 1) | 2"]
+    );
+}
+
+/// `grammar.arg`: a named argument, `name:` alone, and `..base` first
+/// (`r[item.struct.update]`).
+#[test]
+fn arguments() {
+    assert_eq!(
+        tree("User(..u, id: 1, email:)"),
+        r#"Call
+  NameRef
+    Ident "User"
+  ArgList
+    LParen "("
+    UpdateArg
+      DotDot ".."
+      NameRef
+        Ident "u"
+    Comma ","
+    NamedArg
+      NameRef
+        Ident "id"
+      Colon ":"
+      Literal
+        Int "1"
+    Comma ","
+    NamedArg
+      NameRef
+        Ident "email"
+      Colon ":"
+    RParen ")"
+"#
+    );
+    assert_eq!(errors("f(email:\n  )"), Vec::<String>::new());
+    assert_eq!(errors("User(id: 1, ..u)"), ["E0016 12..14"]);
+    // After the base come one or more named fields (`grammar.struct_lit`).
+    assert_eq!(errors("User(..u)"), ["E0016 8..9"]);
+    assert_eq!(
+        messages("User(..u)"),
+        ["expected `,` and `name:`, found `)`"]
+    );
+    assert_eq!(errors("User(..u,)"), ["E0016 9..10"]);
+    assert_eq!(
+        messages("User(..u, 1)"),
+        ["expected `name:`, found the number `1`"]
+    );
+    assert_eq!(errors("User(..u, id: 1, 2)"), ["E0016 17..18"]);
+    assert_eq!(
+        messages("User(id: 1, ..u)"),
+        ["expected an expression or `name:`, found `..`"]
+    );
+    // A line break in the list is spacing, so a value on the line after `name:` is its value.
+    assert_eq!(tree("f(email:\n  e)"), tree("f(email: e)"));
+    assert_eq!(tree("f(email\n  : e)"), tree("f(email: e)"));
+}
+
+/// A block where an expression is expected, which Quince doesn't have
+/// (`r[expr.block.no-bare]`), is one E0016 at its `{`, and the parser skips to its `}`.
+#[test]
+fn a_bare_block_is_one_error() {
+    assert_eq!(errors("{\n    let y = 1\n  }"), ["E0016 0..1"]);
+    assert_eq!(errors("g({\n    let y = 1\n  }, 2)"), ["E0016 2..3"]);
+    assert_eq!(
+        messages("{\n    let y = 1\n  }"),
+        ["expected an expression, found a block"]
+    );
+    // Whatever statement comes first, as long as no entry's `:` comes before the statement.
+    assert_eq!(errors("{\n    g()\n    let y = 1\n  }"), ["E0016 0..1"]);
+    assert_eq!(
+        errors("{\n    log(1)\n    var y = {\n      while ok {}\n    }\n  } + 1"),
+        ["E0016 0..1"]
+    );
+    // A bracket left open in the block is its own slip, and the block still skips to its `}`.
+    assert_eq!(
+        errors("{\n    g(1\n    let y = 1\n  }"),
+        ["E0016 0..1", "E0017 7..8"]
+    );
+    // A map with an entry is a map missing its `}`.
+    assert_eq!(errors("{\"a\": 1\n  let y = 1"), ["E0017 0..1"]);
+    let text = "fn f() {\n  {\n    var x = 1\n  }\n  g()\n}\n";
+    let errors: Vec<_> = checked(text)
+        .errors()
+        .iter()
+        .map(|e| (e.range.start, e.range.end))
+        .collect();
+    assert_eq!(errors, [(11, 12)]);
+}
+
+/// An attribute's arguments may be named too.
+#[test]
+fn named_attribute_arguments() {
+    let parse = checked("@deprecated(\"why\", use: g)\nfn f() {}\n");
+    assert_eq!(parse.errors(), []);
+    assert!(
+        parse
+            .syntax()
+            .descendants()
+            .any(|node| node.kind() == SyntaxKind::NamedArg)
+    );
+    let errors = checked("@deprecated(..g)\nfn f() {}\n").errors().to_vec();
+    assert_eq!(errors.len(), 1);
+    assert_eq!(errors[0].code, "E0016");
+}

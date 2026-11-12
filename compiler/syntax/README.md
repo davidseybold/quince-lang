@@ -132,8 +132,15 @@ A node holds its tokens and child nodes in source order. A part the code leaves 
 | `Binary` | An expression, an operator other than a range's, and an expression. `>>` and `>=` are one token each. |
 | `Prefix` | `-`, `!` or `~`, and an expression. |
 | `Paren` | `(`, an expression, and `)`. |
+| `Tuple` | `(`, two or more expressions and their commas, and `)`, or just `(` and `)` for the unit value. |
+| `MapLit` | `{`, `MapEntry` nodes and their commas, and `}`, or `{`, `:` and `}` for the empty map. |
+| `MapEntry` | An expression, `:` and an expression. |
+| `Index` | An expression, `[`, an expression, and `]`. |
+| `Try` | An expression and `?`. |
 | `Call` | The callee, any expression, and an `ArgList`. A method call is a `Call` whose callee is a `Field`, and a struct literal or a variant is a `Call` too, since only name resolution can tell them apart. |
-| `ArgList` | `(`, expressions and their commas, and `)`. |
+| `ArgList` | `(`, the arguments and their commas, and `)`. An argument is an expression or a `NamedArg`. The first may be an `UpdateArg`, and then each argument after it is a `NamedArg`, at least one. |
+| `NamedArg` | A `NameRef`, `:`, and an expression if there is one. |
+| `UpdateArg` | `..` and an expression: the base of a struct update. |
 | `Field` | An expression, `.`, and a `NameRef` or a tuple position's `Int`. |
 | `Skipped` | The tokens the parser skipped after an error, a bracket and what it holds included. |
 
@@ -154,6 +161,7 @@ The parser reads the significant tokens: every token but the trivia and the doc 
   - A bracket closed while the parser is skipping after an error gets no E0017, since that error covers the slip.
   - After a bracket closes without its closing bracket, what the constructs around it lack is part of that slip, until the parser next takes a token. A line break there ends them, whatever token comes before it.
   - An E0016 after a list item, at an item that starts the next line, has a fix that inserts the `,` (`needs-review`).
+  - A map literal's list that a block's member start (`let`, `var` or `while` at the start of a line) closes before any entry's `:` was a block, which can't go where an expression goes. That is one E0016 at the `{`, not an E0017, and the parser skips the rest of the block up to its `}`. A map with an entry before that line is a map missing its `}`, an E0017.
 - **Operators.** The parser accepts any mix of binary operators and builds the tree of the usual reading, then reports what the spec forbids. The usual reading puts the operators with no level where the spec's examples do, so the order, tightest first, is postfix, prefix, `*` `/` `%`, `+` `-`, `<<` `>>`, `&`, `^`, `|`, `..` `..=`, comparisons, `&&`, `||`. Every level groups to the left, comparisons and ranges included, and their chains are E0020s.
   - A `>` and a `>` or `=` right after it, with no trivia between, are one operator, `>>` or `>=`, which the tree holds as one `GtGt` or `GtEq` token. A closing `>` of type arguments is never joined.
   - After a binary operator a line break is spacing, `*` and `>` included, which `continues_line()` leaves to the parser. After `-` it is spacing too, since `-` can be binary, but after `!` or `~` it ends the line.
@@ -173,3 +181,4 @@ The parser reads the significant tokens: every token but the trivia and the doc 
 | E0019 | An operand that needs parentheses: `&&` mixed with `||`, a bit operator or a shift as an operand of another operator or with an arithmetic operand, `&`, `|` or `^` mixed, a shift of a shift, or a range as an operand | Add the parentheses of the usual reading (`needs-review`) |
 | E0020 | A chained comparison or range, at its second operator | For comparisons, repeat each middle operand: `a < b && b < c` (`needs-review`), in parentheses when the chain is an operand of `\|\|`. None when a middle operand holds a comment or a line break or needs parentheses itself, and none for ranges |
 | E0024 | A struct with no fields written with braces, at the braces | Remove them (`safe`), unless a `requires` follows or a comment lies before or between them |
+| E0025 | `{}` where an expression is expected, over the braces | Insert `:` after the `{` (`needs-review`) |

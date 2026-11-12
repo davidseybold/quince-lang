@@ -101,7 +101,7 @@ r[item.struct.field-private]
 - Each field is private unless marked `pub`, as in `pub struct Account { pub id: AccountId, balance: Money }`.
 
 r[item.struct.literal-visibility]
-- A struct literal or a `Type(..x)` update can be written only where every field is visible, so a type with private fields can only be built through its own functions. Invariants are stated once, with `requires` on the struct ([Contracts](contracts.md)).
+- A struct literal or a `Type(..x, …)` update can be written only where every field is visible, so a type with private fields can only be built through its own functions. Invariants are stated once, with `requires` on the struct ([Contracts](contracts.md)).
 
 ## Enums (algebraic data types)
 

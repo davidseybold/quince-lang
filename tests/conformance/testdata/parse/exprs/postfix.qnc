@@ -1,0 +1,17 @@
+// rule: grammar.postfix
+// rule: grammar.args
+// rule: grammar.arg
+// mode: parse
+// Postfix forms: fields, tuple positions, method calls with type arguments, calls, indexes and
+// `?`. An argument may be named, and `name:` alone passes the binding of that name.
+fn f(xs: List<Int>, pair: (Int, Int), email: String) -> Result<Int, Error> {
+  let first = xs[0]
+  let nested = grid[i][j + 1].len()
+  let n = parse<Int>(text)?
+  let user = User(id: UserId(1), email:, name: "Ada")
+  let deep = pair.0
+  let m = load()?.rows[0]?
+  let open = xs[0 //~ E0017
+  let empty = xs[] //~ E0016
+  Ok(n)
+}

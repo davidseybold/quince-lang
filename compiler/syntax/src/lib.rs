@@ -41,6 +41,7 @@ pub mod codes {
     pub const PARENTHESES_NEEDED: &str = "E0019";
     pub const CHAINED_OPERATOR: &str = "E0020";
     pub const EMPTY_STRUCT_BRACES: &str = "E0024";
+    pub const EMPTY_BRACES: &str = "E0025";
     /// The codes the lexer and `decode_source` report. The lexer's mutation test requires
     /// every one of them from its mutants.
     pub const LEXER: &[&str] = &[
@@ -67,6 +68,7 @@ pub mod codes {
         PARENTHESES_NEEDED,
         CHAINED_OPERATOR,
         EMPTY_STRUCT_BRACES,
+        EMPTY_BRACES,
     ];
 
     /// Every code this crate reports.

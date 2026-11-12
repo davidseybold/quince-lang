@@ -1,5 +1,5 @@
-//! Blocks, statements and expressions: `let`, literals, names, list literals, operators,
-//! calls, method calls and fields. Later layers of the parser add the rest.
+//! Blocks, statements and expressions: `let`, literals, names, collections, operators and
+//! postfix forms. Later layers of the parser add the rest.
 
 use super::input::Break;
 use super::{Completed, Holds, Parser, Sync, items, types};
@@ -431,8 +431,8 @@ fn follows_type_args(p: &Parser, end: usize) -> bool {
     }
 }
 
-/// A primary expression and its calls, method calls and fields (`grammar.postfix`). `None`
-/// when there is no expression, after reporting it.
+/// A primary expression and its postfix forms (`grammar.postfix`): calls, fields and method
+/// calls, indexes and `?`. `None` when there is no expression, after reporting it.
 fn postfix(p: &mut Parser) -> Option<Completed> {
     let mut done = primary(p)?;
     loop {
@@ -454,6 +454,15 @@ fn postfix(p: &mut Parser) -> Option<Completed> {
             if p.recovering {
                 break;
             }
+        } else if p.at(LBracket) {
+            let marker = p.precede(done);
+            p.bump();
+            in_brackets(p, RBracket);
+            done = p.complete(marker, Index);
+        } else if p.at(Question) {
+            let marker = p.precede(done);
+            p.bump();
+            done = p.complete(marker, Try);
         } else {
             break;
         }
@@ -461,10 +470,10 @@ fn postfix(p: &mut Parser) -> Option<Completed> {
     Some(done)
 }
 
-/// A literal, a name, `self`, `Self`, a list literal or an expression in parentheses
-/// (`grammar.primary`). A statement starts
-/// after a break, so this doesn't check for one: each caller has taken a token that continues
-/// the line, or is at the start of a statement.
+/// A literal, a name, `self`, `Self`, a list or map literal, a tuple, or an expression in
+/// parentheses (`grammar.primary`). A statement starts after a break, so this doesn't check
+/// for one: each caller has taken a token that continues the line, or is at the start of a
+/// statement.
 fn primary(p: &mut Parser) -> Option<Completed> {
     let marker = p.start();
     let kind = match p.kind() {
@@ -490,16 +499,12 @@ fn primary(p: &mut Parser) -> Option<Completed> {
             ListLit
         }
         LParen => {
-            p.bump();
-            p.push_frame(Holds::Items, Some(RParen));
-            match p.stop() {
-                Some(stop) => p.close_frame(stop),
-                None => {
-                    expr(p);
-                    p.end_list(RParen);
-                }
-            }
-            Paren
+            p.abandon(marker);
+            return Some(paren(p));
+        }
+        LBrace => {
+            p.abandon(marker);
+            return Some(map_lit(p));
         }
         _ => {
             p.abandon(marker);
@@ -508,6 +513,135 @@ fn primary(p: &mut Parser) -> Option<Completed> {
         }
     };
     Some(p.complete(marker, kind))
+}
+
+/// One expression and the closing bracket after it, after the opening one, which the caller
+/// took.
+fn in_brackets(p: &mut Parser, closer: SyntaxKind) {
+    p.push_frame(Holds::Items, Some(closer));
+    match p.stop() {
+        Some(stop) => p.close_frame(stop),
+        None => {
+            expr(p);
+            p.end_list(closer);
+        }
+    }
+}
+
+/// `()`, a tuple of two or more expressions (`grammar.tuple`), or one expression in
+/// parentheses. One expression and a `,` is an error, since a tuple has two or more.
+fn paren(p: &mut Parser) -> Completed {
+    let marker = p.start();
+    p.bump();
+    if p.kind() == RParen {
+        p.bump();
+        return p.complete(marker, Tuple);
+    }
+    p.push_frame(Holds::Items, Some(RParen));
+    if let Some(stop) = p.stop() {
+        p.close_frame(stop);
+        return p.complete(marker, Paren);
+    }
+    expr(p);
+    if p.kind() != Comma {
+        p.end_list(RParen);
+        return p.complete(marker, Paren);
+    }
+    p.bump();
+    if p.kind() == RParen {
+        p.expected("a second expression");
+    }
+    p.list_items(RParen, "an expression", expr, starts_expr, false);
+    p.complete(marker, Tuple)
+}
+
+/// A map literal, where `{` starts an expression (`grammar.map_lit`,
+/// `r[expr.block.brace-map]`): `{:}`, or entries in braces. `{}` is an E0025, whose fix
+/// writes `{:}` (`r[lex.lit.empty-map]`). When a block's statement closes the list before
+/// any entry, the braces were a block, which can't go here (`r[expr.block.no-bare]`): one
+/// E0016 at the `{`, and the rest of the block up to its `}` is skipped.
+fn map_lit(p: &mut Parser) -> Completed {
+    let marker = p.start();
+    let open = p.pos;
+    p.bump();
+    if p.kind() == RBrace {
+        let brace = p.input.tokens[open].range.clone();
+        let range = brace.start..p.input.tokens[p.pos].range.end;
+        let message = "`{}` isn't a value: the empty map is `{:}`".to_string();
+        let error = SyntaxError::new(range, codes::EMPTY_BRACES, message).with_fix(
+            "write the empty map",
+            Applicability::NeedsReview,
+            vec![(brace.end..brace.end, ":".to_string())],
+        );
+        // `{}` is whole, so it isn't a slip that hides the operators around it.
+        let after_error = p.current().is_some_and(|t| t.after_error);
+        if !(p.recovering || p.closed_early || after_error) {
+            p.emit(error);
+        }
+        p.bump();
+    } else if p.kind() == Colon && p.nth_kind(1) == RBrace {
+        p.bump();
+        p.bump();
+    } else {
+        p.push_frame(Holds::Map, Some(RBrace));
+        p.list_items(RBrace, "a map entry", entry, starts_expr, false);
+        if p.block_at == Some(open) {
+            p.block_at = None;
+            skip_block(p);
+        }
+    }
+    p.complete(marker, MapLit)
+}
+
+/// The rest of a block written where an expression goes, into a `Skipped` node, up to and
+/// including the `}` that closes it. A line that starts a member of the file or an `impl`
+/// body ends it, as it ends any skip.
+fn skip_block(p: &mut Parser) {
+    let marker = p.start();
+    let mut open = 1;
+    let mut skipped = false;
+    while let Some(token) = p.current() {
+        let kind = token.kind;
+        let member = p
+            .member_holder()
+            .is_some_and(|at| matches!(p.frames[at].holds, Holds::File | Holds::Body));
+        if member {
+            break;
+        }
+        p.take();
+        skipped = true;
+        match kind {
+            LBrace => open += 1,
+            RBrace if open == 1 => break,
+            RBrace => open -= 1,
+            _ => {}
+        }
+    }
+    if skipped {
+        p.complete(marker, Skipped);
+    } else {
+        p.abandon(marker);
+    }
+}
+
+/// expr `:` expr (`grammar.entry`). With no expression, there is no entry, only the error.
+fn entry(p: &mut Parser) {
+    if !starts_expr(p.kind()) {
+        return expr(p);
+    }
+    let marker = p.start();
+    expr(p);
+    if !p.recovering {
+        if p.kind() == Colon {
+            p.bump();
+            expr(p);
+        } else if !p.frame_closes_here() {
+            // A line break in the braces is spacing, so the error is the token after it.
+            let error = p.unexpected("`:`", false);
+            p.report(error);
+        }
+    }
+    p.complete(marker, MapEntry);
 }
 
 /// The tokens that can start an expression.
@@ -524,6 +658,7 @@ fn starts_expr(kind: SyntaxKind) -> bool {
             | SelfTypeKw
             | LBracket
             | LParen
+            | LBrace
             | Minus
             | Bang
             | Tilde
@@ -560,22 +695,81 @@ pub(super) fn literal(p: &mut Parser) -> Completed {
 }
 
 /// An attribute's arguments: `(` arg { `,` arg } [ `,` ] `)` (`grammar.attribute`), at least
-/// one. Layer 3 of the parser adds named arguments here too.
+/// one.
 pub(super) fn attribute_args(p: &mut Parser) {
     let marker = p.start();
     p.bump();
     if p.kind() == RParen {
         p.expected("an expression");
     }
-    p.list(RParen, "an expression", expr, starts_expr);
+    p.list(RParen, "an expression", arg, starts_expr);
     p.complete(marker, ArgList);
 }
 
-/// `(` [ arg { `,` arg } [ `,` ] ] `)` (`grammar.args`). Layer 3 of the parser adds named
-/// arguments.
+/// `(` [ arg { `,` arg } [ `,` ] ] `)` (`grammar.args`), where the first argument may be
+/// `..` and an expression, the base of a struct update (`r[item.struct.update]`). Only name
+/// resolution can tell a struct from a function, so any call takes one. After the base come
+/// one or more named fields (`grammar.struct_lit`), so `User(..user)`, which would mean
+/// `user`, is an error.
 fn arg_list(p: &mut Parser) {
     let marker = p.start();
     p.bump();
-    p.list(RParen, "an expression", expr, starts_expr);
+    if p.kind() == DotDot {
+        p.push_frame(Holds::Items, Some(RParen));
+        let base = p.start();
+        p.bump();
+        if p.at_break() {
+            p.expected("an expression");
+        } else {
+            expr(p);
+        }
+        p.complete(base, UpdateArg);
+        if p.kind() == RParen {
+            p.expected("`,` and `name:`");
+        } else if p.kind() == Comma && p.nth_kind(1) == RParen {
+            p.bump();
+            p.expected("`name:`");
+        }
+        p.list_items(RParen, "`name:`", field_arg, |kind| kind == Ident, true);
+    } else {
+        p.list(RParen, "an expression", arg, starts_expr);
+    }
     p.complete(marker, ArgList);
+}
+
+/// An expression, or a name, `:` and an expression if there is one (`grammar.arg`). `name:`
+/// alone, before a `,` or the `)`, passes the binding of that name. A line break in the list is
+/// spacing, after the `:` too.
+fn arg(p: &mut Parser) {
+    if at_named(p) {
+        return named_arg(p);
+    }
+    if p.kind() == DotDot {
+        return p.expected("an expression or `name:`");
+    }
+    expr(p);
+}
+
+/// A named argument after a struct update's base (`grammar.field_init`).
+fn field_arg(p: &mut Parser) {
+    if at_named(p) {
+        named_arg(p);
+    } else {
+        p.expected("`name:`");
+    }
+}
+
+fn at_named(p: &Parser) -> bool {
+    p.kind() == Ident && p.nth_kind(1) == Colon
+}
+
+/// A name, `:` and an expression if there is one: `name:` alone, before a `,` or the `)`.
+fn named_arg(p: &mut Parser) {
+    let marker = p.start();
+    p.bump_node(NameRef);
+    p.bump();
+    if !matches!(p.kind(), Comma | RParen) {
+        expr(p);
+    }
+    p.complete(marker, NamedArg);
 }

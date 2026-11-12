@@ -244,6 +244,10 @@ Doc comments and attributes aren't member starts: they belong to the declaration
 | `if x` followed by a line `{` | E0018 |
 | `a; b` | E0002 |
 | `"press "b" now"` | E0016, expecting a line break |
+| `let x = {` then lines `let y = 1` and `}` | E0016 at `{`, which found a block (layer 3c) |
+| `let x = {` then lines `g()`, `let y = 1` and `}` | E0016 at `{` |
+| `let m = {"a": 1` then a line `let y = 1` | E0017 at `{` |
+| `g({` then lines `let y = 1` and `})` | E0016 at `{` |
 
 ### 10. Diagnostics
 
@@ -515,7 +519,7 @@ Layer 3 is three PRs (decided by David, 2026-11-12), since together they would r
 - [x] Type arguments in expressions, `.name<T>(...)` included; negative literals, unit-tested only (decision 11). [`expr.op.type-args`]
 
 **Layer 3c: `m1/parser-postfix`**
-- [ ] Postfix forms, tuples, maps, `{}` and E0025, named arguments (attribute arguments too), `..base`. [`lex.lit.collections`, `lex.lit.empty-map`, `expr.block.brace-map`, `item.struct.update`, `intro.excl.macros`]
+- [x] Postfix forms, tuples, maps, `{}` and E0025, named arguments (attribute arguments too), `..base`. [`lex.lit.collections`, `lex.lit.empty-map`, `expr.block.brace-map`, `item.struct.update`, `intro.excl.macros`, `grammar.postfix`, `grammar.args`, `grammar.arg`, `grammar.tuple`, `grammar.primary`, `grammar.map_lit`, `grammar.entry`]
 
 **Layer 4: `m1/parser-stmts`**
 - [ ] Spec: questions 3, 12 and 13, and a bump.
