@@ -2,6 +2,7 @@
 //! The README's CST section has the contract, and `docs/design/m1-parser.md` the design. Each
 //! grammar area has its own module.
 
+mod arms;
 mod exprs;
 mod input;
 mod items;
@@ -235,8 +236,9 @@ struct Parser<'t> {
     closed_early: bool,
     /// The parser is in a `fn` header, where a line that starts with `->` or `{` continues.
     in_fn_header: bool,
-    /// The parser is in the condition of an `if` or a `while`, and this many frames are open
-    /// at its top, where `{` always starts the block (`r[expr.block.cond-brace]`).
+    /// The parser is in the condition of an `if` or a `while`, the subject of a `match` or the
+    /// iterable of a `for`, and this many frames are open at its top, where `{` always starts
+    /// the block (`r[expr.block.cond-brace]`).
     condition_frames: Option<usize>,
     /// The parser has just taken attributes, so the line after them continues what they
     /// apply to.

@@ -260,7 +260,7 @@ The operators Quince leaves out (`r[expr.op.excluded]`) get no code or hint of t
 
 | Code | Problem | Fix | Rule from |
 | --- | --- | --- | --- |
-| E0016 | A token that can't go here: "expected X, found Y" | Insert a line break after an attribute on its declaration's line (`safe`); insert a missing `,` between list items on separate lines (`needs-review`); remove parentheses around a type that isn't a function type (`safe`, Q14). Otherwise none | |
+| E0016 | A token that can't go here: "expected X, found Y" | Insert a line break after an attribute on its declaration's line (`safe`); insert a missing `,` between list items on separate lines (`needs-review`), or after a match's last arm (`safe`); remove parentheses around a type that isn't a function type (`safe`, Q14). Otherwise none | |
 | E0017 | An opening bracket with no closing one, at the opener | None | |
 | E0018 | A line break that ends a statement too early, including before `else` or a body's `{` (decision 4) | Replace everything between the two tokens with a space (`safe`), unless a comment lies between them | Q3, Q12 |
 | E0019 | Operators that need parentheses (decision 6) | Add the parentheses for the usual reading (`needs-review`) | |
@@ -555,9 +555,9 @@ Layer 5 is two PRs (decided by David, 2026-11-12), since patterns with `match` a
 - [x] Patterns, `let` patterns and `is`. A pattern's `-` and its number are one literal, whatever lies between them (decision 5). A pattern missing from the line of its `let` is taken from the next line, as a missing condition is. An operator that binds tighter than a comparison can't follow the pattern of an `is` (`grammar.compare`): it is an E0016 (found in review). [`grammar.pattern`, `grammar.alt`, `grammar.tuple_pat`, `grammar.variant_pat`, `grammar.pfields`, `grammar.pfield`, `pat.negative`, `pat.const`, `expr.range.pattern`, `lex.grammar-rules`]
 
 **Layer 5b: `m1/parser-match`**
-- [ ] Spec (decided by David, 2026-11-12): extend `r[expr.block.cond-brace]` to a `match` subject and a `for` loop's `in` expression, whose `{` has the same problem (found in layer 4a's review). Wording: "In the condition of an `if` or `while`, the subject of a `match`, and the iterable of a `for`, `{` always starts the block. A map literal there is written in parentheses." It lands in the same PR as the `match` and `for` parsing, with a spec bump (v0.20). [`expr.block.cond-brace`]
-- [ ] Extend `parse/lexical/lists.qnc` with line breaks in match arms, which `r[lex.continue.lists]` covers (layer 4b).
-- [ ] `match`, guards, `for`. [`grammar.match_expr`, `grammar.arm`, `expr.match.arm-syntax`, `expr.match.arm-comma`]
+- [x] Spec (decided by David, 2026-11-12): extend `r[expr.block.cond-brace]` to a `match` subject and a `for` loop's `in` expression, whose `{` has the same problem (found in layer 4a's review). Wording: "In the condition of an `if` or `while`, the subject of a `match`, and the iterable of a `for`, `{` always starts the block. A map literal there is written in parentheses." It lands in the same PR as the `match` and `for` parsing, with a spec bump (v0.20). [`expr.block.cond-brace`]
+- [x] Extend `parse/lexical/lists.qnc` with line breaks in match arms, which `r[lex.continue.lists]` covers (layer 4b).
+- [x] `match`, guards, `for`. Every arm ends with a `,`, so a `}` right after an arm is an E0016 whose fix inserts it (`safe`). The `{` after a `match` subject or a `for` iterable uses the condition's machinery, `condition_frames` and `map_close`, so all four places share one test. A pattern missing from the line of its `let` or `for` is taken from the next line, as a missing condition is. [`grammar.match_expr`, `grammar.arm`, `expr.match.arm-syntax`, `expr.match.arm-block`, `expr.match.arm-comma`, `expr.match.guard`, `stmt.loop.stmt`]
 
 **Layer 6: `m1/parser-keyword-forms`**
 - [ ] Spec: question 7, and a bump. `concurrent`'s arguments take an optional trailing `,` (layer 2a's trailing-comma decision).

@@ -1,7 +1,7 @@
 // rule: expr.block.cond-brace
 // mode: parse
-// In the condition of an `if` or `while`, `{` always starts the block, so a map literal there
-// is written in parentheses.
+// In the condition of an `if` or `while`, the subject of a `match`, and the iterable of a
+// `for`, `{` always starts the block, so a map literal there is written in parentheses.
 fn f(m: Map<String, Int>, var n: Int) {
   if m == ({:}) {
     log("empty")
@@ -20,5 +20,18 @@ fn f(m: Map<String, Int>, var n: Int) {
   }
   while n > { //~ E0016
     n -= 1
+  }
+  let size = match ({"a": 1}).len() {
+    0 => "none",
+    _ => "some",
+  }
+  for (key, value) in ({"a": 1}) {
+    log(key)
+  }
+  let kind = match {"a": 1} { //~ E0016
+    _ => "map",
+  }
+  for entry in {"a": 1} { //~ E0016
+    log("entry")
   }
 }

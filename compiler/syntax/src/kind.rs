@@ -174,6 +174,15 @@ syntax_kinds! {
         FieldPat,
         /// Two or more patterns in parentheses.
         TuplePat,
+        /// `match`, an expression and a `MatchArmList`.
+        MatchExpr,
+        /// A `match`'s arms in braces.
+        MatchArmList,
+        MatchArm,
+        /// `if` and an expression, between an arm's pattern and its `=>`.
+        MatchGuard,
+        /// `for`, a pattern, `in`, an expression and a block.
+        ForStmt,
     ],
 }
 
@@ -218,6 +227,7 @@ impl SyntaxKind {
                 | AliasDecl
                 | FieldDecl
                 | Variant
+                | MatchArm
         )
     }
 

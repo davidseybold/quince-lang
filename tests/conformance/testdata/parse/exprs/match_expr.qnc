@@ -1,0 +1,48 @@
+// rule: grammar.match_expr
+// rule: grammar.arm
+// rule: expr.match.arm-syntax
+// rule: expr.match.arm-block
+// rule: expr.match.arm-comma
+// rule: expr.match.guard
+// mode: parse
+// `match` takes an expression and its arms in braces. An arm is a pattern, a guard if there
+// is one, `=>`, and an expression or a block. Every arm ends with a comma, a block arm
+// included. In an arm, `{` starts a block.
+fn f(shape: Shape, n: Int) -> Int {
+  let area = match shape {
+    Shape.Circle(radius:) => radius * radius * 3,
+    Shape.Rect(width:, height:) => {
+      let a = width * height
+      a
+    },
+    Shape.Point => 0,
+  }
+  let sign = match n {
+    0 => 0,
+    m if m > 0 => 1,
+    m if m < -100 => {
+      log("far")
+      -1
+    },
+    _ => -1,
+  }
+  match n {
+    1 | 2 => log("small"),
+    _ => {},
+  }
+  let nested = match shape {
+    Shape.Point => match n { 0 => 0, _ => 1, },
+    _ => 2,
+  }
+  let last = match n { 0 => 0, _ => 1 } //~ E0016
+  let block = match n { _ => { 1 } } //~ E0016
+  let between = match n {
+    0 => 0
+    _ => 1, //~ E0016
+  }
+  let arrow = match n { 0 1, } //~ E0016
+  let pattern = match n { => 1, } //~ E0016
+  let body = match n { 0 =>, } //~ E0016
+  let braces = match n { 0 => { "a": 1 }, } //~ E0016
+  area
+}

@@ -402,6 +402,162 @@ fn a_brace_in_a_condition_is_one_error() {
     );
 }
 
+/// `match`, its subject and its arms in braces. An arm is a pattern, a guard if there is one,
+/// `=>`, and an expression or a block (`grammar.match_expr`, `grammar.arm`).
+#[test]
+fn match_and_its_arms() {
+    assert_eq!(
+        stmts("match x {\n  0 => a,\n  n if n > 0 => { b },\n}"),
+        r#"MatchExpr
+  MatchKw "match"
+  NameRef
+    Ident "x"
+  MatchArmList
+    LBrace "{"
+    MatchArm
+      LiteralPat
+        Literal
+          Int "0"
+      FatArrow "=>"
+      NameRef
+        Ident "a"
+    Comma ","
+    MatchArm
+      BindPat
+        Name
+          Ident "n"
+      MatchGuard
+        IfKw "if"
+        Binary
+          NameRef
+            Ident "n"
+          Gt ">"
+          Literal
+            Int "0"
+      FatArrow "=>"
+      Block
+        LBrace "{"
+        NameRef
+          Ident "b"
+        RBrace "}"
+    Comma ","
+    RBrace "}"
+"#
+    );
+    assert_eq!(
+        stmts("match x {}"),
+        r#"MatchExpr
+  MatchKw "match"
+  NameRef
+    Ident "x"
+  MatchArmList
+    LBrace "{"
+    RBrace "}"
+"#
+    );
+    // The arms are a list, so a line break before a `,` or the `}` is spacing, and a line that
+    // starts with `=>` continues the arm, an E0018.
+    assert_eq!(
+        stmts("match x {\n  0 => a\n  , _ => b\n  ,\n}"),
+        stmts("match x { 0 => a, _ => b, }")
+    );
+    assert_eq!(
+        errors("  match x {\n    0\n    => a,\n  }"),
+        ["E0018 17..18"]
+    );
+}
+
+/// Comment lines directly above an arm go inside it, as they do above a declaration.
+#[test]
+fn comments_above_an_arm() {
+    let text = "fn f() {\n  match x {\n    // zero\n    0 => a,\n  }\n}\n";
+    let arm = checked(text)
+        .syntax()
+        .descendants()
+        .find(|node| node.kind() == crate::SyntaxKind::MatchArm)
+        .expect("an arm");
+    assert_eq!(arm.text().to_string(), "// zero\n    0 => a");
+}
+
+/// `for`, a pattern, `in`, an expression and a block (`grammar.stmt`).
+#[test]
+fn for_loops() {
+    assert_eq!(
+        stmts("for (k, v) in m { a }"),
+        r#"ForStmt
+  ForKw "for"
+  TuplePat
+    LParen "("
+    BindPat
+      Name
+        Ident "k"
+    Comma ","
+    BindPat
+      Name
+        Ident "v"
+    RParen ")"
+  InKw "in"
+  NameRef
+    Ident "m"
+  Block
+    LBrace "{"
+    NameRef
+      Ident "a"
+    RBrace "}"
+"#
+    );
+    // `for` is a statement, so it isn't a value (`r[stmt.loop.stmt]`).
+    assert_eq!(errors("  let v = for x in xs { a }"), ["E0016 10..13"]);
+}
+
+/// Every arm ends with a `,` (`r[expr.match.arm-comma]`), so a `}` right after one is an
+/// E0016 whose fix inserts it. Each slip in a `match` or a `for` is one error.
+#[test]
+fn match_and_for_slips() {
+    let fixed = |body: &str| {
+        let text = format!("{PREFIX}{body}\n}}\n");
+        let parse = checked(&text);
+        parse
+            .errors()
+            .iter()
+            .filter_map(|e| {
+                let [fix] = e.fixes.as_slice() else {
+                    return None;
+                };
+                let mut fixed = text.clone();
+                for (range, with) in fix.edits.iter().rev() {
+                    fixed.replace_range(range.start as usize..range.end as usize, with);
+                }
+                Some(fixed[PREFIX.len()..fixed.len() - "\n}\n".len()].to_string())
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(errors("  match x { 0 => a }"), ["E0016 19..20"]);
+    assert_eq!(fixed("  match x { 0 => a }"), ["  match x { 0 => a, }"]);
+    assert_eq!(
+        fixed("  match x {\n    _ => { a }\n  }"),
+        ["  match x {\n    _ => { a },\n  }"]
+    );
+    assert_eq!(
+        errors("  match x {\n    0 => a\n    _ => b,\n  }"),
+        ["E0016 27..28"]
+    );
+    assert_eq!(errors("  match x { 0 a, }"), ["E0016 14..15"]);
+    assert_eq!(errors("  match x { => a, }"), ["E0016 12..14"]);
+    assert_eq!(errors("  match x { a if => b, }"), ["E0016 17..19"]);
+    assert_eq!(errors("  match { _ => a, }"), ["E0016 8..9"]);
+    assert_eq!(
+        errors("  match x {\n    0 => a,\n  let y = 1"),
+        ["E0017 10..11"]
+    );
+    assert_eq!(errors("  for x xs { a }"), ["E0016 8..10"]);
+    assert_eq!(errors("  for in xs { a }"), ["E0016 6..8"]);
+    assert_eq!(errors("  for x in { a }"), ["E0016 11..12"]);
+    // A pattern missing from the line of its `let` or `for` is taken from the next line.
+    assert_eq!(errors("  for\n    x in xs { a }"), ["E0016 5..6"]);
+    assert_eq!(errors("  let\n    (a, b) = p"), ["E0016 5..6"]);
+}
+
 /// Blocks nest, and a missing `}` is one E0017 at the `{` the next declaration closes.
 #[test]
 fn nested_blocks_close_at_a_declaration() {

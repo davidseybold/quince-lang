@@ -1,10 +1,10 @@
 // rule: lex.continue.lists
 // mode: parse
 // Inside parentheses, square brackets, angle brackets and the braces of a comma-separated
-// list, a line break before a `,` or the closing bracket is only spacing. Elsewhere in them a
-// line break works as it does in a block: a line that starts with `-` or `(` is a new item,
-// which needs a `,` before it. A block inside them is a line context again, and `else` still
-// goes on the line of the closing `}`.
+// list, such as match arms, a line break before a `,` or the closing bracket is only
+// spacing. Elsewhere in them a line break works as it does in a block: a line that starts
+// with `-` or `(` is a new item, which needs a `,` before it. A block inside them is a line
+// context again, and `else` still goes on the line of the closing `}`.
 struct Point {
   x: Int,
   y: Int
@@ -59,5 +59,21 @@ fn f(
   ) = pair_of(a, b)
   let (c, d
     (e, g)) = (a, (b, a)) //~ E0016
+  let named = match a {
+    0 => "zero"
+    , _ => "other"
+    ,
+  }
+  let arm = match a {
+    0 => {
+      let z = a
+      z
+    },
+    _ => b,
+  }
+  let tuple = match (a, b) {
+    (0, 0) => 0
+    (_, _) => 1, //~ E0016
+  }
   map
 }

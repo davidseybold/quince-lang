@@ -3,6 +3,10 @@ expr.block.brace-map
 expr.block.cond-brace
 expr.block.last-newline
 expr.block.no-bare
+expr.match.arm-block
+expr.match.arm-comma
+expr.match.arm-syntax
+expr.match.guard
 expr.op.bits.chain
 expr.op.bits.parens
 expr.op.compare.no-chain
@@ -18,6 +22,7 @@ grammar.alt
 grammar.arg
 grammar.args
 grammar.arith
+grammar.arm
 grammar.attribute
 grammar.bits
 grammar.block
@@ -45,6 +50,7 @@ grammar.import
 grammar.list_lit
 grammar.logic
 grammar.map_lit
+grammar.match_expr
 grammar.name_ref
 grammar.names
 grammar.newtype_decl
@@ -133,6 +139,7 @@ stmt.assign.no-chain
 stmt.assign.place
 stmt.assign.stmt
 stmt.loop.forms
+stmt.loop.stmt
 test.name
 test.name-escapes
 type.fn-parens
