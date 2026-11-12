@@ -173,7 +173,7 @@ pub(super) fn literal(p: &mut Parser) -> Completed {
 
 /// `(` [ arg { `,` arg } [ `,` ] ] `)` (`grammar.args`). Layer 3 of the parser adds named
 /// arguments.
-fn arg_list(p: &mut Parser) {
+pub(super) fn arg_list(p: &mut Parser) {
     let marker = p.start();
     p.bump();
     p.list(RParen, "an expression", expr, starts_expr);

@@ -1,0 +1,8 @@
+// rule: grammar.newtype_decl
+// mode: parse
+// A newtype wraps one type in parentheses, which may be `pub`.
+pub struct UserId(Int)
+struct Email(pub String)
+struct Wrapper<T>(List<T>)
+struct Two(Int, Int) //~ E0016
+struct Nothing() //~ E0016

@@ -1,0 +1,7 @@
+// rule: grammar.alias_decl
+// mode: parse
+// A type alias is `type`, a name, optional generic parameters, `=` and a type.
+type Handler = fn(Request) -> Response uses Net
+pub type Pairs<T> = List<(T, T)>
+type NotAType = 1 //~ E0016
+type NoEq Int //~ E0016

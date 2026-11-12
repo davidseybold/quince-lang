@@ -28,6 +28,8 @@ pub(super) struct Sig {
     /// When this is the first token after a line that holds an unclosed one-line literal, where
     /// that line starts. The lists opened on that line close before this token.
     pub closes_line_from: Option<usize>,
+    /// The index of the first doc comment between this token and the one before it.
+    pub docs_from: Option<usize>,
 }
 
 pub(super) struct Input {
@@ -54,6 +56,7 @@ impl Input {
         let mut brk = Break::None;
         let mut after_error = false;
         let mut closes_line_from = None;
+        let mut docs_from = None;
         let mut line_start = 0;
         // A one-line literal on this line has no closing quote.
         let mut unclosed = false;
@@ -76,7 +79,9 @@ impl Input {
                 }
                 Semicolon => brk = Break::Hard,
                 Error => after_error = true,
-                DocComment => {}
+                DocComment => {
+                    docs_from = docs_from.or(Some(index));
+                }
                 _ if kind.is_trivia() => {}
                 _ => {
                     match kind {
@@ -100,6 +105,7 @@ impl Input {
                         brk,
                         after_error,
                         closes_line_from: closes_line_from.take(),
+                        docs_from: docs_from.take(),
                     });
                     brk = Break::None;
                     after_error = false;

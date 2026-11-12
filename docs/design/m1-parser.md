@@ -498,9 +498,9 @@ Layer 2 is two PRs, since types and declarations are separate pieces of work and
 - [x] Trailing commas (decided by David, 2026-11-12): every bracketed list the formatter breaks across lines takes an optional trailing `,`, as `r[tool.fmt.trailing-comma]` adds one. The grammar's `fn_type`, `type_args`, `generics` and `bound` gain `[ "," ]` here, `attribute` in 2b, and the pattern and `concurrent` lists in layers 5 and 6. `effects` and `with` aren't bracketed, so a trailing `,` there stays an error.
 
 **Layer 2b: `m1/parser-decls`**
-- [ ] Spec: question 11, and a bump.
-- [ ] Struct, enum, newtype, alias and import declarations; attributes; doc comments; E0024. [`grammar.struct_decl`, `grammar.enum_decl`, `grammar.newtype_decl`, `grammar.alias_decl`, `grammar.import`, `grammar.attribute`, `item.attr.placement`, `item.enum.field-visibility`, `lex.comment.doc`, `intro.excl.wildcard-imports`, `item.struct.no-fields`]
-- [ ] Attribute look-past (decision 9): at the start of a line, the member-start check looks past attribute and doc-comment lines, so `g(1,` then a line `@attr` then `fn h() {}` closes the call with one E0017 and no E0016 at `@`.
+- [x] Spec: question 11, and a bump (v0.14). The `@test` attribute became `@test_only` (decided by David, 2026-11-12): `test` is a keyword, so `@test` couldn't parse.
+- [x] Struct, enum, newtype, alias and import declarations; attributes; doc comments; E0024. [`grammar.struct_decl`, `grammar.enum_decl`, `grammar.newtype_decl`, `grammar.alias_decl`, `grammar.import`, `grammar.attribute`, `item.attr.placement`, `item.enum.field-visibility`, `lex.comment.doc`, `intro.excl.wildcard-imports`, `item.struct.no-fields`]
+- [x] Attribute look-past (decision 9): at the start of a line, the member-start check looks past attribute and doc-comment lines, so `g(1,` then a line `@attr` then `fn h() {}` closes the call with one E0017 and no E0016 at `@`.
 
 **Layer 3: `m1/parser-exprs`**
 - [ ] Spec: questions 5 and 6, and a bump.

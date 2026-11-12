@@ -6,6 +6,7 @@ use std::path::Path;
 mod chars;
 mod control;
 mod cst;
+mod decls;
 mod errors;
 mod multiline;
 mod mutations;

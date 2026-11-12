@@ -62,11 +62,15 @@ pub fn parse_str(text: &str) -> Parse {
 
 fn parse_lexed(text: &str, lexed: Lexed) -> Parse {
     let input = Input::new(text, &lexed);
-    let significant: Vec<usize> = input.tokens.iter().map(|t| t.index).collect();
     let mut parser = Parser::new(text, &lexed, input);
     items::file(&mut parser);
+    debug_assert_eq!(
+        parser.pos,
+        parser.input.tokens.len(),
+        "the parser left a significant token"
+    );
     let events = into_events(parser.steps);
-    let (green, parser_errors) = cst::build(text, &lexed.tokens, &significant, events);
+    let (green, parser_errors) = cst::build(text, &lexed.tokens, &parser.taken, events);
     let mut errors = lexed.errors;
     errors.extend(parser_errors);
     // Stable, so the lexer's errors come first where both start at one offset.
@@ -153,7 +157,17 @@ enum Holds {
     File,
     /// The body of an `impl`.
     Body,
+    /// Struct braces, enum braces and a variant's fields: a list, whose member start is `pub`
+    /// and a name.
+    Fields,
     Block,
+}
+
+impl Holds {
+    /// A list context, where a line break is spacing.
+    fn is_list(self) -> bool {
+        matches!(self, Holds::Items | Holds::Fields)
+    }
 }
 
 /// An open construct that error recovery knows about: the file, and each bracket.
@@ -190,6 +204,9 @@ struct Parser<'t> {
     input: Input,
     pos: usize,
     steps: Vec<Step>,
+    /// The index of each lexer token the parser took, in order: the significant tokens, and
+    /// the doc comments it took as part of what they document. The rest is trivia.
+    taken: Vec<usize>,
     frames: Vec<Frame>,
     /// An error was reported and the parser hasn't taken a token since, so nothing more is
     /// reported (decision 9).
@@ -200,6 +217,11 @@ struct Parser<'t> {
     closed_early: bool,
     /// The parser is in a `fn` header, where a line that starts with `->` or `{` continues.
     in_fn_header: bool,
+    /// The parser has just taken attributes, so the line after them continues what they
+    /// apply to.
+    after_attributes: bool,
+    /// The file has had a declaration, so an import is out of place.
+    imports_closed: bool,
     lookahead: Cell<u32>,
 }
 
@@ -211,10 +233,13 @@ impl<'t> Parser<'t> {
             input,
             pos: 0,
             steps: Vec::new(),
+            taken: Vec::new(),
             frames: Vec::new(),
             recovering: false,
             closed_early: false,
             in_fn_header: false,
+            after_attributes: false,
+            imports_closed: false,
             lookahead: Cell::new(0),
         }
     }
@@ -250,7 +275,8 @@ impl<'t> Parser<'t> {
     /// A break before the current token ends the construct the parser is in (decision 4):
     /// there is one, and the token before it doesn't continue the line. Right after frames
     /// closed early, at a member start, every break ends it: the token before belongs to a
-    /// construct that is already closed.
+    /// construct that is already closed. Right after attributes, a line break doesn't: an
+    /// attribute goes on its own line.
     fn at_break(&self) -> bool {
         let Some(token) = self.current() else {
             return true;
@@ -258,6 +284,7 @@ impl<'t> Parser<'t> {
         match token.brk {
             Break::None => false,
             Break::Hard => true,
+            Break::Line if self.after_attributes => false,
             Break::Line if self.closed_early => true,
             Break::Line => {
                 let previous = self.input.tokens[self.pos - 1].kind;
@@ -288,8 +315,26 @@ impl<'t> Parser<'t> {
             "took a token past the end"
         );
         self.steps.push(Step::Token);
+        self.taken.push(self.input.tokens[self.pos].index);
         self.pos += 1;
+        self.after_attributes = false;
         self.lookahead.set(0);
+    }
+
+    /// Takes the doc comments right before the current token into a `DocComments` node, if
+    /// there are any. Those it doesn't take stay trivia.
+    fn doc_comments(&mut self) {
+        let Some(from) = self.current().and_then(|t| t.docs_from) else {
+            return;
+        };
+        let marker = self.start();
+        for index in from..self.input.tokens[self.pos].index {
+            if self.lexed.tokens[index].kind == DocComment {
+                self.steps.push(Step::Token);
+                self.taken.push(index);
+            }
+        }
+        self.complete(marker, DocComments);
     }
 
     fn start(&mut self) -> Marker {
@@ -385,8 +430,8 @@ impl<'t> Parser<'t> {
         };
         let top = self.frames.len() - 1;
         let frame = self.top();
-        if let (Some(line_start), Holds::Items, Some((_, opener))) =
-            (token.closes_line_from, frame.holds, frame.bracket)
+        if let (Some(line_start), true, Some((_, opener))) =
+            (token.closes_line_from, frame.holds.is_list(), frame.bracket)
             && self.input.tokens[opener].range.start >= line_start
         {
             return Some(Stop::LineEnd);
@@ -410,7 +455,8 @@ impl<'t> Parser<'t> {
     }
 
     /// When the current token starts a line and can only start a member of some containers,
-    /// the innermost open one.
+    /// the innermost open one. Attributes belong to the member after them, so the check looks
+    /// past them (decision 9).
     fn member_holder(&self) -> Option<usize> {
         if !self.starts_line() {
             return None;
@@ -426,14 +472,46 @@ impl<'t> Parser<'t> {
             TypeKw | ConstKw => true,
             _ => false,
         };
-        let public = usize::from(self.kind() == PubKw);
+        let past = self.attributes_len();
+        let public = past + usize::from(self.nth_kind(past) == PubKw);
         let holds = |holds: Holds| match holds {
             Holds::Items => false,
             Holds::File => item_start(public),
             Holds::Body => member_start(public),
-            Holds::Block => matches!(self.kind(), LetKw | VarKw | WhileKw),
+            Holds::Fields => public > past && self.nth_kind(public) == Ident,
+            Holds::Block => matches!(self.nth_kind(past), LetKw | VarKw | WhileKw),
         };
         self.frames.iter().rposition(|frame| holds(frame.holds))
+    }
+
+    /// How many tokens the attributes at the current token hold: each is `@`, a name, and its
+    /// arguments in parentheses if it has any. A direct scan: it takes nothing, and isn't a
+    /// loop that could stick.
+    fn attributes_len(&self) -> usize {
+        let tokens = &self.input.tokens[self.pos..];
+        let kind = |n: usize| tokens.get(n).map(|t| t.kind);
+        let mut n = 0;
+        while kind(n) == Some(At) {
+            n += 1;
+            if kind(n) == Some(Ident) {
+                n += 1;
+            }
+            if kind(n) == Some(LParen) {
+                let mut depth = 0usize;
+                while let Some(k) = kind(n) {
+                    n += 1;
+                    if closer_of(k).is_some() {
+                        depth += 1;
+                    } else if is_closer(k) {
+                        depth = depth.saturating_sub(1);
+                        if depth == 0 {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        n
     }
 
     // Errors.
@@ -663,6 +741,29 @@ impl<'t> Parser<'t> {
                     self.recover(Sync::List, false);
                 }
             }
+        }
+    }
+
+    /// The closing bracket of a list that holds one item, after it: what is left before the
+    /// bracket is skipped, after one E0016.
+    fn end_list(&mut self, closer: SyntaxKind) {
+        let close = format!("`{}`", punctuation(closer));
+        loop {
+            if self.kind() == closer {
+                self.pop_frame();
+                self.bump();
+                return;
+            }
+            if let Some(stop) = self.stop() {
+                self.close_frame(stop);
+                return;
+            }
+            if self.unmatched_closer() {
+                self.close_in_place(&close);
+                return;
+            }
+            self.expected(&close);
+            self.recover(Sync::List, true);
         }
     }
 

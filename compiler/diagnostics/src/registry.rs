@@ -100,6 +100,11 @@ pub const REGISTRY: &[CodeInfo] = &[
         "an opening bracket with no closing one",
         include_str!("../explain/E0017.md"),
     ),
+    error(
+        "E0024",
+        "a struct with no fields written with braces",
+        include_str!("../explain/E0024.md"),
+    ),
 ];
 
 const fn error(code: &'static str, title: &'static str, explain: &'static str) -> CodeInfo {

@@ -1,0 +1,20 @@
+// rule: lex.comment.doc
+// mode: parse
+// A doc comment attaches to the declaration, field, variant or variant field after it.
+/// A point on the plane.
+pub struct Point {
+  /// Across.
+  x: Int,
+  y: Int,
+}
+
+/// The shapes.
+/// Each has its own fields.
+@extensible
+enum Shape {
+  /// A circle.
+  Circle(
+    /// Its radius.
+    radius: Float,
+  ),
+}

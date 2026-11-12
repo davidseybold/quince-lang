@@ -1,0 +1,17 @@
+// rule: grammar.enum_decl
+// rule: grammar.evariant
+// rule: grammar.variant
+// rule: grammar.vfield
+// rule: item.enum.field-visibility
+// mode: parse
+// An enum's variants go in braces, separated by commas. A variant may have named fields in
+// parentheses, which are never `pub`: they have the enum's visibility.
+pub enum Shape {
+  Circle(radius: Float),
+  Rect(width: Float, height: Float,),
+  Point,
+}
+enum Choice<T> { Some(value: T), None }
+enum Never {}
+enum Visible { A(pub x: Int) } //~ E0016
+enum NoBraces //~ E0016
