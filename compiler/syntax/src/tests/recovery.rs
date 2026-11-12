@@ -362,6 +362,24 @@ fn a_line_break_too_early() {
         messages("fn f() {\n  let x\n  = 1\n}"),
         ["a line break can't come before `=`, which continues the line above"]
     );
+    assert_eq!(
+        messages("fn f() {\n  a\n  >= b\n}"),
+        ["a line break can't come before `>=`, which continues the line above"]
+    );
+}
+
+/// Type arguments accepted because a line break follows their `>` would be less-than once the
+/// lines were joined, so no fix joins them unless the next token may follow type arguments.
+#[test]
+fn no_join_that_changes_type_arguments() {
+    assert_eq!(
+        errors("fn f() {\n  let v = make<Int>\n    + 1\n}"),
+        ["E0018 28..29"]
+    );
+    assert_eq!(
+        errors("fn f() {\n  let v = make<Int>\n    ?\n}"),
+        [r#"E0018 28..29 => "fn f() {\n  let v = make<Int> ?\n}""#]
+    );
 }
 
 /// No fix joins lines with a comment between them.
@@ -393,6 +411,8 @@ fn what_doesnt_join() {
         codes("fn f() {\n  if a {};\n  else {}\n}"),
         ["E0002", "E0016"]
     );
+    // In a list a `;` is spacing too, apart from its E0002.
+    assert_eq!(codes("fn f() {\n  g(a;\n    + b)\n}"), ["E0002"]);
 }
 
 /// A keyword can't be a name, and the error names it (`r[lex.keyword-not-name]`).

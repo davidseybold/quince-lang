@@ -110,7 +110,7 @@ The parser checks that one function, `at_break()`, wherever a construct may end 
 **A break that ends a statement too early** is one error, E0018, not two. The parser reports E0018 at the break and parses on as though the lines were joined when the next line starts with:
 - a token that can't start a statement but would continue the construct the break ended: `=`, a compound assignment, `=>`, a binary operator that can't also start an expression, or `?`;
 - `else` after an `if`'s block (`r[lex.else-same-line]`). This applies in list contexts too, where breaks are otherwise spacing, since the spec's rule has no exception;
-- `{` where the construct the break ended needs its body next, as in `if x` followed by a line `{`. Outside a `fn` header, which `r[lex.continue.signature]` continues, a body's `{` sits on its construct's line.
+- `{` where the construct the break ended needs its body next, as in `if x` followed by a line `{`. Outside a `fn` header, which `r[lex.continue.fn-header]` continues, a body's `{` sits on its construct's line.
 
 A line that starts with `- b` or `(x)` isn't one of these: it can start a statement, so it is one, as `r[lex.line-end]` says.
 
@@ -540,10 +540,12 @@ Layer 4 is three PRs (decided by David, 2026-11-12), since together they would r
 **Layer 5: `m1/parser-patterns`**
 - [ ] Spec (decided by David, 2026-11-12): extend `r[expr.block.cond-brace]` to a `match` subject and a `for` loop's `in` expression, whose `{` has the same problem (found in layer 4a's review). Wording: "In the condition of an `if` or `while`, the subject of a `match`, and the iterable of a `for`, `{` always starts the block. A map literal there is written in parentheses." It lands in the same PR as the `match` and `for` parsing, with a spec bump. [`expr.block.cond-brace`]
 - [ ] Spec: `variant_pat` and `pfields` take an optional trailing `,` (layer 2a's trailing-comma decision).
+- [ ] Extend `parse/lexical/lists.qnc` with line breaks in match arms and patterns, which `r[lex.continue.lists]` covers (layer 4b).
 - [ ] Patterns, `match`, guards, `is`, `for`. [`grammar.pattern`, `grammar.match_expr`, `expr.match.arm-syntax`, `expr.match.arm-comma`, `pat.negative`, `pat.const`, `expr.range.pattern`, `lex.grammar-rules`]
 
 **Layer 6: `m1/parser-keyword-forms`**
 - [ ] Spec: question 7, and a bump. `concurrent`'s arguments take an optional trailing `,` (layer 2a's trailing-comma decision).
+- [ ] Extend `parse/lexical/fn_header.qnc` with closure headers and `requires`/`ensures` lines, which `r[lex.continue.fn-header]` covers (layer 4b).
 - [ ] Closures, `concurrent`, `background`, `select`, `with`, `spawn`, `return`, contracts. [`grammar.closure`, `grammar.concurrent`, `grammar.background`, `grammar.select`, `grammar.with_expr`, `grammar.jump`, `grammar.contract`, `expr.op.keyword-forms`]
 
 **Layer 7: `m1/parser-items`**

@@ -594,10 +594,7 @@ fn type_args(p: &mut Parser) {
 /// `}`, or comes after a line break or at the end of the file. So `=` and `>` aren't.
 fn follows_type_args(p: &Parser, end: usize) -> bool {
     match p.input.tokens.get(end) {
-        Some(next) if next.brk == Break::None => matches!(
-            next.kind,
-            LParen | Dot | Question | Comma | RParen | RBracket | RBrace
-        ),
+        Some(next) if next.brk == Break::None => super::can_follow_type_args(next.kind),
         _ => true,
     }
 }
@@ -870,7 +867,7 @@ fn entry(p: &mut Parser) {
     if !starts_expr(p.kind()) {
         return expr(p);
     }
-    let (marker, first) = (p.start(), p.pos);
+    let marker = p.start();
     expr(p);
     if !p.recovering {
         if p.kind() == Colon {
@@ -878,10 +875,10 @@ fn entry(p: &mut Parser) {
             expr(p);
         } else if !p.frame_closes_here() {
             let error = match p.top().bracket {
-                // The first entry has no `:`, and the braces end or a line starts after it: the
-                // braces hold statements, a block, which can't go here (`r[expr.block.no-bare]`).
+                // The braces hold no entry's `:`, and end or have a line after this item: they
+                // hold statements, a block, which can't go here (`r[expr.block.no-bare]`).
                 Some((_, opener))
-                    if opener + 1 == first && (p.kind() == RBrace || p.starts_line()) =>
+                    if (p.kind() == RBrace || p.starts_line()) && !p.braces_hold_entry(opener) =>
                 {
                     let range = p.input.tokens[opener].range.clone();
                     let message = "expected an expression, found a block".to_string();

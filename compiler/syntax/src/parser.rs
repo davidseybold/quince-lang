@@ -416,12 +416,24 @@ impl<'t> Parser<'t> {
         let commented = self.lexed.tokens[previous.index + 1..token.index]
             .iter()
             .any(|t| matches!(t.kind, Comment | BlockComment | DocComment));
-        let text = &self.text[token.range.clone()];
+        // Type arguments in an expression can be accepted because a line break follows their
+        // `>` (`r[expr.op.type-args]`). Joining the lines would make the `<` less-than, unless
+        // the token after the break may follow type arguments too.
+        let after_type_args = previous.kind == Gt
+            && self
+                .type_args_end
+                .values()
+                .any(|&end| end == Some(self.pos))
+            && !can_follow_type_args(token.kind);
+        let after_error = token.after_error;
+        let text = match self.joined_gt() {
+            Some(joined) => punctuation(joined),
+            None => &self.text[token.range.clone()],
+        };
         let message =
             format!("a line break can't come before `{text}`, which continues the line above");
-        let after_error = token.after_error;
         let mut error = SyntaxError::new(self.break_range(), codes::EARLY_LINE_BREAK, message);
-        if !commented {
+        if !commented && !after_type_args {
             error = error.with_fix(
                 "join the lines",
                 Applicability::Safe,
@@ -614,6 +626,29 @@ impl<'t> Parser<'t> {
                 open += 1;
             } else if is_closer(token.kind) {
                 open = open.saturating_sub(1);
+            } else if open == 0 && token.kind == Colon {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// The braces whose `{` is at `opener` hold an entry's `:`, outside any bracket inside
+    /// them, before their `}`. The scan stops at a line that starts with a member start, which
+    /// no map holds. A direct scan, done once, when an entry has no `:`.
+    fn braces_hold_entry(&self, opener: usize) -> bool {
+        let mut open = 0usize;
+        for token in &self.input.tokens[opener + 1..] {
+            if token.brk != Break::None && starts_member(token.kind) {
+                return false;
+            }
+            if closer_of(token.kind).is_some() {
+                open += 1;
+            } else if is_closer(token.kind) {
+                if open == 0 {
+                    return false;
+                }
+                open -= 1;
             } else if open == 0 && token.kind == Colon {
                 return true;
             }
@@ -1105,6 +1140,15 @@ fn starts_member(kind: SyntaxKind) -> bool {
             | LetKw
             | VarKw
             | WhileKw
+    )
+}
+
+/// The tokens that may come right after type arguments' `>` in an expression
+/// (`r[expr.op.type-args]`). So `=` and `>` can't.
+fn can_follow_type_args(kind: SyntaxKind) -> bool {
+    matches!(
+        kind,
+        LParen | Dot | Question | Comma | RParen | RBracket | RBrace
     )
 }
 

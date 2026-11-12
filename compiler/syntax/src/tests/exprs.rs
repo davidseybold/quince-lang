@@ -697,6 +697,16 @@ fn maps() {
         messages("{ g() }"),
         ["expected an expression, found a block"]
     );
+    assert_eq!(
+        messages("{\"a\"}"),
+        ["expected an expression, found a block"]
+    );
+    // Braces that hold an entry's `:` are a map, whose entry lacks its `:`.
+    assert_eq!(messages("{\"a\": 1, \"b\"}"), ["expected `:`, found `}`"]);
+    assert_eq!(
+        messages("{\n    \"a\"\n    \"b\": 2\n  }"),
+        ["expected `:`, found a string"]
+    );
 }
 
 /// E0025: `{}` where an expression is expected, whose fix writes `{:}`.
