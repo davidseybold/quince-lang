@@ -121,7 +121,7 @@ The parser reads the significant tokens: every token but the trivia and the doc 
   - A token at the start of a line that can only start a member of some open container closes every construct inside the innermost such container, with an E0017 at each opening bracket it closes. For the file those tokens are `fn` and a name, `struct`, `enum`, `type`, `interface`, `impl`, `effect`, `foreign`, `import`, `const` and `test`, each also after `pub`. For a block they are `let`, `var` and `while`.
   - A closing bracket that matches a bracket further out closes everything inside it, with an E0017 at each opener. One that matches nothing open closes the innermost list in its place, with one E0016 that names the bracket expected, and in a line context it is skipped as an E0016. The end of the file closes everything still open, with an E0017 at each opener.
   - A bracket closed while the parser is skipping after an error gets no E0017, since that error covers the slip.
-  - After a bracket closes without its closing bracket, what the constructs around it lack is part of that slip, until the parser next takes a token.
+  - After a bracket closes without its closing bracket, what the constructs around it lack is part of that slip, until the parser next takes a token. A line break there ends them, whatever token comes before it.
   - An E0016 after a list item, at an item that starts the next line, has a fix that inserts the `,` (`needs-review`).
 - **Errors the parser leaves to the lexer.** Beyond the lexer's own list (above):
   - The parser drops an error it would report right after an `Error` token, with only trivia between, so `let x = $` is the E0001 alone.

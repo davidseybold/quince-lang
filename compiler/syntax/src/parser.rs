@@ -246,7 +246,9 @@ impl<'t> Parser<'t> {
     }
 
     /// A break before the current token ends the construct the parser is in (decision 4):
-    /// there is one, and the token before it doesn't continue the line.
+    /// there is one, and the token before it doesn't continue the line. Right after frames
+    /// closed early, at a member start, every break ends it: the token before belongs to a
+    /// construct that is already closed.
     fn at_break(&self) -> bool {
         let Some(token) = self.current() else {
             return true;
@@ -254,6 +256,7 @@ impl<'t> Parser<'t> {
         match token.brk {
             Break::None => false,
             Break::Hard => true,
+            Break::Line if self.closed_early => true,
             Break::Line => {
                 let previous = self.input.tokens[self.pos - 1].kind;
                 let header_continues = self.in_fn_header

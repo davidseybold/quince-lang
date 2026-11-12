@@ -87,6 +87,39 @@ fn closers_after_an_error_are_silent() {
 #[test]
 fn a_declaration_closes_a_block() {
     assert_eq!(errors("fn f() {\n  g()\nfn h() {}\n"), ["E0017 7..8"]);
+    // So does `pub` and a declaration.
+    let text = "fn f() {\n  g(\npub fn h() {}\n";
+    assert_eq!(errors(text), ["E0017 7..8", "E0017 12..13"]);
+    assert_eq!(decls(text), [SyntaxKind::FnDecl, SyntaxKind::FnDecl]);
+}
+
+/// A member start ends the constructs it closes even after a token that continues the line,
+/// so the next declaration is parsed, and its own slips reported.
+#[test]
+fn a_declaration_after_a_token_that_continues_the_line() {
+    let text = "fn f() {\nfn g() {\n  x y\n}\n";
+    assert_eq!(errors(text), ["E0017 7..8", "E0016 22..23"]);
+    assert_eq!(decls(text), [SyntaxKind::FnDecl, SyntaxKind::FnDecl]);
+    let text = "fn f() {\n  g(\nfn h() {\n  x y\n}\n";
+    assert_eq!(errors(text), ["E0017 7..8", "E0017 12..13", "E0016 27..28"]);
+    assert_eq!(decls(text), [SyntaxKind::FnDecl, SyntaxKind::FnDecl]);
+    let text = "fn f() {\n  g(a,\nfn h() {\n  x y\n}\n";
+    assert_eq!(errors(text), ["E0017 7..8", "E0017 12..13", "E0016 29..30"]);
+    assert_eq!(decls(text), [SyntaxKind::FnDecl, SyntaxKind::FnDecl]);
+    let text = "fn f(a: Int,\nfn g() {}\n";
+    assert_eq!(errors(text), ["E0017 4..5"]);
+    assert_eq!(decls(text), [SyntaxKind::FnDecl, SyntaxKind::FnDecl]);
+}
+
+/// `let`, `var` and `while` start a statement of a block, so each closes the lists inside it.
+#[test]
+fn a_statement_closes_a_list() {
+    assert_eq!(errors("fn f() {\n  g(\n  let x = 1\n}\n"), ["E0017 12..13"]);
+    assert_eq!(errors("fn f() {\n  g(\n  var x = 1\n}\n"), ["E0017 12..13"]);
+    assert_eq!(
+        errors("fn f() {\n  g(\n  while x {}\n}\n"),
+        ["E0017 12..13"]
+    );
 }
 
 /// A closing bracket closes every list inside the bracket it matches.
@@ -174,6 +207,8 @@ fn nothing_is_reported_at_a_swallowed_end() {
     assert_eq!(codes("fn f() {\n  g(\"\"\"\n  text\n"), ["E0005"]);
     assert_eq!(codes("fn f() {\n  g(\n  /* never closed\n"), ["E0003"]);
     assert_eq!(codes("fn f /* never closed"), ["E0003"]);
+    // `/*/` ends with `*/`, but the two share the `*`, so it's still open.
+    assert_eq!(codes("fn f() {\n  g(\n/*/"), ["E0003"]);
     // A closed one still lets the end of the file report.
     assert_eq!(
         codes("fn f() {\n  g(\n  /* closed */\n"),
@@ -187,6 +222,8 @@ fn nothing_is_reported_at_a_swallowed_end() {
 fn nothing_is_reported_after_an_error_token() {
     assert_eq!(errors("fn f() {\n  let x = $\n}\n"), ["E0001 19..20"]);
     assert_eq!(codes("fn f() {\n  let x = 1 $ 2\n}\n"), ["E0001"]);
+    // An `Error` token last in the file: nothing is reported at the end.
+    assert_eq!(errors("fn f() ->$"), ["E0001 9..10"]);
 }
 
 /// A `;` is the lexer's error, and a hard break: it ends the statement even before a `.`.
