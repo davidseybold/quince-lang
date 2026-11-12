@@ -45,7 +45,7 @@ bounds       = bound { "+" bound }
 bound        = type_path [ "<" bound_arg { "," bound_arg } [ "," ] ">" ]
 bound_arg    = type_arg | Name "=" type   // Item = Int, Output = T
 
-attribute    = "@" name [ "(" arg { "," arg } ")" ]
+attribute    = "@" name [ "(" arg { "," arg } [ "," ] ")" ]
 
 type         = type_path [ type_args ] | "(" ")" | "(" type "," type { "," type } [ "," ] ")"
              | fn_type | "(" fn_type ")"

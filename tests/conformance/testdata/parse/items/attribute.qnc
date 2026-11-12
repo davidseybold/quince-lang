@@ -1,10 +1,16 @@
 // rule: grammar.attribute
 // rule: item.attr.placement
 // mode: parse
-// An attribute is `@`, a name and optional arguments, on its own line directly above the
-// declaration, field or variant it applies to.
+// An attribute is `@`, a name and optional arguments, on its own line above the declaration,
+// field or variant it applies to. Blank lines may come between them, and a trailing comma may
+// end the arguments.
 @deprecated("use g")
 fn f() {}
+@deprecated(
+  "use h",
+)
+
+fn h() {}
 @test_only
 @opaque
 pub struct FakeDb { rows: List<Row> }

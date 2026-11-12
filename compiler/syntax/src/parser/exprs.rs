@@ -171,8 +171,8 @@ pub(super) fn literal(p: &mut Parser) -> Completed {
     p.complete(marker, Literal)
 }
 
-/// An attribute's arguments: `(` arg { `,` arg } `)` (`grammar.attribute`), at least one and
-/// no trailing `,`. Layer 3 of the parser adds named arguments here too.
+/// An attribute's arguments: `(` arg { `,` arg } [ `,` ] `)` (`grammar.attribute`), at least
+/// one. Layer 3 of the parser adds named arguments here too.
 pub(super) fn attribute_args(p: &mut Parser) {
     let marker = p.start();
     p.bump();

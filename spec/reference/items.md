@@ -285,7 +285,7 @@ r[item.arg.semver]
 ## Attributes
 
 ```ebnf
-attribute    = "@" name [ "(" arg { "," arg } ")" ]
+attribute    = "@" name [ "(" arg { "," arg } [ "," ] ")" ]
 ```
 
 r[item.attr.fixed]
@@ -331,4 +331,4 @@ r[item.attr.test-default]
 - `@test_default(f)` (Package effects): The handler a test gets when it reaches this effect with no `with` around it; `f` takes no arguments and returns a handler ([Effects](effects.md))
 
 r[item.attr.placement]
-An attribute goes on its own line directly above the declaration it applies to.
+An attribute goes on its own line above the declaration it applies to. Blank lines may come between them.

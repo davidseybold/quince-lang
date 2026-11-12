@@ -22,9 +22,11 @@ fn decl(p: &mut Parser, holds: Holds) {
     if file && p.kind() == ImportKw {
         return import(p);
     }
+    // Taking attributes or `pub` ends recovery, but a line that turns out to be no item is
+    // still part of the slip before it.
+    let quiet = p.recovering;
     let marker = p.start();
     if file {
-        p.imports_closed = true;
         p.doc_comments();
         attributes(p);
     }
@@ -64,6 +66,7 @@ fn decl(p: &mut Parser, holds: Holds) {
             AliasDecl
         },
         _ => {
+            p.recovering |= quiet;
             let what = if file { "a declaration" } else { "`fn` or `}`" };
             if p.steps.len() == marker.0 + 1 {
                 // Nothing before the item, so the skip's own node is enough.
@@ -75,6 +78,8 @@ fn decl(p: &mut Parser, holds: Holds) {
             return;
         }
     };
+    // Only an item ends the imports: a slip among them doesn't.
+    p.imports_closed |= file;
     let kind = parse(p);
     p.complete(marker, kind);
 }

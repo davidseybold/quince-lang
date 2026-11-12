@@ -250,6 +250,28 @@ fn attribute_lines_are_looked_past() {
     );
     let text = "struct S {\n  a: Int,\n  @wire(\"b\")\n  pub b: Int,\n}\n";
     assert_eq!(errors(text), Vec::<String>::new());
+    // A blank line may follow an attribute.
+    assert_eq!(
+        errors("fn f() {\n  g(1,\n@test_only\n\nfn h() {}\n"),
+        ["E0017 7..8", "E0017 12..13"]
+    );
+    assert_eq!(errors("@test_only\n\n\nfn h() {}\n"), Vec::<String>::new());
+}
+
+/// A line that turns out to be no item after attributes or `pub` stays part of the slip
+/// before it, and only an item ends the imports.
+#[test]
+fn one_slip_one_error_around_items() {
+    for text in [
+        "struct User {\n  a: Int)\n  pub id: UserId,\n  name: String,\n}",
+        "struct User {\n  @wire(\"i\"))\n  pub id: UserId,\n  name: String,\n}",
+        "struct User {\n  a: Int)\n  @wire(\"i\")\n  name: String,\n}",
+        "import a\nfoo()\nimport b\nimport c",
+        "@x\nimport a\nimport b\nimport c",
+    ] {
+        assert_eq!(errors(text).len(), 1, "{text}: {:?}", errors(text));
+    }
+    assert_eq!(codes("fn a() {}\nimport b"), ["E0016"]);
 }
 
 /// The slips of decision 9's table for struct braces.
@@ -346,9 +368,10 @@ fn errors_in_declarations() {
         messages("@deprecated()\nfn f() {}"),
         ["expected an expression, found `)`"]
     );
+    assert_eq!(errors("@x(1,)\nfn f() {}"), Vec::<String>::new());
     assert_eq!(
-        messages("@x(1,)\nfn f() {}"),
-        ["expected an expression, found `)`"]
+        messages("@x(,)\nfn f() {}"),
+        ["expected an expression, found `,`"]
     );
     // A skip in struct braces stays out of type arguments.
     assert_eq!(codes("struct S { a: Int b: Map<K, V> }"), ["E0016"]);
