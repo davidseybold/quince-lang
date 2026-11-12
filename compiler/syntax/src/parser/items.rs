@@ -1,6 +1,6 @@
 //! Declarations: the file and `fn`, and their parts.
 
-use super::{Parser, Sync, exprs, types};
+use super::{Break, Parser, Sync, exprs, types};
 use crate::SyntaxKind::{self, *};
 
 /// The file: declarations, one per line (`grammar.file`).
@@ -12,6 +12,14 @@ pub(super) fn file(p: &mut Parser) {
 
 /// A declaration, with its `pub` (`grammar.decl`). Anything else is skipped as an error.
 fn decl(p: &mut Parser) {
+    if p.kind() == PubKw && p.nth(1).is_some_and(|t| t.brk != Break::None) {
+        // `pub` doesn't continue the line, so a break after it ends the declaration.
+        let marker = p.start();
+        p.bump();
+        p.expected("a declaration");
+        p.complete(marker, Skipped);
+        return;
+    }
     let item = if p.kind() == PubKw {
         p.nth_kind(1)
     } else {
@@ -68,7 +76,7 @@ fn param_list(p: &mut Parser) -> bool {
 /// [ `var` ] `self`, or [ `var` ] a name or `_` with `:`, a type and an optional default
 /// (`grammar.param`).
 fn param(p: &mut Parser) {
-    if !starts_param(p.kind()) {
+    if !starts_param(p.kind()) || p.at_break() {
         return p.expected("a parameter");
     }
     let marker = p.start();
@@ -76,8 +84,8 @@ fn param(p: &mut Parser) {
         p.bump();
     }
     match p.kind() {
-        SelfKw => p.bump(),
-        Underscore => {
+        SelfKw if !p.at_break() => p.bump(),
+        Underscore if !p.at_break() => {
             p.bump();
             param_type(p);
         }

@@ -2,7 +2,7 @@
 
 use super::errors::describe;
 use super::parser::{check_error_ranges, checked};
-use crate::{decode_source, parse};
+use crate::{SyntaxKind, decode_source, parse};
 
 /// Each error as `code start..end`, then its fixed text when it has one fix.
 fn errors(text: &str) -> Vec<String> {
@@ -35,6 +35,39 @@ fn an_item_on_the_next_line_needs_a_comma() {
         messages("fn f() {\n  g(a, b\n  h()\n}\n"),
         ["expected `,` or `)`, found the name `h`"]
     );
+}
+
+/// A break that ends a construct ends it even where a token after it could go on: a
+/// parameter after a `;`, which is also the lexer's E0002, and a declaration after a `pub`
+/// on its own line.
+#[test]
+fn a_break_ends_a_parameter_or_a_pub() {
+    assert_eq!(errors("fn f(;a: Int) {}"), ["E0002 5..6", "E0016 5..6"]);
+    assert_eq!(
+        errors("fn f(a: Int,;b: Int) {}"),
+        ["E0002 12..13", "E0016 12..13"]
+    );
+    assert_eq!(errors("fn f(var;self) {}"), ["E0002 8..9", "E0016 8..9"]);
+    assert_eq!(
+        messages("fn f(;a: Int) {}")[1],
+        "expected a parameter, found a line break"
+    );
+    let text = "pub\nfn f() {}\n";
+    assert_eq!(errors(text), ["E0016 3..4"]);
+    assert_eq!(
+        messages(text),
+        ["expected a declaration, found a line break"]
+    );
+    assert_eq!(decls(text), [SyntaxKind::Skipped, SyntaxKind::FnDecl]);
+}
+
+/// The kinds of the file's children.
+fn decls(text: &str) -> Vec<SyntaxKind> {
+    checked(text)
+        .syntax()
+        .children()
+        .map(|n| n.kind())
+        .collect()
 }
 
 /// The skip after an error takes a bracket whole, and stops at a sync point: a `,` in a list,
