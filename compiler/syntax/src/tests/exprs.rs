@@ -686,6 +686,9 @@ fn maps() {
     // With no expression there is no entry node, which would be empty (found by the lexer's
     // mutation test).
     assert_eq!(errors("{= 1}"), ["E0016 1..2"]);
+    // A line break in the braces is spacing, before the `:` too.
+    assert_eq!(tree("{\"a\"\n    : 1}"), tree("{\"a\": 1}"));
+    assert_eq!(errors("{\n    a + 1\n  }"), ["E0016 14..15"]);
 }
 
 /// E0025: `{}` where an expression is expected, whose fix writes `{:}`.
@@ -736,11 +739,28 @@ fn arguments() {
         messages("User(id: 1, ..u)"),
         ["expected an expression or `name:`, found `..`"]
     );
-    // A value on the line after `name:` is the next argument, missing its `,`.
+    // A line break in the list is spacing, so a value on the line after `name:` is its value.
+    assert_eq!(tree("f(email:\n  e)"), tree("f(email: e)"));
+    assert_eq!(tree("f(email\n  : e)"), tree("f(email: e)"));
+}
+
+/// A block where an expression is expected, which Quince doesn't have
+/// (`r[expr.block.no-bare]`), is one E0016 at its `{`, and the parser skips to its `}`.
+#[test]
+fn a_bare_block_is_one_error() {
+    assert_eq!(errors("{\n    let y = 1\n  }"), ["E0016 0..1"]);
+    assert_eq!(errors("g({\n    let y = 1\n  }, 2)"), ["E0016 2..3"]);
     assert_eq!(
-        errors("f(email:\n  e)"),
-        ["E0016 11..12 => f(email:,\n  e)"]
+        messages("{\n    let y = 1\n  }"),
+        ["expected an expression, found a block"]
     );
+    let text = "fn f() {\n  {\n    var x = 1\n  }\n  g()\n}\n";
+    let errors: Vec<_> = checked(text)
+        .errors()
+        .iter()
+        .map(|e| e.range.clone())
+        .collect();
+    assert_eq!(errors, [11..12]);
 }
 
 /// An attribute's arguments may be named too.

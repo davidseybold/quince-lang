@@ -40,8 +40,8 @@ pub mod codes {
     pub const UNCLOSED_BRACKET: &str = "E0017";
     pub const PARENTHESES_NEEDED: &str = "E0019";
     pub const CHAINED_OPERATOR: &str = "E0020";
-    pub const EMPTY_BRACES: &str = "E0025";
     pub const EMPTY_STRUCT_BRACES: &str = "E0024";
+    pub const EMPTY_BRACES: &str = "E0025";
     /// The codes the lexer and `decode_source` report. The lexer's mutation test requires
     /// every one of them from its mutants.
     pub const LEXER: &[&str] = &[

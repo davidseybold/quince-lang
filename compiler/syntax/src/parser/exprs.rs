@@ -504,7 +504,7 @@ fn primary(p: &mut Parser) -> Option<Completed> {
         }
         LBrace => {
             p.abandon(marker);
-            return Some(map_lit(p));
+            return map_lit(p);
         }
         _ => {
             p.abandon(marker);
@@ -557,8 +557,21 @@ fn paren(p: &mut Parser) -> Completed {
 
 /// A map literal, where `{` starts an expression (`grammar.map_lit`,
 /// `r[expr.block.brace-map]`): `{:}`, or entries in braces. `{}` is an E0025, whose fix
-/// writes `{:}` (`r[lex.lit.empty-map]`).
-fn map_lit(p: &mut Parser) -> Completed {
+/// writes `{:}` (`r[lex.lit.empty-map]`). `None` for a block, which can't go here
+/// (`r[expr.block.no-bare]`), after reporting it.
+fn map_lit(p: &mut Parser) -> Option<Completed> {
+    if bare_block(p) {
+        let range = p.input.tokens[p.pos].range.clone();
+        let message = "expected an expression, found a block".to_string();
+        p.report(SyntaxError::new(range, codes::UNEXPECTED_TOKEN, message));
+        let sync = if p.top().holds.is_list() {
+            Sync::List
+        } else {
+            Sync::Line
+        };
+        p.recover(sync, true);
+        return None;
+    }
     let marker = p.start();
     let open = p.pos;
     p.bump();
@@ -579,7 +592,18 @@ fn map_lit(p: &mut Parser) -> Completed {
     } else {
         p.list(RBrace, "a map entry", entry, starts_expr);
     }
-    p.complete(marker, MapLit)
+    Some(p.complete(marker, MapLit))
+}
+
+/// The current `{` opens a block: the token after it starts a line with `let`, `var` or
+/// `while`, which start statements and never expressions (decision 9's member starts of a
+/// block). Its map list would close there, one E0017 and more errors to follow, so the braces
+/// are skipped as one slip.
+fn bare_block(p: &Parser) -> bool {
+    p.input
+        .tokens
+        .get(p.pos + 1)
+        .is_some_and(|next| next.brk != Break::None && matches!(next.kind, LetKw | VarKw | WhileKw))
 }
 
 /// expr `:` expr (`grammar.entry`). With no expression, there is no entry, only the error.
@@ -590,11 +614,13 @@ fn entry(p: &mut Parser) {
     let marker = p.start();
     expr(p);
     if !p.recovering {
-        if p.at(Colon) {
+        if p.kind() == Colon {
             p.bump();
             expr(p);
-        } else {
-            p.expected("`:`");
+        } else if !p.frame_closes_here() {
+            // A line break in the braces is spacing, so the error is the token after it.
+            let error = p.unexpected("`:`", false);
+            p.report(error);
         }
     }
     p.complete(marker, MapEntry);
@@ -686,11 +712,10 @@ fn arg_list(p: &mut Parser) {
 }
 
 /// An expression, or a name, `:` and an expression if there is one (`grammar.arg`). `name:`
-/// alone, before a `,`, a `)` or a line break, passes the binding of that name.
+/// alone, before a `,` or the `)`, passes the binding of that name. A line break in the list is
+/// spacing, after the `:` too.
 fn arg(p: &mut Parser) {
-    let named = p.kind() == Ident
-        && p.nth_kind(1) == Colon
-        && p.nth(1).is_some_and(|colon| colon.brk == Break::None);
+    let named = p.kind() == Ident && p.nth_kind(1) == Colon;
     if !named {
         if p.kind() == DotDot {
             return p.expected("an expression or `name:`");
@@ -700,7 +725,7 @@ fn arg(p: &mut Parser) {
     let marker = p.start();
     p.bump_node(NameRef);
     p.bump();
-    if !(p.at_break() || matches!(p.kind(), Comma | RParen)) {
+    if !matches!(p.kind(), Comma | RParen) {
         expr(p);
     }
     p.complete(marker, NamedArg);

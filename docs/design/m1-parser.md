@@ -244,6 +244,8 @@ Doc comments and attributes aren't member starts: they belong to the declaration
 | `if x` followed by a line `{` | E0018 |
 | `a; b` | E0002 |
 | `"press "b" now"` | E0016, expecting a line break |
+| `let x = {` then lines `let y = 1` and `}` | E0016 at `{`, which found a block (layer 3c) |
+| `g({` then lines `let y = 1` and `})` | E0016 at `{` |
 
 ### 10. Diagnostics
 
