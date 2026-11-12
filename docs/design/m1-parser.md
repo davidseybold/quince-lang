@@ -537,7 +537,7 @@ Layer 4 is three PRs (decided by David, 2026-11-12), since together they would r
 - [x] Line and list contexts, E0018. 3c already treats a line break before a `,` or a closing bracket, after `name:` and before an entry's `:` as spacing, and a block closed by a `let`, `var` or `while` line as one E0016 at its `{` (3c's `block_at`). This layer applies the line-context rules elsewhere in a list (question 3 as revised), with E0018, and adds the bare-block cases 3c misses. [`lex.line-end`, `lex.continue.more`, `lex.continue.fn-header`, `lex.continue.lists`, `lex.else-same-line`, `expr.block.no-bare`]
 
 **Layer 4c: `m1/parser-member-peek`**
-- [x] `member_holder` peeks the line's leading kinds once, so its cost doesn't grow with the number of open frames; a deep-nesting test of valid blocks stays under `LOOKAHEAD_LIMIT`. Blocks first nest in this layer, and today each open block costs a look on every `stop()` (found in layer 1's review).
+- [x] `member_holder` peeks the line's leading kinds once, so its cost doesn't grow with the number of open frames; a deep-nesting test of valid blocks stays under `LOOKAHEAD_LIMIT`. Blocks nest from layer 4a on, and each open block cost a look on every `stop()` (found in layer 1's review).
 
 **Layer 5: `m1/parser-patterns`**
 - [ ] Spec (decided by David, 2026-11-12): extend `r[expr.block.cond-brace]` to a `match` subject and a `for` loop's `in` expression, whose `{` has the same problem (found in layer 4a's review). Wording: "In the condition of an `if` or `while`, the subject of a `match`, and the iterable of a `for`, `{` always starts the block. A map literal there is written in parentheses." It lands in the same PR as the `match` and `for` parsing, with a spec bump. [`expr.block.cond-brace`]
