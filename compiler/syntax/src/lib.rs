@@ -38,6 +38,8 @@ pub mod codes {
     pub const CONTROL_CHARACTER: &str = "E0015";
     pub const UNEXPECTED_TOKEN: &str = "E0016";
     pub const UNCLOSED_BRACKET: &str = "E0017";
+    pub const PARENTHESES_NEEDED: &str = "E0019";
+    pub const CHAINED_OPERATOR: &str = "E0020";
     pub const EMPTY_STRUCT_BRACES: &str = "E0024";
     /// The codes the lexer and `decode_source` report. The lexer's mutation test requires
     /// every one of them from its mutants.
@@ -59,7 +61,13 @@ pub mod codes {
         CONTROL_CHARACTER,
     ];
     /// The codes the parser reports.
-    pub const PARSER: &[&str] = &[UNEXPECTED_TOKEN, UNCLOSED_BRACKET, EMPTY_STRUCT_BRACES];
+    pub const PARSER: &[&str] = &[
+        UNEXPECTED_TOKEN,
+        UNCLOSED_BRACKET,
+        PARENTHESES_NEEDED,
+        CHAINED_OPERATOR,
+        EMPTY_STRUCT_BRACES,
+    ];
 
     /// Every code this crate reports.
     pub fn all() -> impl Iterator<Item = &'static str> {

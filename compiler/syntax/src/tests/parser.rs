@@ -383,10 +383,11 @@ fn where_a_statement_ends() {
         stmts("let r = 1..10\ng(a, b,)")
     );
     assert_eq!(stmts("g(\n  a,\n  b,\n)"), stmts("g(a, b,)"));
-    // A `(` on the next line doesn't call `f`: it starts a statement, which it can't.
-    let errors = checked("fn f() {\n  f\n  (x)\n}\n").errors().to_vec();
-    assert_eq!(errors.len(), 1);
-    assert_eq!(errors[0].message, "expected a statement or `}`, found `(`");
+    // A `(` on the next line doesn't call `f`: it starts a statement.
+    assert_eq!(
+        stmts("f\n(x)"),
+        "NameRef\n  Ident \"f\"\nParen\n  LParen \"(\"\n  NameRef\n    Ident \"x\"\n  RParen \")\"\n"
+    );
 }
 
 /// In a `fn` header, a line that starts with `->` or `{` continues it

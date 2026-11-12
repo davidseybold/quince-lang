@@ -28,10 +28,6 @@ pub type SyntaxElement = rowan::SyntaxElement<QuinceLanguage>;
 /// One step of the parser's output. The parser sees only significant tokens, so these never
 /// mention trivia: the builder places it.
 #[derive(Debug)]
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "layer 3 of the parser joins tokens")
-)]
 pub(crate) enum Event {
     /// Opens a node of this kind inside the innermost open one.
     Start(SyntaxKind),

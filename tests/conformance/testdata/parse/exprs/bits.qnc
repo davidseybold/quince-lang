@@ -1,0 +1,25 @@
+// rule: grammar.bits
+// rule: expr.op.bits.parens
+// rule: expr.op.bits.chain
+// rule: expr.op.parens-required
+// mode: parse
+// `&`, `|`, `^`, `<<` and `>>` have no level. `&`, `|` and `^` chain only with themselves, a
+// shift doesn't chain, their operands are prefix or postfix expressions, and each must be in
+// parentheses as an operand of any other operator.
+fn f(flags: Int, mask: Int, n: Int) {
+  let all = flags & mask & 7
+  let any = flags | mask | ~n
+  let one = flags ^ mask ^ -n
+  let up = 1 << n
+  let down = flags >> 2
+  let tested = (flags & mask) == 0
+  let shifted = 1 << (n - 1)
+  let mixed = (flags & mask) | n
+  let a = flags & mask == 0 //~ E0019
+  let b = 1 << n - 1 //~ E0019
+  let c = flags & mask | n //~ E0019
+  let d = 1 << n << 2 //~ E0019
+  let e = flags >> n + 1 //~ E0019
+  let g = n + flags ^ mask //~ E0019
+  let h = -flags & mask * 2 //~ E0019
+}

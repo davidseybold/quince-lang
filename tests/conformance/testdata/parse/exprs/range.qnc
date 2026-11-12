@@ -1,0 +1,15 @@
+// rule: grammar.range
+// rule: expr.op.range.no-chain
+// rule: expr.op.range.parens
+// mode: parse
+// A range's ends are additive expressions. A range doesn't chain, and must be in parentheses
+// as an operand.
+fn f(n: Int, r: Range<Int>) {
+  let a = 0..n
+  let b = 1..=n + 1
+  let c = n * 2..n * 4
+  let d = r == (0..n)
+  let x = 0..n..10 //~ E0020
+  let y = r == 0..n //~ E0019
+  let z = 0..n & 1 //~ E0019
+}

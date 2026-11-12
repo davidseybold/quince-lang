@@ -101,6 +101,16 @@ pub const REGISTRY: &[CodeInfo] = &[
         include_str!("../explain/E0017.md"),
     ),
     error(
+        "E0019",
+        "an operand that needs parentheses",
+        include_str!("../explain/E0019.md"),
+    ),
+    error(
+        "E0020",
+        "a comparison or range that chains",
+        include_str!("../explain/E0020.md"),
+    ),
+    error(
         "E0024",
         "a struct with no fields written with braces",
         include_str!("../explain/E0024.md"),

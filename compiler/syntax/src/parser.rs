@@ -99,6 +99,8 @@ enum Step {
     },
     Finish,
     Token,
+    /// Takes two adjacent tokens as one of this kind (decision 5).
+    Join(SyntaxKind),
     Error(SyntaxError),
 }
 
@@ -135,6 +137,7 @@ fn into_events(mut steps: Vec<Step>) -> Vec<Event> {
             }
             Step::Finish => events.push(Event::Finish),
             Step::Token => events.push(Event::Token),
+            Step::Join(kind) => events.push(Event::Join(kind)),
             Step::Error(error) => events.push(Event::Error(error)),
         }
     }
@@ -220,6 +223,13 @@ struct Parser<'t> {
     /// The parser has just taken attributes, so the line after them continues what they
     /// apply to.
     after_attributes: bool,
+    /// The parser has just taken a binary operator, so a line break after it is spacing,
+    /// after `*` and `>` too (`r[lex.line-end]`).
+    after_operator: bool,
+    /// How many slips the parser has met: each error it reports or would report, and each
+    /// bracket closed without its closing bracket. The operator checks skip an operand that
+    /// holds one.
+    slips: u32,
     /// The file has had a declaration, so an import is out of place.
     imports_closed: bool,
     lookahead: Cell<u32>,
@@ -239,6 +249,8 @@ impl<'t> Parser<'t> {
             closed_early: false,
             in_fn_header: false,
             after_attributes: false,
+            after_operator: false,
+            slips: 0,
             imports_closed: false,
             lookahead: Cell::new(0),
         }
@@ -276,7 +288,7 @@ impl<'t> Parser<'t> {
     /// there is one, and the token before it doesn't continue the line. Right after frames
     /// closed early, at a member start, every break ends it: the token before belongs to a
     /// construct that is already closed. Right after attributes, a line break doesn't: an
-    /// attribute goes on its own line.
+    /// attribute goes on its own line. Nor does one right after a binary operator.
     fn at_break(&self) -> bool {
         let Some(token) = self.current() else {
             return true;
@@ -284,7 +296,7 @@ impl<'t> Parser<'t> {
         match token.brk {
             Break::None => false,
             Break::Hard => true,
-            Break::Line if self.after_attributes => false,
+            Break::Line if self.after_attributes || self.after_operator => false,
             Break::Line if self.closed_early => true,
             Break::Line => {
                 let previous = self.input.tokens[self.pos - 1].kind;
@@ -292,6 +304,20 @@ impl<'t> Parser<'t> {
                     && matches!(token.kind, Arrow | UsesKw | RequiresKw | EnsuresKw | LBrace);
                 !(previous.continues_line() || token.kind == Dot || header_continues)
             }
+        }
+    }
+
+    /// What the current `>` and the token after it join into, `>>` or `>=`, when no trivia
+    /// sits between them (decision 5).
+    fn joined_gt(&self) -> Option<SyntaxKind> {
+        let (gt, next) = (self.current()?, self.nth(1)?);
+        if gt.kind != Gt || next.range.start != gt.range.end {
+            return None;
+        }
+        match next.kind {
+            Gt => Some(GtGt),
+            Eq => Some(GtEq),
+            _ => None,
         }
     }
 
@@ -318,7 +344,17 @@ impl<'t> Parser<'t> {
         self.taken.push(self.input.tokens[self.pos].index);
         self.pos += 1;
         self.after_attributes = false;
+        self.after_operator = false;
         self.lookahead.set(0);
+    }
+
+    /// Takes the current `>` and the token right after it as one token of `kind`, `>>` or `>=`
+    /// (decision 5). [`Parser::joined_gt`] says whether they join.
+    fn bump_joined(&mut self, kind: SyntaxKind) {
+        self.bump();
+        self.bump();
+        self.steps.truncate(self.steps.len() - 2);
+        self.steps.push(Step::Join(kind));
     }
 
     /// Takes the doc comments right before the current token into a `DocComments` node, if
@@ -404,6 +440,7 @@ impl<'t> Parser<'t> {
     /// Closes the innermost frame without its closing bracket, with an E0017 at its opening
     /// one unless the slip is already reported.
     fn close_frame(&mut self, stop: Stop) {
+        self.slip();
         let frame = self.frames.pop().expect("a frame to close");
         self.lookahead.set(0);
         self.closed_early = true;
@@ -537,10 +574,12 @@ impl<'t> Parser<'t> {
     /// so the parser only recovers.
     fn expected(&mut self, what: &str) {
         if self.frame_closes_here() {
+            self.slip();
             return;
         }
         let brk = self.current().map_or(self.input.eof_brk, |t| t.brk);
         if self.at_break() && brk == Break::Hard {
+            self.slip();
             self.recovering = true;
             return;
         }
@@ -559,6 +598,7 @@ impl<'t> Parser<'t> {
     /// current token starts another item on the next line.
     fn expected_in_list(&mut self, what: &str, starts_item: fn(SyntaxKind) -> bool) {
         if self.frame_closes_here() {
+            self.slip();
             return;
         }
         let mut error = self.unexpected(what, false);
@@ -629,6 +669,7 @@ impl<'t> Parser<'t> {
     /// Reports `error` unless the slip it is part of is already reported, and starts error
     /// recovery either way.
     fn report(&mut self, error: SyntaxError) {
+        self.slip();
         let after_error = self
             .current()
             .map_or(self.input.eof_after_error, |t| t.after_error);
@@ -646,6 +687,10 @@ impl<'t> Parser<'t> {
         if !swallowed && !self.input.on_unclosed_line(start) {
             self.steps.push(Step::Error(error));
         }
+    }
+
+    fn slip(&mut self) {
+        self.slips += 1;
     }
 
     // Recovery.
@@ -686,8 +731,9 @@ impl<'t> Parser<'t> {
             if let Some(closer) = closer_of(kind) {
                 groups.push((closer, start));
             } else if kind == Lt && self.top().holds.is_list() {
-                // In a list, `<` can only open type arguments or generics, so the skip stays
-                // out of their commas. In a line context it may be less-than.
+                // A `<` in a list is taken to open type arguments or generics, so the skip
+                // stays out of their commas. One that is less-than in an argument skips to the
+                // list's closing bracket. In a line context it may be less-than.
                 groups.push((Gt, start));
             }
             self.take();
@@ -864,10 +910,11 @@ fn is_closer(kind: SyntaxKind) -> bool {
     matches!(kind, RParen | RBracket | RBrace)
 }
 
-/// The text of a punctuation kind, for messages.
+/// The text of a punctuation kind, joined ones included, for messages.
 fn punctuation(kind: SyntaxKind) -> &'static str {
     SyntaxKind::PUNCTUATION
         .iter()
+        .chain(SyntaxKind::JOINED)
         .find(|&&(_, k)| k == kind)
         .map_or("", |&(text, _)| text)
 }

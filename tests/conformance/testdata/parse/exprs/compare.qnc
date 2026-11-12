@@ -1,0 +1,11 @@
+// rule: expr.op.compare.no-chain
+// mode: parse
+// Comparison operators don't chain, whichever they are. A chain is one error.
+fn f(a: Int, b: Int, c: Int) {
+  let both = a < b && b < c
+  let x = a < b > c //~ E0020
+  let y = 0 <= a < c //~ E0020
+  let z = a == b == c //~ E0020
+  let w = a < b >= c //~ E0020
+  let long = a < b < c < 10 //~ E0020
+}

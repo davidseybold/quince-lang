@@ -8,6 +8,7 @@ mod control;
 mod cst;
 mod decls;
 mod errors;
+mod exprs;
 mod multiline;
 mod mutations;
 mod numbers;
