@@ -242,6 +242,9 @@ fn slips() {
     assert_eq!(errors("-\n    5"), ["E0016 1..6"]);
     assert_eq!(errors("-x"), ["E0016 1..2"]);
     assert_eq!(errors("1..x"), ["E0016 3..4"]);
+    // A pattern missing from the line of its `let` is taken from the next line.
+    assert_eq!(errors("\n    (a, b)"), ["E0016 0..1"]);
+    assert_eq!(errors("\n    x"), ["E0016 0..1"]);
     // A slip inside the parentheses is the one error, and the `let` goes on after them.
     assert_eq!(errors("(a b, c)"), ["E0016 3..4"]);
     assert_eq!(errors("Some(a b)"), ["E0016 7..8"]);

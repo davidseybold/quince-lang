@@ -109,16 +109,26 @@ fn is_place(p: &Parser, first: usize) -> bool {
 fn let_stmt(p: &mut Parser) {
     let marker = p.start();
     p.bump();
-    let pattern = if p.at_break() {
-        p.expected("a pattern");
-        None
-    } else {
-        patterns::pattern(p)
-    };
-    if pattern.is_some() {
+    if leading_pattern(p) {
         let_rest(p);
     }
     p.complete(marker, LetStmt);
+}
+
+/// The pattern after `let`. False when there is none. One missing from its line is taken from
+/// the next line, after the error, as a missing condition is, so that line isn't a second
+/// error. Then what is missing after it is part of that slip.
+fn leading_pattern(p: &mut Parser) -> bool {
+    let missing = p.at_break();
+    if missing {
+        p.expected("a pattern");
+        if p.frame_closes_here() || !patterns::starts_pattern(p.kind()) {
+            return false;
+        }
+    }
+    let found = patterns::pattern(p).is_some();
+    p.recovering |= missing;
+    found
 }
 
 /// `var` name [ `:` type ] `=` expr. A `var` takes a name, never a pattern.
