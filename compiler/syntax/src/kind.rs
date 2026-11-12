@@ -128,6 +128,12 @@ syntax_kinds! {
         /// An interpolation in a string: its braces and the tokens of its path.
         Interp,
         ListLit, Range,
+        /// An operator between two expressions, other than a range's.
+        Binary,
+        /// `-`, `!` or `~`, and the expression it applies to.
+        Prefix,
+        /// An expression in parentheses.
+        Paren,
         /// A call of anything: a function, a method (`Field` as callee), a struct or a variant.
         Call,
         ArgList,

@@ -1,8 +1,11 @@
-//! Blocks, statements and expressions: `let`, literals, names, list literals, ranges, calls,
-//! method calls and fields. Later layers of the parser add the operators and the rest.
+//! Blocks, statements and expressions: `let`, literals, names, list literals, operators,
+//! calls, method calls and fields. Later layers of the parser add the rest.
 
 use super::{Completed, Holds, Parser, Sync, items, types};
 use crate::SyntaxKind::{self, *};
+use crate::{SyntaxError, codes};
+use quince_diagnostics::Applicability;
+use std::ops::Range;
 
 /// `{` { stmt NEWLINE } [ stmt ] `}` (`grammar.block`). The last statement needs no line break
 /// before the `}` (`r[expr.block.last-newline]`).
@@ -53,17 +56,276 @@ fn let_rest(p: &mut Parser) {
     expr(p);
 }
 
-/// An expression: a range or a postfix expression (`grammar.expr`, `grammar.range`).
+/// An expression (`grammar.expr`): operators over prefix expressions. Any mix of operators
+/// parses, by precedence climbing in the usual reading (decision 6), and then the parser
+/// reports what the spec forbids: E0019 where parentheses are needed and E0020 where
+/// operators chain.
 pub(super) fn expr(p: &mut Parser) {
-    let Some(start) = postfix(p) else {
+    if let Some(operand) = binary(p, 0) {
+        report_chain(p, operand.chain);
+    }
+}
+
+/// An expression whose operators all bind tighter than `min_power`.
+fn binary(p: &mut Parser, min_power: u8) -> Option<Operand> {
+    let first = p.pos;
+    let done = prefix(p)?;
+    let mut lhs = Operand {
+        done,
+        op: None,
+        tokens: (first, p.pos - 1),
+        right: (first, p.pos - 1),
+        chain: None,
+    };
+    while let Some((op, power)) = binary_op(p)
+        && power > min_power
+    {
+        let marker = p.precede(lhs.done);
+        let at = p.pos;
+        match op {
+            GtGt | GtEq => p.bump_joined(op),
+            _ => p.bump(),
+        }
+        p.after_operator = true;
+        let op_range = p.input.tokens[at].range.start..p.input.tokens[p.pos - 1].range.end;
+        let rhs = binary(p, power);
+        let kind = match op {
+            DotDot | DotDotEq => SyntaxKind::Range,
+            _ => Binary,
+        };
+        let done = p.complete(marker, kind);
+        let Some(rhs) = rhs else {
+            // The missing operand is the error, so nothing about the operators is reported.
+            return Some(Operand {
+                done,
+                op: Some(op),
+                tokens: (first, p.pos - 1),
+                right: (p.pos - 1, p.pos - 1),
+                chain: None,
+            });
+        };
+        let checked = !p.recovering && !p.closed_early;
+        lhs = combine(p, lhs, op, op_range, rhs, done, checked);
+        if p.recovering {
+            break;
+        }
+    }
+    Some(lhs)
+}
+
+/// The binary operator at the current token, joined with the token after it when it is `>`,
+/// and how tightly it binds: higher binds tighter. The order is decision 6's usual reading.
+fn binary_op(p: &Parser) -> Option<(SyntaxKind, u8)> {
+    if p.at_break() {
+        return None;
+    }
+    let op = p.joined_gt().unwrap_or(p.kind());
+    let power = match op {
+        PipePipe => 1,
+        AmpAmp => 2,
+        EqEq | BangEq | Lt | LtEq | Gt | GtEq => 3,
+        DotDot | DotDotEq => 4,
+        Pipe => 5,
+        Caret => 6,
+        Amp => 7,
+        LtLt | GtGt => 8,
+        Plus | Minus => 9,
+        Star | Slash | Percent => 10,
+        _ => return None,
+    };
+    Some((op, power))
+}
+
+/// What the checks of decision 6 tell operators apart by.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Group {
+    Arith,
+    /// `&`, `|` and `^`, which chain only with themselves.
+    Bit,
+    Shift,
+    Range,
+    Compare,
+    And,
+    Or,
+}
+
+fn group(op: SyntaxKind) -> Group {
+    match op {
+        Plus | Minus | Star | Slash | Percent => Group::Arith,
+        Amp | Pipe | Caret => Group::Bit,
+        LtLt | GtGt => Group::Shift,
+        DotDot | DotDotEq => Group::Range,
+        AmpAmp => Group::And,
+        PipePipe => Group::Or,
+        _ => Group::Compare,
+    }
+}
+
+/// An operand of a binary operator, parsed, with what the checks need to know about it.
+struct Operand {
+    done: Completed,
+    /// The operator at its top. `None` for a prefix or postfix expression, or one in
+    /// parentheses.
+    op: Option<SyntaxKind>,
+    /// Its first and last significant tokens.
+    tokens: (usize, usize),
+    /// Its right operand's first and last significant tokens, or its own when it has no
+    /// operator: the middle operand of a chain it starts.
+    right: (usize, usize),
+    /// The E0020 of the chain of comparisons or ranges this operand is, reported once the
+    /// chain is complete.
+    chain: Option<Chain>,
+}
+
+/// A chain of comparisons or of ranges: where its second operator is, and for comparisons
+/// the edits of the fix that writes `a < b && b < c`, or `None` when there is no fix.
+struct Chain {
+    at: Range<usize>,
+    message: &'static str,
+    edits: Option<Vec<(Range<usize>, String)>>,
+}
+
+/// The node `done`, `lhs op rhs`, as an operand. With `checked`, reports an operand that needs
+/// parentheses, and starts or extends a chain.
+fn combine(
+    p: &mut Parser,
+    mut lhs: Operand,
+    op: SyntaxKind,
+    op_range: Range<usize>,
+    rhs: Operand,
+    done: Completed,
+    checked: bool,
+) -> Operand {
+    let mut chain = None;
+    if checked {
+        let chains = lhs.op.is_some_and(|inner| {
+            group(inner) == group(op) && matches!(group(op), Group::Compare | Group::Range)
+        });
+        if chains {
+            chain = Some(extend_chain(p, &mut lhs, op, op_range));
+        } else {
+            needs_parens(p, &lhs, op, true);
+            report_chain(p, lhs.chain);
+        }
+        needs_parens(p, &rhs, op, false);
+        report_chain(p, rhs.chain);
+    }
+    Operand {
+        done,
+        op: Some(op),
+        tokens: (lhs.tokens.0, rhs.tokens.1),
+        right: rhs.tokens,
+        chain,
+    }
+}
+
+/// The text range of the significant tokens `first` to `last`.
+fn text_range(p: &Parser, (first, last): (usize, usize)) -> Range<usize> {
+    p.input.tokens[first].range.start..p.input.tokens[last].range.end
+}
+
+/// Reports an E0019 when `operand`, the left one when `left`, needs parentheses as an operand
+/// of `op`, with the fix that adds them.
+fn needs_parens(p: &mut Parser, operand: &Operand, op: SyntaxKind, left: bool) {
+    let Some(inner) = operand.op else {
         return;
     };
-    if p.at(DotDot) || p.at(DotDotEq) {
-        let marker = p.precede(start);
-        p.bump();
-        postfix(p);
-        p.complete(marker, Range);
+    let outer = group(op);
+    let needed = match group(inner) {
+        // `r[expr.op.bits.parens]` and `r[expr.op.bits.chain]`. A shift's operands are prefix
+        // expressions (`grammar.bits`), so a shift never chains.
+        Group::Bit => !(left && inner == op),
+        Group::Shift => true,
+        Group::Arith => matches!(outer, Group::Bit | Group::Shift),
+        // `r[expr.op.range.parens]`.
+        Group::Range => true,
+        // `r[expr.op.logic.no-mix]`.
+        Group::And => outer == Group::Or,
+        Group::Or => outer == Group::And,
+        Group::Compare => false,
+    };
+    if !needed {
+        return;
     }
+    let (inner, outer) = (super::punctuation(inner), super::punctuation(op));
+    let message = format!("`{inner}` needs parentheses as an operand of `{outer}`");
+    let range = text_range(p, operand.tokens);
+    let edits = vec![
+        (range.start..range.start, "(".to_string()),
+        (range.end..range.end, ")".to_string()),
+    ];
+    let error = SyntaxError::new(range, codes::PARENTHESES_NEEDED, message).with_fix(
+        "add the parentheses",
+        Applicability::NeedsReview,
+        edits,
+    );
+    p.emit(error);
+}
+
+/// The chain that `lhs`, a comparison or a range, and `op` after it make
+/// (`r[expr.op.compare.no-chain]`, `r[expr.op.range.no-chain]`). A comparison chain's fix
+/// repeats each middle operand, so `a < b < c` becomes `a < b && b < c`. There is none when a
+/// middle operand holds a comment or a line break, which repeating it would copy.
+fn extend_chain(p: &Parser, lhs: &mut Operand, op: SyntaxKind, op_range: Range<usize>) -> Chain {
+    let mut chain = lhs.chain.take().unwrap_or_else(|| match group(op) {
+        Group::Compare => Chain {
+            at: op_range,
+            message: "comparisons don't chain",
+            edits: Some(Vec::new()),
+        },
+        _ => Chain {
+            at: op_range,
+            message: "ranges don't chain",
+            edits: None,
+        },
+    });
+    if let Some(edits) = &mut chain.edits {
+        let (first, last) = (&p.input.tokens[lhs.right.0], &p.input.tokens[lhs.right.1]);
+        let plain = p.lexed.tokens[first.index..=last.index]
+            .iter()
+            .all(|t| t.kind == Whitespace || !(t.kind.is_trivia() || t.kind == DocComment));
+        if plain {
+            let middle = &p.text[first.range.start..last.range.end];
+            let end = last.range.end;
+            edits.push((end..end, format!(" && {middle}")));
+        } else {
+            chain.edits = None;
+        }
+    }
+    chain
+}
+
+fn report_chain(p: &mut Parser, chain: Option<Chain>) {
+    let Some(chain) = chain else {
+        return;
+    };
+    let mut error = SyntaxError::new(chain.at, codes::CHAINED_OPERATOR, chain.message.into());
+    if let Some(edits) = chain.edits {
+        error = error.with_fix(
+            "join the comparisons with `&&`",
+            Applicability::NeedsReview,
+            edits,
+        );
+    }
+    p.emit(error);
+}
+
+/// `-`, `!` or `~` and the prefix expression it applies to, or a postfix expression
+/// (`grammar.prefix`). `None` when there is no expression, after reporting it. A line break
+/// after `-` is spacing, since `-` can be binary (`r[lex.line-end]`), but one after `!` or `~`
+/// ends the statement.
+fn prefix(p: &mut Parser) -> Option<Completed> {
+    if !matches!(p.kind(), Minus | Bang | Tilde) {
+        return postfix(p);
+    }
+    let marker = p.start();
+    p.bump();
+    if p.at_break() {
+        p.expected("an expression");
+    } else {
+        prefix(p);
+    }
+    Some(p.complete(marker, Prefix))
 }
 
 /// A primary expression and its calls, method calls and fields (`grammar.postfix`). `None`
@@ -94,7 +356,8 @@ fn postfix(p: &mut Parser) -> Option<Completed> {
     Some(done)
 }
 
-/// A literal, a name, `self`, `Self` or a list literal (`grammar.primary`). A statement starts
+/// A literal, a name, `self`, `Self`, a list literal or an expression in parentheses
+/// (`grammar.primary`). A statement starts
 /// after a break, so this doesn't check for one: each caller has taken a token that continues
 /// the line, or is at the start of a statement.
 fn primary(p: &mut Parser) -> Option<Completed> {
@@ -116,6 +379,18 @@ fn primary(p: &mut Parser) -> Option<Completed> {
             p.bump();
             p.list(RBracket, "an expression", expr, starts_expr);
             ListLit
+        }
+        LParen => {
+            p.bump();
+            p.push_frame(Holds::Items, Some(RParen));
+            match p.stop() {
+                Some(stop) => p.close_frame(stop),
+                None => {
+                    expr(p);
+                    p.end_list(RParen);
+                }
+            }
+            Paren
         }
         _ => {
             p.abandon(marker);
@@ -139,6 +414,10 @@ fn starts_expr(kind: SyntaxKind) -> bool {
             | SelfKw
             | SelfTypeKw
             | LBracket
+            | LParen
+            | Minus
+            | Bang
+            | Tilde
     )
 }
 

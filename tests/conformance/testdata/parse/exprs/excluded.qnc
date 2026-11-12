@@ -1,0 +1,13 @@
+// rule: expr.op.excluded
+// mode: parse
+// Quince has no ternary, `++`, `**`, `??`, pipe operator or `as` cast. Each is a token that
+// can't go where it is.
+fn f(c: Bool, a: Int, b: Int, x: Option<Int>) {
+  let t = c ? a : b //~ E0016
+  let p = a ** b //~ E0016
+  let n = x ?? 0 //~ E0016
+  let q = a |> b //~ E0016
+  let k = a as Int //~ E0016
+  // A line that ends with `+` continues, so this one comes last.
+  let i = a++ //~ E0016
+}

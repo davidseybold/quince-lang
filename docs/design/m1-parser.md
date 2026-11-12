@@ -503,12 +503,19 @@ Layer 2 is two PRs, since types and declarations are separate pieces of work and
 - [x] Attribute look-past (decision 9): at the start of a line, the member-start check looks past attribute and doc-comment lines, so `g(1,` then a line `@attr` then `fn h() {}` closes the call with one E0017 and no E0016 at `@`.
 - [x] Decided by David, 2026-11-12: an attribute's arguments take a trailing `,` (layer 2a's trailing-comma decision), and blank lines may come between an attribute and its declaration. `r[item.attr.placement]` is retired for `r[item.attr.own-line]`, since its meaning widened, which reads "An attribute goes on its own line above the declaration it applies to. Blank lines may come between them."
 
-**Layer 3: `m1/parser-exprs`**
+Layer 3 is three PRs (decided by David, 2026-11-12), since together they would run past 1,000 lines: operators, then type arguments and negative literals, then postfix forms and collections.
+
+**Layer 3a: `m1/parser-operators`**
+- [x] Every operator and level; E0019, E0020. [`expr.op.parens-required`, `expr.op.logic.no-mix`, `expr.op.bits.parens`, `expr.op.bits.chain`, `expr.op.compare.no-chain`, `expr.op.range.no-chain`, `expr.op.range.parens`, `expr.op.excluded`, `grammar.bits`, `grammar.expr`, `grammar.logic`, `grammar.compare`, `grammar.cmp_op`, `grammar.arith`, `grammar.term`, `grammar.prefix`, `grammar.range`]
+- [x] The joined `>>` and `>=` (decision 5): the parser's join step, used by the shift and comparison operators. Moved from layer 2, since only expressions join tokens.
+- [x] An expression in parentheses, which the fixes for E0019 write. Tuples wait for 3c.
+
+**Layer 3b: `m1/parser-type-args`**
 - [ ] Spec: questions 5 and 6, and a bump.
-- [ ] Every operator and level; E0019, E0020. [`expr.op.parens-required`, `expr.op.logic.no-mix`, `expr.op.bits.parens`, `expr.op.bits.chain`, `expr.op.compare.no-chain`, `expr.op.range.no-chain`, `expr.op.range.parens`, `expr.op.excluded`, `grammar.bits`]
-- [ ] Type arguments in expressions; negative literals, unit-tested only (decision 11).
-- [ ] The joined `>>` and `>=` (decision 5): the parser's join step, used by the shift and comparison operators. Moved from layer 2, since only expressions join tokens.
-- [ ] Postfix forms, tuples, maps, `{}` and E0025, `..base`. [`lex.lit.collections`, `lex.lit.empty-map`, `expr.block.brace-map`, `item.struct.update`, `intro.excl.macros`]
+- [ ] Type arguments in expressions, `.name<T>(...)` included; negative literals, unit-tested only (decision 11).
+
+**Layer 3c: `m1/parser-postfix`**
+- [ ] Postfix forms, tuples, maps, `{}` and E0025, named arguments (attribute arguments too), `..base`. [`lex.lit.collections`, `lex.lit.empty-map`, `expr.block.brace-map`, `item.struct.update`, `intro.excl.macros`]
 
 **Layer 4: `m1/parser-stmts`**
 - [ ] Spec: questions 3, 12 and 13, and a bump.

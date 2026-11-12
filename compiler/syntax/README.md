@@ -129,6 +129,9 @@ A node holds its tokens and child nodes in source order. A part the code leaves 
 | `Interp` | An interpolation's `InterpStart`, the tokens of its path, and its `InterpEnd`. |
 | `ListLit` | `[`, expressions and their commas, and `]`. |
 | `Range` | An expression, `..` or `..=`, and an expression. |
+| `Binary` | An expression, an operator other than a range's, and an expression. `>>` and `>=` are one token each. |
+| `Prefix` | `-`, `!` or `~`, and an expression. |
+| `Paren` | `(`, an expression, and `)`. |
 | `Call` | The callee, any expression, and an `ArgList`. A method call is a `Call` whose callee is a `Field`, and a struct literal or a variant is a `Call` too, since only name resolution can tell them apart. |
 | `ArgList` | `(`, expressions and their commas, and `)`. |
 | `Field` | An expression, `.`, and a `NameRef` or a tuple position's `Int`. |
@@ -151,6 +154,10 @@ The parser reads the significant tokens: every token but the trivia and the doc 
   - A bracket closed while the parser is skipping after an error gets no E0017, since that error covers the slip.
   - After a bracket closes without its closing bracket, what the constructs around it lack is part of that slip, until the parser next takes a token. A line break there ends them, whatever token comes before it.
   - An E0016 after a list item, at an item that starts the next line, has a fix that inserts the `,` (`needs-review`).
+- **Operators.** The parser accepts any mix of binary operators and builds the tree of the usual reading, then reports what the spec forbids. The usual reading puts the operators with no level where the spec's examples do, so the order, tightest first, is postfix, prefix, `*` `/` `%`, `+` `-`, `<<` `>>`, `&`, `^`, `|`, `..` `..=`, comparisons, `&&`, `||`. Every level groups to the left, comparisons and ranges included, and their chains are E0020s.
+  - A `>` and a `>` or `=` right after it, with no trivia between, are one operator, `>>` or `>=`, which the tree holds as one `GtGt` or `GtEq` token. A closing `>` of type arguments is never joined.
+  - After a binary operator a line break is spacing, `*` and `>` included, which `continues_line()` leaves to the parser. After `-` it is spacing too, since `-` can be binary, but after `!` or `~` it ends the line.
+  - E0019 is reported at each operand that needs parentheses, and E0020 at the second operator of a chain, once per chain. Neither is reported for an operator one of whose operands has a syntax error, since that error is the slip.
 - **Errors the parser leaves to the lexer.** Beyond the lexer's own list (above):
   - The parser drops an error it would report right after an `Error` token, with only trivia between, so `let x = $` is the E0001 alone.
   - An unclosed one-line string or char closes, at its line's end, the parentheses and square brackets opened on that line, with no E0017, and the parser reports nothing on that line. A block's `{` stays open.
@@ -161,4 +168,6 @@ The parser reads the significant tokens: every token but the trivia and the doc 
 | --- | --- | --- |
 | E0016 | A token that can't go here: "expected X, found Y", where Y can be a line break or the end of the file. A keyword where a name goes is one, which the message names | Insert the missing `,` between list items on separate lines (`needs-review`). Remove the parentheses around one type that isn't a function type (`safe`). Move what follows an attribute on its line to the next line (`safe`). Otherwise none |
 | E0017 | An opening bracket with no closing one, at the opener | None |
+| E0019 | An operand that needs parentheses: `&&` mixed with `||`, a bit operator or a shift as an operand of another operator or with an arithmetic operand, `&`, `|` or `^` mixed, a shift of a shift, or a range as an operand | Add the parentheses of the usual reading (`needs-review`) |
+| E0020 | A chained comparison or range, at its second operator | For comparisons, repeat each middle operand: `a < b && b < c` (`needs-review`), unless one holds a comment or a line break. None for ranges |
 | E0024 | A struct with no fields written with braces, at the braces | Remove them (`safe`), unless a `requires` follows or a comment lies before or between them |

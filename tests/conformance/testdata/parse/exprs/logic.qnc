@@ -1,0 +1,11 @@
+// rule: expr.op.logic.no-mix
+// mode: parse
+// `&&` and `||` each chain with themselves, but can't be mixed without parentheses.
+fn f(a: Bool, b: Bool, c: Bool) {
+  let all = a && b && c
+  let any = a || b || c
+  let left = (a && b) || c
+  let right = a || (b && c)
+  let x = a || b && c //~ E0019
+  let y = a && b || c //~ E0019
+}

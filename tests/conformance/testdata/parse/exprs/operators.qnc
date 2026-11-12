@@ -1,0 +1,22 @@
+// rule: grammar.expr
+// rule: grammar.logic
+// rule: grammar.compare
+// rule: grammar.cmp_op
+// rule: grammar.arith
+// rule: grammar.term
+// rule: grammar.prefix
+// mode: parse
+// Every operator of the seven levels, mixed as the spec allows without parentheses. A line
+// that ends with a binary operator continues, `*` and `>` included.
+fn f(a: Int, b: Int, ok: Bool) -> Bool {
+  let sum = a + b * 2 - a / b % 3
+  let neg = -a + -(b) - --a
+  let not = !ok && !!ok
+  let flipped = ~a
+  let eq = a == b || a != b || a < b || a <= b || a > b || a >= b
+  let all = a + 1 < b * 2 && ok && b - 1 >= 0
+  let wrapped = a *
+    b >
+    1
+  eq || (all && not)
+}
