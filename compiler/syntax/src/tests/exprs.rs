@@ -391,3 +391,181 @@ fn a_syntax_error_is_the_one_error() {
     );
     assert_eq!(errors("a < b < c <"), ["E0016 12..13"]);
 }
+
+/// `r[expr.op.type-args]`: type arguments after a name go in its `NameRef`, after a path's
+/// last name too.
+#[test]
+fn type_arguments() {
+    assert_eq!(
+        tree("json.decode<Order>(body)"),
+        r#"Call
+  Field
+    NameRef
+      Ident "json"
+    Dot "."
+    NameRef
+      Ident "decode"
+      TypeArgs
+        Lt "<"
+        TypePath
+          Ident "Order"
+        Gt ">"
+  ArgList
+    LParen "("
+    NameRef
+      Ident "body"
+    RParen ")"
+"#
+    );
+    assert_eq!(
+        tree("Channel<Job>.new"),
+        r#"Field
+  NameRef
+    Ident "Channel"
+    TypeArgs
+      Lt "<"
+      TypePath
+        Ident "Job"
+      Gt ">"
+  Dot "."
+  NameRef
+    Ident "new"
+"#
+    );
+    // Case doesn't decide it: a type can be a C name.
+    assert_eq!(
+        tree("CBuf.new<Ptr<sqlite3>>()"),
+        tree("CBuf.new<Ptr<Sqlite3>>()").replace("Sqlite3", "sqlite3")
+    );
+}
+
+/// The tokens that may follow type arguments' `>`: `(`, `.`, `?`, `,`, `)`, `]`, `}` and a
+/// line break. After any other, the `<` is less-than.
+#[test]
+fn what_may_follow_type_arguments() {
+    let has_type_args = |text: &str| {
+        let parse = checked(text);
+        parse.syntax().descendants().any(|node| {
+            node.kind() == SyntaxKind::TypeArgs
+                && node.parent().unwrap().kind() == SyntaxKind::NameRef
+        })
+    };
+    for text in [
+        "fn f() {\n  g(id<Int>)\n}\n",
+        "fn f() {\n  id<Int>.name\n}\n",
+        "fn f() {\n  g(id<Int>, 1)\n}\n",
+        "fn f() {\n  [id<Int>]\n}\n",
+        "fn f() { id<Int> }\n",
+        "fn f() {\n  id<Int>\n}\n",
+        "fn f() {\n  id<Int>",
+        // `?` is a postfix operator, so the tree holds type arguments whatever follows it.
+        "fn f() {\n  id<Int>?\n}\n",
+    ] {
+        assert!(has_type_args(text), "{text:?}");
+    }
+    for text in [
+        "fn f() {\n  a < b > c\n}\n",
+        "fn f() {\n  a < b >= c\n}\n",
+        "fn f() {\n  a < b >> c\n}\n",
+        "fn f() {\n  a < b > -c\n}\n",
+        "fn f() {\n  a < b > [c]\n}\n",
+        "fn f() {\n  g(a < b, c > d)\n}\n",
+    ] {
+        assert!(!has_type_args(text), "{text:?}");
+    }
+}
+
+/// When the `<` is less-than, parsing ahead leaves nothing behind: no error, no node and no
+/// closed bracket.
+#[test]
+fn less_than_after_parsing_ahead() {
+    assert_eq!(
+        tree("g(a < b, c > d)"),
+        r#"Call
+  NameRef
+    Ident "g"
+  ArgList
+    LParen "("
+    Binary
+      NameRef
+        Ident "a"
+      Lt "<"
+      NameRef
+        Ident "b"
+    Comma ","
+    Binary
+      NameRef
+        Ident "c"
+      Gt ">"
+      NameRef
+        Ident "d"
+    RParen ")"
+"#
+    );
+    for expr in [
+        "a < b + c",
+        "g(a < b)",
+        "[a < b, c]",
+        "a < (b) && c > d",
+        "a < f(b > c)",
+    ] {
+        assert_eq!(errors(expr), Vec::<String>::new(), "{expr}");
+    }
+    assert_eq!(errors("a < b > c"), ["E0020 6..7 => a < b && b > c"]);
+    assert_eq!(errors("x < Y >= z"), ["E0020 6..8 => x < Y && Y >= z"]);
+    assert_eq!(errors("a < b >> c"), ["E0019 4..10 => a < (b >> c)"]);
+    // A long chain is parsed ahead from each `<` once, and is one error.
+    let chain = vec!["a"; 200].join(" < ");
+    assert_eq!(errors(&chain).len(), 1);
+}
+
+/// `r[lex.lit.int.neg]` and `r[lex.lit.neg-adjacent]`: a `-` in prefix position directly
+/// before a number that no postfix operator follows is part of the literal.
+#[test]
+fn negative_literals() {
+    assert_eq!(tree("-1"), "Literal\n  Minus \"-\"\n  Int \"1\"\n");
+    assert_eq!(tree("-1.5"), "Literal\n  Minus \"-\"\n  Float \"1.5\"\n");
+    assert_eq!(
+        tree("-9_223_372_036_854_775_808"),
+        "Literal\n  Minus \"-\"\n  Int \"9_223_372_036_854_775_808\"\n"
+    );
+    assert_eq!(
+        tree("- 1"),
+        "Prefix\n  Minus \"-\"\n  Literal\n    Int \"1\"\n"
+    );
+    assert_eq!(
+        tree("--1"),
+        "Prefix\n  Minus \"-\"\n  Literal\n    Minus \"-\"\n    Int \"1\"\n"
+    );
+    assert_eq!(
+        tree("a - -1"),
+        "Binary\n  NameRef\n    Ident \"a\"\n  Minus \"-\"\n  Literal\n    Minus \"-\"\n    Int \"1\"\n"
+    );
+    // In binary position a `-` is the operator, spaced or not.
+    assert_eq!(tree("a -1"), tree("a - 1"));
+    // A postfix operator after the number binds tighter, as `-x.abs()` reads.
+    assert_eq!(
+        tree("-2.pow(2)"),
+        r#"Prefix
+  Minus "-"
+  Call
+    Field
+      Literal
+        Int "2"
+      Dot "."
+      NameRef
+        Ident "pow"
+    ArgList
+      LParen "("
+      Literal
+        Int "2"
+      RParen ")"
+"#
+    );
+    assert!(tree("-2\n    .pow(2)").starts_with("Prefix\n"));
+    // A `(` on the next line starts a statement, so it isn't a postfix operator.
+    assert_eq!(
+        stmts("  -1\n  (2)"),
+        "Literal\n  Minus \"-\"\n  Int \"1\"\nParen\n  LParen \"(\"\n  Literal\n    Int \"2\"\n  RParen \")\"\n"
+    );
+}

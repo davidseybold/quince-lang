@@ -74,12 +74,22 @@ fn path_names(p: &mut Parser) -> (Marker, bool) {
 
 /// `<` type_arg { `,` type_arg } `>` (`grammar.type_args`, `grammar.type_arg`), or a bound's
 /// arguments, which may also name an associated type (`grammar.bound_arg`). A list closed by
-/// `>`, so line breaks in it are spacing.
+/// `>`, so line breaks in it are spacing. While the parser is speculating, it records where
+/// they end, or that they don't parse.
 fn type_args(p: &mut Parser, in_bound: bool) -> bool {
-    let marker = p.start();
+    let (marker, at) = (p.start(), p.pos);
     angle_list(p, "a type", if in_bound { bound_arg } else { type_arg });
     p.complete(marker, TypeArgs);
+    if p.speculating {
+        let end = (!p.speculation_failed).then_some(p.pos);
+        p.type_args_end.insert(at, end);
+    }
     true
+}
+
+/// Type arguments after a name in an expression, at their `<`.
+pub(super) fn expr_type_args(p: &mut Parser) {
+    type_args(p, false);
 }
 
 /// After a `<`: one item or more until `>`, each parsed by `item`, with no trailing `,`.

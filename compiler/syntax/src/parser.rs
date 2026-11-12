@@ -14,6 +14,7 @@ use input::{Break, Input, Sig};
 use quince_diagnostics::{Applicability, Diagnostic, LineIndex};
 use rowan::GreenNode;
 use std::cell::Cell;
+use std::collections::HashMap;
 use std::ops::Range;
 
 /// A parsed file: its tree, and every error the lexer and the parser found, in source order.
@@ -233,6 +234,28 @@ struct Parser<'t> {
     /// The file has had a declaration, so an import is out of place.
     imports_closed: bool,
     lookahead: Cell<u32>,
+    /// The parser is parsing ahead to see whether a `<` in an expression starts type
+    /// arguments (decision 6).
+    speculating: bool,
+    /// While speculating, a slip happened. From then on the parser sees no more tokens, so
+    /// every construct it has open closes at once.
+    speculation_failed: bool,
+    /// Each `<` the parser has parsed ahead from, nested ones included, by its index among
+    /// the significant tokens: the index after the `>` that closes its type arguments, or
+    /// `None` when what follows isn't type arguments. So each `<` is examined once.
+    type_args_end: HashMap<usize, Option<usize>>,
+}
+
+/// Where the parser was, so it can go back there after parsing ahead.
+struct Checkpoint {
+    pos: usize,
+    steps: usize,
+    taken: usize,
+    frames: usize,
+    slips: u32,
+    recovering: bool,
+    closed_early: bool,
+    after_operator: bool,
 }
 
 impl<'t> Parser<'t> {
@@ -253,6 +276,9 @@ impl<'t> Parser<'t> {
             slips: 0,
             imports_closed: false,
             lookahead: Cell::new(0),
+            speculating: false,
+            speculation_failed: false,
+            type_args_end: HashMap::new(),
         }
     }
 
@@ -263,6 +289,9 @@ impl<'t> Parser<'t> {
         let count = self.lookahead.get() + 1;
         debug_assert!(count <= LOOKAHEAD_LIMIT, "the parser is stuck");
         self.lookahead.set(count);
+        if self.speculation_failed {
+            return None;
+        }
         self.input.tokens.get(self.pos + n)
     }
 
@@ -689,8 +718,45 @@ impl<'t> Parser<'t> {
         }
     }
 
+    /// Counts a slip. While speculating, it means what follows the `<` isn't type arguments.
     fn slip(&mut self) {
         self.slips += 1;
+        if self.speculating {
+            self.speculation_failed = true;
+        }
+    }
+
+    // Parsing ahead.
+
+    fn checkpoint(&self) -> Checkpoint {
+        Checkpoint {
+            pos: self.pos,
+            steps: self.steps.len(),
+            taken: self.taken.len(),
+            frames: self.frames.len(),
+            slips: self.slips,
+            recovering: self.recovering,
+            closed_early: self.closed_early,
+            after_operator: self.after_operator,
+        }
+    }
+
+    /// Goes back to `checkpoint`, dropping everything parsed since, errors included.
+    fn rewind(&mut self, checkpoint: Checkpoint) {
+        debug_assert_eq!(
+            self.frames.len(),
+            checkpoint.frames,
+            "parsing ahead left a frame"
+        );
+        self.pos = checkpoint.pos;
+        self.steps.truncate(checkpoint.steps);
+        self.taken.truncate(checkpoint.taken);
+        self.slips = checkpoint.slips;
+        self.recovering = checkpoint.recovering;
+        self.closed_early = checkpoint.closed_early;
+        self.after_operator = checkpoint.after_operator;
+        self.after_attributes = false;
+        self.lookahead.set(0);
     }
 
     // Recovery.

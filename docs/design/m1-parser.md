@@ -511,8 +511,8 @@ Layer 3 is three PRs (decided by David, 2026-11-12), since together they would r
 - [x] An expression in parentheses, which the fixes for E0019 write. Tuples wait for 3c.
 
 **Layer 3b: `m1/parser-type-args`**
-- [ ] Spec: questions 5 and 6, and a bump.
-- [ ] Type arguments in expressions, `.name<T>(...)` included; negative literals, unit-tested only (decision 11).
+- [x] Spec: questions 5 and 6, and a bump (v0.15).
+- [x] Type arguments in expressions, `.name<T>(...)` included; negative literals, unit-tested only (decision 11). [`expr.op.type-args`]
 
 **Layer 3c: `m1/parser-postfix`**
 - [ ] Postfix forms, tuples, maps, `{}` and E0025, named arguments (attribute arguments too), `..base`. [`lex.lit.collections`, `lex.lit.empty-map`, `expr.block.brace-map`, `item.struct.update`, `intro.excl.macros`]

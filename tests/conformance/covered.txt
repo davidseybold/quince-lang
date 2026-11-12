@@ -8,6 +8,7 @@ expr.op.logic.no-mix
 expr.op.parens-required
 expr.op.range.no-chain
 expr.op.range.parens
+expr.op.type-args
 grammar.alias_decl
 grammar.arith
 grammar.attribute

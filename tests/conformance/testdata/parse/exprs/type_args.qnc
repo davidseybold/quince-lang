@@ -1,0 +1,18 @@
+// rule: expr.op.type-args
+// mode: parse
+// In an expression, `<` after a name or path starts type arguments when they parse, closed
+// by `>`, and the token after the `>` is `(`, `.`, `,`, `)`, `]`, `}` or a line break.
+// Otherwise it is less-than, so these comparisons chain or need parentheses.
+fn f(body: String, a: Int, b: Int, c: Int) {
+  let order = json.decode<Order>(body)
+  let jobs = Channel<Job>.new(16)
+  let buf = CBuf.new<Ptr<sqlite3>>()
+  let pools = [Pool<PgConn, PgError>.open(), make<Int>]
+  let pair = g(a < b, c > 1)
+  let calls = g(id<Int>, id<String>)
+  let list = List<Int>
+  let less = a < b && b > c
+  let x = a < b > c //~ E0020
+  let y = a < b >= c //~ E0020
+  let z = a < b >> c //~ E0019
+}
