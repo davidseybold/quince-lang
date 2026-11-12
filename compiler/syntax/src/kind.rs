@@ -92,6 +92,16 @@ syntax_kinds! {
         FnDecl, ParamList, Param, RetType, TestDecl, ConstDecl, ImplDecl,
         /// A type path with its type arguments.
         TypePath, TypeArgs,
+        /// A bound's type argument that names an associated type: `Item = Int`.
+        NamedTypeArg,
+        /// `()`, or a tuple of two or more types.
+        TupleType,
+        /// One type in parentheses: a function type, or an error.
+        ParenType,
+        FnType,
+        /// `uses` and its list of effects.
+        Effects,
+        Generics, GenericParam,
         Block, LetStmt,
         /// A name being declared.
         Name,

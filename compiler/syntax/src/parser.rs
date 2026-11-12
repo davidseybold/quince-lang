@@ -175,6 +175,13 @@ enum Stop {
     LineEnd,
 }
 
+/// Whether a list may end with a `,`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Trailing {
+    Allowed,
+    Rejected,
+}
+
 /// Where error recovery stops skipping.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Sync {
@@ -611,26 +618,52 @@ impl<'t> Parser<'t> {
         what_item: &str,
         item: fn(&mut Parser),
         starts_item: fn(SyntaxKind) -> bool,
+        trailing: Trailing,
     ) {
         self.push_frame(Holds::Items, Some(closer));
+        self.list_items(closer, what_item, item, starts_item, trailing, false);
+    }
+
+    /// The rest of a [`Parser::list`] whose frame is open. With `after_item`, the caller has
+    /// parsed an item, so the list goes on at the token after it.
+    fn list_items(
+        &mut self,
+        closer: SyntaxKind,
+        what_item: &str,
+        item: fn(&mut Parser),
+        starts_item: fn(SyntaxKind) -> bool,
+        trailing: Trailing,
+        mut after_item: bool,
+    ) {
         let close = format!("`{}`", punctuation(closer));
+        let mut after_comma = false;
         loop {
-            if self.kind() == closer {
-                self.pop_frame();
-                self.bump();
-                return;
+            if !after_item {
+                if self.kind() == closer {
+                    if after_comma && trailing == Trailing::Rejected {
+                        self.expected(what_item);
+                    }
+                    self.pop_frame();
+                    self.bump();
+                    return;
+                }
+                if let Some(stop) = self.stop() {
+                    self.close_frame(stop);
+                    return;
+                }
+                if self.unmatched_closer() {
+                    self.close_in_place(&format!("{what_item} or {close}"));
+                    return;
+                }
+                item(self);
             }
-            if let Some(stop) = self.stop() {
-                self.close_frame(stop);
-                return;
-            }
-            if self.unmatched_closer() {
-                self.close_in_place(&format!("{what_item} or {close}"));
-                return;
-            }
-            item(self);
+            after_item = false;
+            after_comma = false;
             match self.kind() {
-                Comma => self.bump(),
+                Comma => {
+                    self.bump();
+                    after_comma = true;
+                }
                 kind if kind == closer => {}
                 _ if self.stop().is_some() => {}
                 _ if self.unmatched_closer() => {

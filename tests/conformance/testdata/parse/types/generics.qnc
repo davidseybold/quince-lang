@@ -1,0 +1,18 @@
+// rule: grammar.generics
+// rule: grammar.generic
+// rule: grammar.bounds
+// rule: grammar.bound
+// rule: grammar.bound_arg
+// mode: parse
+// Generic parameters go in angle brackets after a function's name. Each is a type parameter
+// with optional bounds joined by `+`, or `uses` and an effect variable. A bound takes type
+// arguments, which may name an associated type.
+fn one<T>(x: T) -> T { x }
+fn bounded<T: Eq + Hash, U: Into<String>>(t: T, u: U) {}
+fn sums<I: Iterator<Item = Int>, O: Add<Int, Output = Int>>(i: I) {}
+fn map<U, uses E>(f: fn(Int) -> U uses E) -> List<U> uses E {}
+fn two<uses E1, uses E2>() {}
+fn empty<>() {} //~ E0016
+fn no_bound<T:>() {} //~ E0016
+fn trailing_plus<T: Eq +>() {} //~ E0016
+fn bounded_effect<uses E: Eq>() {} //~ E0016

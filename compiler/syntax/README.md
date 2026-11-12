@@ -92,15 +92,22 @@ A node holds its tokens and child nodes in source order. A part the code leaves 
 | Kind | Holds |
 | --- | --- |
 | `File` | The declarations. |
-| `FnDecl` | `pub` if present, `fn`, a `Name`, a `ParamList`, a `RetType` if present, and a `Block`. |
+| `FnDecl` | `pub` if present, `fn`, a `Name`, `Generics`, a `ParamList`, a `RetType` and `Effects` if present, and a `Block`. A `uses` after a bare function type in the `RetType` is the declaration's `Effects` (`r[effect.uses-return]`). |
 | `ParamList` | `(`, `Param`s and their commas, and `)`. |
 | `Param` | `var` if present, then `self`, or a `Name` or `_` followed by `:`, a type, and `=` and an expression for a default. |
 | `RetType` | `->` and a type. |
 | `TestDecl` | `test`, its name as a `Literal`, and a `Block`. |
 | `ConstDecl` | `pub` if present, `const`, a `Name`, `:`, a type, `=` and an expression. |
 | `ImplDecl` | `impl`, a type, `{`, a `FnDecl` per method, and `}`. |
-| `TypePath` | Its names and the `.` tokens between them, whatever their case, then its `TypeArgs` if present. |
-| `TypeArgs` | `<`, types and their commas, and `>`. |
+| `TypePath` | Its names and the `.` tokens between them, whatever their case, then its `TypeArgs` if present. An effect in a `uses` list and a bound are `TypePath`s too. |
+| `TypeArgs` | `<`, types and their commas, and `>`. The last item may be `Effects`, and in a bound an item may be a `NamedTypeArg`. |
+| `NamedTypeArg` | A `NameRef`, `=` and a type: `Item = Int` in a bound. |
+| `TupleType` | `(`, two or more types and their commas, and `)`, or just `(` and `)` for the unit type. |
+| `ParenType` | `(`, one type and `)`. The type is a `FnType` unless it is an error. |
+| `FnType` | `fn`, `(`, the parameter types and their commas, `)`, then a `RetType` and `Effects` if present. |
+| `Effects` | `uses`, then `*` or `TypePath`s and their commas. |
+| `Generics` | `<`, `GenericParam`s and their commas, and `>`. |
+| `GenericParam` | A `Name`, then `:` and bounds joined by `+` if present, or `uses` and a `Name`. |
 | `Block` | `{`, its statements, and `}`. An expression statement is the expression's own node. |
 | `LetStmt` | `let`, a `Name`, `:` and a type if present, `=` and an expression. |
 | `Name` | The `Ident` of a name being declared. |
@@ -122,7 +129,7 @@ The parser reads the significant tokens: every token but the trivia and the doc 
 
 - **Where a break ends a construct.** In a line context (the file, a block, an `impl` body), a break ends the statement or declaration unless the token before it continues the line (`SyntaxKind::continues_line()`), the next token is `.`, or the parser is in a `fn` header and the next token is `->`, `uses`, `requires`, `ensures` or `{`. A hard break always ends it. Inside brackets, a break before a `,` or a closing bracket is spacing, but an expression in brackets still ends at a break, as a statement does.
 - **Errors.** Every syntax error is reported once, and then the parser skips to a sync point, reporting nothing more until it next takes a token as part of a construct. The skipped tokens go in a `Skipped` node, and a bracket the skip meets is skipped up to its closing bracket.
-  - A list syncs at its next `,` and at its closing bracket. A line context syncs at its next break, which ends the member that went wrong. An `impl` header syncs at the `{` on its line, so its body is still parsed as its body.
+  - A list syncs at its next `,` and at its closing bracket. Type arguments and generics are lists closed by `>`, so their errors stay inside them, and a closing bracket further out closes them with an E0017 at the `<`. A line context syncs at its next break, which ends the member that went wrong. An `impl` header syncs at the `{` on its line, so its body is still parsed as its body.
   - A token at the start of a line that can only start a member of some open container closes every construct inside the innermost such container, with an E0017 at each opening bracket it closes. For the file those tokens are `fn` and a name, `struct`, `enum`, `type`, `interface`, `impl`, `effect`, `foreign`, `import`, `const` and `test`, each also after `pub`. For an `impl` body they are `fn` and a name, `type` and `const`. For a block they are `let`, `var` and `while`.
   - A closing bracket that matches a bracket further out closes everything inside it, with an E0017 at each opener. One that matches nothing open closes the innermost list in its place, with one E0016 that names the bracket expected, and in a line context it is skipped as an E0016. The end of the file closes everything still open, with an E0017 at each opener.
   - A bracket closed while the parser is skipping after an error gets no E0017, since that error covers the slip.
@@ -136,5 +143,5 @@ The parser reads the significant tokens: every token but the trivia and the doc 
 
 | Code | Reported for | Fix |
 | --- | --- | --- |
-| E0016 | A token that can't go here: "expected X, found Y", where Y can be a line break or the end of the file. A keyword where a name goes is one, which the message names | Insert the missing `,` between list items on separate lines (`needs-review`). Otherwise none |
+| E0016 | A token that can't go here: "expected X, found Y", where Y can be a line break or the end of the file. A keyword where a name goes is one, which the message names | Insert the missing `,` between list items on separate lines (`needs-review`). Remove the parentheses around one type that isn't a function type (`safe`). Otherwise none |
 | E0017 | An opening bracket with no closing one, at the opener | None |

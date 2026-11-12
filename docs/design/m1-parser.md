@@ -335,8 +335,8 @@ The layers:
    - literals, booleans (question 2), names, list literals, ranges, calls, method calls and fields;
    - the README's CST contract;
    - `SyntaxBackend::parse` runs the parser.
-2. `m1/parser-types`: the rest of types, generics, bounds and effect lists; the joined `>>` and `>=`; struct, enum, newtype, alias and import declarations; attributes and doc comments; E0024.
-3. `m1/parser-exprs`: every operator and level, E0019 and E0020; type arguments in expressions; negative literals; tuples, maps and E0025; `..base`.
+2. `m1/parser-types` (2a): the rest of types, generics, bounds and effect lists. `m1/parser-decls` (2b): struct, enum, newtype, alias and import declarations; attributes and doc comments; E0024.
+3. `m1/parser-exprs`: every operator and level, E0019 and E0020; the joined `>>` and `>=`; type arguments in expressions; negative literals; tuples, maps and E0025; `..base`.
 4. `m1/parser-stmts`: statements, assignment and E0026; list contexts; E0018; `if` and `else`.
 5. `m1/parser-patterns`: patterns, `match`, `is` and `for`.
 6. `m1/parser-keyword-forms`: closures, `concurrent`, `background`, `select`, `with`, `spawn` and contracts.
@@ -489,15 +489,23 @@ Rule IDs in brackets are what each task's fixtures cite. Grammar productions are
 - [x] `SyntaxBackend::parse` runs the parser, and every `lex/` fixture still passes.
 - [x] `compiler/syntax/README.md`: the CST contract. `AGENTS.md`'s map.
 
-**Layer 2: `m1/parser-types`**
-- [ ] Spec: questions 8, 11 and 14, and a bump.
-- [ ] Types, generics, bounds, effect lists; parenthesized function types (question 14); joined `>>` and `>=`. [`grammar.type`, `grammar.fn_type`, `grammar.type_args`, `grammar.generics`, `grammar.bounds`, `grammar.effects`, `lex.no-shift-token`]
-- [ ] Struct, enum, newtype, alias and import declarations; attributes; doc comments; E0024. [`grammar.struct_decl`, `grammar.enum_decl`, `grammar.newtype_decl`, `grammar.alias_decl`, `grammar.import`, `grammar.attribute`, `item.attr.placement`, `item.enum.field-visibility`, `lex.comment.doc`, `intro.excl.wildcard-imports`]
+Layer 2 is two PRs, since types and declarations are separate pieces of work and together would run past 1,000 lines.
+
+**Layer 2a: `m1/parser-types`**
+- [x] Spec: questions 8 and 14, and a bump (v0.13).
+- [x] Types, generics, bounds, effect lists; parenthesized function types (question 14); a closing `>` is never joined, so `>>` and `>=` close type arguments. Type arguments and generics are lists closed by `>`, so an error in them stays inside them. [`grammar.type`, `grammar.type_path`, `grammar.fn_type`, `grammar.type_args`, `grammar.type_arg`, `grammar.generics`, `grammar.generic`, `grammar.bounds`, `grammar.bound`, `grammar.bound_arg`, `grammar.effects`, `grammar.effect_ref`, `lex.no-shift-token`, `effect.uses-list`, `type.fn-parens`]
+- [x] `effect.uses-return` is about the tree's shape, which no diagnostic shows, so it is unit-tested only (decision 11). M2's `check` fixtures cite it.
+
+**Layer 2b: `m1/parser-decls`**
+- [ ] Spec: question 11, and a bump.
+- [ ] Struct, enum, newtype, alias and import declarations; attributes; doc comments; E0024. [`grammar.struct_decl`, `grammar.enum_decl`, `grammar.newtype_decl`, `grammar.alias_decl`, `grammar.import`, `grammar.attribute`, `item.attr.placement`, `item.enum.field-visibility`, `lex.comment.doc`, `intro.excl.wildcard-imports`, `item.struct.no-fields`]
+- [ ] Attribute look-past (decision 9): at the start of a line, the member-start check looks past attribute and doc-comment lines, so `g(1,` then a line `@attr` then `fn h() {}` closes the call with one E0017 and no E0016 at `@`.
 
 **Layer 3: `m1/parser-exprs`**
 - [ ] Spec: questions 5 and 6, and a bump.
 - [ ] Every operator and level; E0019, E0020. [`expr.op.parens-required`, `expr.op.logic.no-mix`, `expr.op.bits.parens`, `expr.op.bits.chain`, `expr.op.compare.no-chain`, `expr.op.range.no-chain`, `expr.op.range.parens`, `expr.op.excluded`, `grammar.bits`]
 - [ ] Type arguments in expressions; negative literals, unit-tested only (decision 11).
+- [ ] The joined `>>` and `>=` (decision 5): the parser's join step, used by the shift and comparison operators. Moved from layer 2, since only expressions join tokens.
 - [ ] Postfix forms, tuples, maps, `{}` and E0025, `..base`. [`lex.lit.collections`, `lex.lit.empty-map`, `expr.block.brace-map`, `item.struct.update`, `intro.excl.macros`]
 
 **Layer 4: `m1/parser-stmts`**

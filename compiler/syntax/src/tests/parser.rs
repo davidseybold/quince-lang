@@ -6,7 +6,7 @@ use super::repo_root;
 use crate::{Parse, SyntaxError, SyntaxKind, decode_source, lex, lex_str, parse, parse_str};
 
 /// The tree without trivia, after checking that the text parses with no error.
-fn valid(text: &str) -> String {
+pub(super) fn valid(text: &str) -> String {
     let parse = checked(text);
     assert_eq!(parse.errors(), [], "{text:?}");
     dump_tree_without_trivia(&parse.syntax())
@@ -14,7 +14,7 @@ fn valid(text: &str) -> String {
 
 /// The statements of a function whose body is `body`, each dumped without trivia, after
 /// checking that it parses with no error.
-fn stmts(body: &str) -> String {
+pub(super) fn stmts(body: &str) -> String {
     let text = format!("fn f() {{\n{body}\n}}\n");
     let parse = checked(&text);
     assert_eq!(parse.errors(), [], "{text:?}");
