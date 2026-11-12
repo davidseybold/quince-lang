@@ -1,0 +1,39 @@
+// rule: lex.continue.lists
+// mode: parse
+// Inside parentheses, square brackets, angle brackets and the braces of a comma-separated
+// list, a line break is only spacing. A block inside them is a line context again, and `else`
+// still goes on the line of the closing `}`.
+struct Point {
+  x: Int,
+  y: Int
+}
+
+fn f(
+  a: Int,
+  b: Int
+) -> Map<
+  String,
+  Int
+> {
+  let sum = g(
+    a
+    + b
+  )
+  let list = [
+    a
+    , b
+  ]
+  let map = {
+    "a": a
+    , "b": b
+  }
+  let chosen = g(if a > b {
+    let c = a
+    c
+  } else {
+    b
+  })
+  let wrong = g(if a > b { a }
+    else { b }) //~^ E0018
+  map
+}

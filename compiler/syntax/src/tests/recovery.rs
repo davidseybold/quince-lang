@@ -1,6 +1,7 @@
 //! Error recovery: the slips of the parser design doc's decision 9 and their diagnostics, one
 //! slip to one error, and the errors the parser leaves to the lexer.
 
+use super::cst::dump_tree_without_trivia;
 use super::errors::describe;
 use super::parser::{check_error_ranges, checked};
 use crate::{SyntaxKind, decode_source, parse};
@@ -300,8 +301,97 @@ fn a_break_too_early() {
         ["expected `(`, found a line break"]
     );
     assert_eq!(
+        messages("fn f() {\n  let\n  x = 1\n}"),
+        ["expected a name, found a line break"]
+    );
+}
+
+/// The tree of `text`, whatever its errors.
+fn tree(text: &str) -> String {
+    dump_tree_without_trivia(&checked(text).syntax())
+}
+
+/// A line that starts with what can't start a statement but continues the line above is one
+/// E0018 at the break, whose fix joins the lines, and the tree is the joined one (decision 4).
+#[test]
+fn a_line_break_too_early() {
+    let cases = [
+        (
+            "fn f() {\n  let x\n  = 1\n}",
+            "fn f() {\n  let x = 1\n}",
+            16..17,
+        ),
+        ("fn f() {\n  x\n  += 1\n}", "fn f() {\n  x += 1\n}", 12..13),
+        (
+            "fn f() {\n  if a {\n  }\n  else {}\n}",
+            "fn f() {\n  if a {\n  } else {}\n}",
+            21..22,
+        ),
+        (
+            "fn f() {\n  if a\n\n  {}\n}",
+            "fn f() {\n  if a {}\n}",
+            15..16,
+        ),
+        (
+            "fn f() {\n  if a {} else\n  {}\n}",
+            "fn f() {\n  if a {} else {}\n}",
+            23..24,
+        ),
+        ("fn f() {\n  a\n    * b\n}", "fn f() {\n  a * b\n}", 12..13),
+        ("fn f() {\n  g()\n    ?\n}", "fn f() {\n  g() ?\n}", 14..15),
+        (
+            "fn f() {\n  g(if a {}\n  else {})\n}",
+            "fn f() {\n  g(if a {} else {})\n}",
+            20..21,
+        ),
+        ("impl T\n{}", "impl T {}", 6..7),
+        ("enum E\n{ A }", "enum E { A }", 6..7),
+        ("test \"t\"\n{}", "test \"t\" {}", 8..9),
+        ("const N: Int\n  = 1", "const N: Int = 1", 12..13),
+        ("type T\n  = Int", "type T = Int", 6..7),
+    ];
+    for (text, joined, at) in cases {
+        assert_eq!(
+            errors(text),
+            [format!("E0018 {at:?} => {joined:?}")],
+            "{text:?}"
+        );
+        assert_eq!(tree(text), tree(joined), "{text:?}");
+    }
+    assert_eq!(
         messages("fn f() {\n  let x\n  = 1\n}"),
-        ["expected `:` or `=`, found a line break"]
+        ["a line break can't come before `=`, which continues the line above"]
+    );
+}
+
+/// No fix joins lines with a comment between them.
+#[test]
+fn no_join_across_a_comment() {
+    assert_eq!(
+        errors("fn f() {\n  let x // the total\n  = 1\n}"),
+        ["E0018 29..30"]
+    );
+    assert_eq!(
+        errors("fn f() {\n  let x\n  // the total\n  = 1\n}"),
+        ["E0018 16..17"]
+    );
+}
+
+/// A line that starts with `-` or `(` is a new statement, and in a list a line break is only
+/// spacing (`r[lex.continue.lists]`). After a `;` nothing joins: `.` there is an E0016 after
+/// the lexer's E0002.
+#[test]
+fn what_doesnt_join() {
+    assert_eq!(errors("fn f() {\n  a\n  -b\n  (c)\n}"), [] as [String; 0]);
+    assert_eq!(
+        tree("fn f() {\n  g(\n    a\n    + b\n    - c\n  )\n}"),
+        tree("fn f() {\n  g(a + b - c)\n}")
+    );
+    assert_eq!(codes("fn f() {\n  a;\n  .b()\n}"), ["E0002", "E0016"]);
+    assert_eq!(codes("fn f() {\n  a;\n  + b\n}"), ["E0002", "E0016"]);
+    assert_eq!(
+        codes("fn f() {\n  if a {};\n  else {}\n}"),
+        ["E0002", "E0016"]
     );
 }
 

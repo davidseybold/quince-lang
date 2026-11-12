@@ -38,6 +38,7 @@ pub mod codes {
     pub const CONTROL_CHARACTER: &str = "E0015";
     pub const UNEXPECTED_TOKEN: &str = "E0016";
     pub const UNCLOSED_BRACKET: &str = "E0017";
+    pub const EARLY_LINE_BREAK: &str = "E0018";
     pub const PARENTHESES_NEEDED: &str = "E0019";
     pub const CHAINED_OPERATOR: &str = "E0020";
     pub const EMPTY_STRUCT_BRACES: &str = "E0024";
@@ -66,6 +67,7 @@ pub mod codes {
     pub const PARSER: &[&str] = &[
         UNEXPECTED_TOKEN,
         UNCLOSED_BRACKET,
+        EARLY_LINE_BREAK,
         PARENTHESES_NEEDED,
         CHAINED_OPERATOR,
         EMPTY_STRUCT_BRACES,

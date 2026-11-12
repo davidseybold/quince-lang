@@ -155,7 +155,7 @@ fn skip(what: &str, p: &mut Parser) {
 
 /// `fn` name [ generics ] `(` params `)` [ `->` type ] [ `uses` effects ] block
 /// (`grammar.fn_decl`, `grammar.fn_sig`). A line that starts with `->`, `uses` or `{`
-/// continues the header (`r[lex.continue.signature]`).
+/// continues the header (`r[lex.continue.fn-header]`).
 fn fn_decl(p: &mut Parser) {
     p.bump();
     let outer_header = std::mem::replace(&mut p.in_fn_header, true);
@@ -242,7 +242,7 @@ fn test_decl(p: &mut Parser) {
         return p.expected("the test's name, a string");
     }
     exprs::literal(p);
-    if !p.at(LBrace) {
+    if !p.at_or_join(LBrace) {
         return p.expected("`{`");
     }
     exprs::block(p);
@@ -261,7 +261,7 @@ fn const_decl(p: &mut Parser) {
     if !types::type_(p) {
         return;
     }
-    if !p.at(Eq) {
+    if !p.at_or_join(Eq) {
         return p.expected("`=`");
     }
     p.bump();
@@ -272,7 +272,7 @@ fn const_decl(p: &mut Parser) {
 /// (`grammar.impl_decl`).
 fn impl_decl(p: &mut Parser) {
     p.bump();
-    if types::type_(p) && !p.at(LBrace) {
+    if types::type_(p) && !p.at_or_join(LBrace) {
         p.expected("`{`");
     }
     skip_to_brace(p);
@@ -462,7 +462,7 @@ fn enum_decl(p: &mut Parser) {
     if !(name(p, "an enum name") && (!p.at(Lt) || types::generics(p))) {
         return;
     }
-    if !p.at(LBrace) {
+    if !p.at_or_join(LBrace) {
         return p.expected("`{`");
     }
     let marker = p.start();
@@ -503,7 +503,7 @@ fn alias_decl(p: &mut Parser) {
     if !(name(p, "a type name") && (!p.at(Lt) || types::generics(p))) {
         return;
     }
-    if !p.at(Eq) {
+    if !p.at_or_join(Eq) {
         return p.expected("`=`");
     }
     p.bump();

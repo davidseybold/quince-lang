@@ -1,0 +1,37 @@
+// rule: lex.line-end
+// mode: parse
+// A line break ends a statement unless the line ends with a binary operator, a comma or an
+// opening bracket. A line that starts with `- b` is a new statement. A line that starts with
+// something that can't start a statement but continues the one above, such as a binary
+// operator other than `-`, `?` or a body's `{`, is an error whose fix joins the lines.
+fn f(a: Int, b: Int) -> Int {
+  let sum = a +
+    b
+  let all = a > 0 &&
+    b > 0
+  let list = [
+    a, b]
+  let call = g(a,
+    b)
+  let two = a
+  -b
+  let joined = a
+    + b //~^ E0018
+  let compared = a
+    < b //~^ E0018
+  let anded = sum > 0
+    && all //~^ E0018
+  let ranged = a
+    ..b //~^ E0018
+  let tried = load(a)
+    ? //~^ E0018
+  if sum > 0
+  { //~^ E0018
+    log("positive")
+  }
+  while sum > 100
+  { //~^ E0018
+    log("large")
+  }
+  sum
+}

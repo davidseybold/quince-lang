@@ -15,8 +15,11 @@ A line also continues when it ends with `=`, a compound assignment such as `+=`,
 r[lex.else-same-line]
 `else` must sit on the line of the closing `}`; a line that starts with `else` is an error whose fix joins it.
 
-r[lex.continue.signature]
-Inside a `fn` signature, a line that starts with `->`, `uses`, `requires`, `ensures` or `{` continues the signature, so `quince` `fmt` breaks a long signature before those words, as in [Effects](effects.md) and [Contracts](contracts.md).
+r[lex.continue.fn-header]
+Inside any `fn` header, whether a declaration's signature, a closure's or a function type, a line that starts with `->`, `uses`, `requires`, `ensures` or `{` continues the header. So `quince` `fmt` breaks a long signature before those words, as in [Effects](effects.md) and [Contracts](contracts.md).
+
+r[lex.continue.lists]
+Inside parentheses, square brackets, angle brackets and the braces of a comma-separated list, such as fields, variants, map entries and match arms, a line break is only spacing. A block inside them is a line context again, where the rules above apply. `else` still goes on the line of the closing `}`.
 
 ## Source text
 

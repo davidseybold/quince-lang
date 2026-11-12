@@ -1,0 +1,20 @@
+// rule: lex.continue.more
+// mode: parse
+// A line also continues when it ends with `=`, a compound assignment or `->`, and when the
+// next line starts with `.`. A line that starts with `=` or a compound assignment is an error
+// whose fix joins it to the line above.
+fn f(var total: Int, items: List<Int>) ->
+  Int {
+  let first =
+    items[0]
+  total +=
+    first
+  let doubled = items
+    .map(double)
+    .filter(positive)
+  let second
+    = items[1] //~^ E0018
+  total
+    -= second //~^ E0018
+  total
+}

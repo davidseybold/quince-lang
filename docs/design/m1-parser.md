@@ -531,8 +531,8 @@ Layer 4 is three PRs (decided by David, 2026-11-12), since together they would r
 - [x] `var`, `while`, `if` and `else` on one line; assignment, places, E0026. Until 4b, `else` at the start of a line is an E0016. [`grammar.stmt`, `grammar.place`, `grammar.if_expr`, `stmt.assign.stmt`, `stmt.assign.place`, `stmt.assign.no-chain`, `stmt.loop.forms`]
 
 **Layer 4b: `m1/parser-lines`**
-- [ ] Spec: questions 3 and 12, and a bump (v0.17).
-- [ ] Line and list contexts, E0018. 3c already treats a line break before a `,` or a closing bracket, after `name:` and before an entry's `:` as spacing, and a block closed by a `let`, `var` or `while` line as one E0016 at its `{` (3c's `block_at`). This layer makes every line break in a list spacing, and adds the bare-block cases 3c misses. [`lex.line-end`, `lex.continue.more`, `lex.continue.fn-header`, `lex.continue.lists`, `lex.else-same-line`, `expr.block.no-bare`]
+- [x] Spec: questions 3 and 12, and a bump (v0.17).
+- [x] Line and list contexts, E0018. 3c already treats a line break before a `,` or a closing bracket, after `name:` and before an entry's `:` as spacing, and a block closed by a `let`, `var` or `while` line as one E0016 at its `{` (3c's `block_at`). This layer makes every line break in a list spacing, and adds the bare-block cases 3c misses. [`lex.line-end`, `lex.continue.more`, `lex.continue.fn-header`, `lex.continue.lists`, `lex.else-same-line`, `expr.block.no-bare`]
 
 **Layer 4c: `m1/parser-member-peek`**
 - [ ] `member_holder` peeks the line's leading kinds once, so its cost doesn't grow with the number of open frames; a deep-nesting test of valid blocks stays under `LOOKAHEAD_LIMIT`. Blocks first nest in this layer, and today each open block costs a look on every `stop()` (found in layer 1's review).

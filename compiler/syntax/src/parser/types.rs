@@ -145,6 +145,9 @@ fn named_type_arg(p: &mut Parser) -> bool {
 fn fn_type(p: &mut Parser, uses: Uses) -> bool {
     let marker = p.start();
     p.bump();
+    // A function type's header continues on a line that starts with `->` or `uses`
+    // (`r[lex.continue.fn-header]`).
+    let outer_header = std::mem::replace(&mut p.in_fn_header, true);
     let mut ok = p.at(LParen);
     if ok {
         p.bump();
@@ -161,6 +164,7 @@ fn fn_type(p: &mut Parser, uses: Uses) -> bool {
     if ok && uses == Uses::Take && p.at(UsesKw) {
         ok = effects(p);
     }
+    p.in_fn_header = outer_header;
     p.complete(marker, FnType);
     ok
 }

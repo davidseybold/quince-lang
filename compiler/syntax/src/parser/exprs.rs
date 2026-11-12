@@ -42,8 +42,14 @@ fn expr_or_assign(p: &mut Parser) {
     let Some(left) = expr_node(p) else {
         return;
     };
-    if p.recovering || !is_assign_op(p.kind()) || p.at_break() {
+    if p.recovering || !is_assign_op(p.kind()) {
         return;
+    }
+    if p.at_break() {
+        if !p.can_join() {
+            return;
+        }
+        p.join_line();
     }
     let marker = p.precede(left);
     if p.slips == slips && !is_place(p, first) {
@@ -125,22 +131,41 @@ fn while_stmt(p: &mut Parser) {
     p.complete(marker, WhileStmt);
 }
 
-/// `if` expr block [ `else` ( if_expr | block ) ] (`grammar.if_expr`). The `else` is taken
-/// only on the line of the `}`.
+/// `if` expr block [ `else` ( if_expr | block ) ] (`grammar.if_expr`).
 fn if_expr(p: &mut Parser) -> Completed {
     let marker = p.start();
     p.bump();
-    if condition_and_block(p) && p.at(ElseKw) {
+    if condition_and_block(p) && else_follows(p) {
         p.bump();
         match p.kind() {
             IfKw if !p.at_break() => {
                 if_expr(p);
             }
-            LBrace if !p.at_break() => block(p),
+            LBrace if p.at_or_join(LBrace) => block(p),
             _ => p.expected("`if` or `{`"),
         }
     }
     p.complete(marker, IfExpr)
+}
+
+/// The current token is an `else` after an `if`'s block. On the next line it is an E0018,
+/// in a list too, where a line break is otherwise spacing (`r[lex.else-same-line]`). After a
+/// `;` it isn't: a hard break never joins.
+fn else_follows(p: &mut Parser) -> bool {
+    let Some(token) = p.current() else {
+        return false;
+    };
+    if token.kind != ElseKw {
+        return false;
+    }
+    match token.brk {
+        Break::None => true,
+        Break::Line if !p.closed_early => {
+            p.join_line();
+            true
+        }
+        _ => false,
+    }
 }
 
 /// The condition of an `if` or a `while`, and the block after it on its line. False when there
@@ -164,7 +189,7 @@ fn condition_and_block(p: &mut Parser) -> bool {
     let outer = p.condition_frames.replace(p.frames.len());
     expr(p);
     p.condition_frames = outer;
-    if !p.at(LBrace) {
+    if !p.at_or_join(LBrace) {
         // A block missing after a condition taken from the next line is part of that slip.
         p.recovering |= missing;
         p.expected("`{`");
@@ -186,7 +211,7 @@ fn let_rest(p: &mut Parser) {
         }
         what = "`=`";
     }
-    if !p.at(Eq) {
+    if !p.at_or_join(Eq) {
         return p.expected(what);
     }
     p.bump();
@@ -258,11 +283,10 @@ fn binary(p: &mut Parser, min_power: u8) -> Option<Operand> {
 }
 
 /// The binary operator at the current token, joined with the token after it when it is `>`,
-/// and how tightly it binds: higher binds tighter. The order is decision 6's usual reading.
-fn binary_op(p: &Parser) -> Option<(SyntaxKind, u8)> {
-    if p.at_break() {
-        return None;
-    }
+/// and how tightly it binds: higher binds tighter. The order is decision 6's usual reading. A
+/// line that starts with one continues the line above, an E0018, unless it is `-`, which can
+/// start an expression (`r[lex.line-end]`).
+fn binary_op(p: &mut Parser) -> Option<(SyntaxKind, u8)> {
     let op = p.joined_gt().unwrap_or(p.kind());
     let power = match op {
         PipePipe => 1,
@@ -277,6 +301,12 @@ fn binary_op(p: &Parser) -> Option<(SyntaxKind, u8)> {
         Star | Slash | Percent => 10,
         _ => return None,
     };
+    if p.at_break() {
+        if op == Minus || !p.can_join() {
+            return None;
+        }
+        p.join_line();
+    }
     Some((op, power))
 }
 
@@ -600,7 +630,7 @@ fn postfix(p: &mut Parser) -> Option<Completed> {
             p.bump();
             in_brackets(p, RBracket);
             done = p.complete(marker, Index);
-        } else if p.at(Question) {
+        } else if p.at_or_join(Question) {
             let marker = p.precede(done);
             p.bump();
             done = p.complete(marker, Try);
@@ -840,15 +870,26 @@ fn entry(p: &mut Parser) {
     if !starts_expr(p.kind()) {
         return expr(p);
     }
-    let marker = p.start();
+    let (marker, first) = (p.start(), p.pos);
     expr(p);
     if !p.recovering {
         if p.kind() == Colon {
             p.bump();
             expr(p);
         } else if !p.frame_closes_here() {
-            // A line break in the braces is spacing, so the error is the token after it.
-            let error = p.unexpected("`:`", false);
+            let error = match p.top().bracket {
+                // The first entry has no `:`, and the braces end or a line starts after it: the
+                // braces hold statements, a block, which can't go here (`r[expr.block.no-bare]`).
+                Some((_, opener))
+                    if opener + 1 == first && (p.kind() == RBrace || p.starts_line()) =>
+                {
+                    let range = p.input.tokens[opener].range.clone();
+                    let message = "expected an expression, found a block".to_string();
+                    SyntaxError::new(range, codes::UNEXPECTED_TOKEN, message)
+                }
+                // A line break in the braces is spacing, so the error is the token after it.
+                _ => p.unexpected("`:`", false),
+            };
             p.report(error);
         }
     }

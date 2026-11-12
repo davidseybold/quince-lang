@@ -243,6 +243,9 @@ struct Parser<'t> {
     /// The parser has just taken a binary operator, so a line break after it is spacing,
     /// after `*` and `>` too (`r[lex.line-end]`).
     after_operator: bool,
+    /// The index among the significant tokens of the token after a line break the parser has
+    /// reported as an E0018, and parses on from as though the lines were joined (decision 4).
+    joined: Option<usize>,
     /// How many slips the parser has met: each error it reports or would report, and each
     /// bracket closed without its closing bracket. The operator checks skip an operand that
     /// holds one.
@@ -280,6 +283,7 @@ struct Checkpoint {
     recovering: bool,
     closed_early: bool,
     after_operator: bool,
+    joined: Option<usize>,
 }
 
 impl<'t> Parser<'t> {
@@ -298,6 +302,7 @@ impl<'t> Parser<'t> {
             condition_frames: None,
             after_attributes: false,
             after_operator: false,
+            joined: None,
             slips: 0,
             imports_closed: false,
             lookahead: Cell::new(0),
@@ -342,19 +347,29 @@ impl<'t> Parser<'t> {
     }
 
     /// A break before the current token ends the construct the parser is in (decision 4):
-    /// there is one, and the token before it doesn't continue the line. Right after frames
-    /// closed early, at a member start, every break ends it: the token before belongs to a
-    /// construct that is already closed. Right after attributes, a line break doesn't: an
-    /// attribute goes on its own line. Nor does one right after a binary operator.
+    /// there is one, and the token before it doesn't continue the line. In a list, a break is
+    /// only spacing (`r[lex.continue.lists]`), a `;` included, apart from its E0002. Right after
+    /// frames closed early, at a member start, every line break ends it: the token before
+    /// belongs to a construct that is already closed. Right after attributes, a line break
+    /// doesn't: an attribute goes on its own line. Nor does one right after a binary operator,
+    /// or one reported as an E0018.
     fn at_break(&self) -> bool {
         let Some(token) = self.current() else {
             return true;
         };
+        if self.joined == Some(self.pos) {
+            return false;
+        }
+        let in_list = self
+            .frames
+            .last()
+            .is_some_and(|frame| frame.holds.is_list());
         match token.brk {
             Break::None => false,
-            Break::Hard => true,
+            Break::Hard => !in_list,
             Break::Line if self.after_attributes || self.after_operator => false,
             Break::Line if self.closed_early => true,
+            Break::Line if in_list => false,
             Break::Line => {
                 let previous = self.input.tokens[self.pos - 1].kind;
                 let header_continues = self.in_fn_header
@@ -362,6 +377,61 @@ impl<'t> Parser<'t> {
                 !(previous.continues_line() || token.kind == Dot || header_continues)
             }
         }
+    }
+
+    /// The current token comes after a line break that ends the construct the parser is in,
+    /// so a token that can't start a statement but continues that construct may join it.
+    fn can_join(&self) -> bool {
+        self.at_break()
+            && !self.closed_early
+            && self.current().is_some_and(|t| t.brk == Break::Line)
+    }
+
+    /// The current token is `kind`, on the line of the construct the parser is in, or after a
+    /// line break that ends it too early, which [`Parser::join_line`] reports.
+    fn at_or_join(&mut self, kind: SyntaxKind) -> bool {
+        if self.kind() != kind {
+            return false;
+        }
+        if !self.at_break() {
+            return true;
+        }
+        if !self.can_join() {
+            return false;
+        }
+        self.join_line();
+        true
+    }
+
+    /// Reports an E0018 at the line break before the current token, which continues the line
+    /// above, and parses on as though the lines were joined (decision 4). The fix replaces
+    /// everything between the two tokens with a space, unless a comment lies between them,
+    /// which joining would move code into or delete.
+    fn join_line(&mut self) {
+        let (previous, token) = (
+            &self.input.tokens[self.pos - 1],
+            &self.input.tokens[self.pos],
+        );
+        let gap = previous.range.end..token.range.start;
+        let commented = self.lexed.tokens[previous.index + 1..token.index]
+            .iter()
+            .any(|t| matches!(t.kind, Comment | BlockComment | DocComment));
+        let text = &self.text[token.range.clone()];
+        let message =
+            format!("a line break can't come before `{text}`, which continues the line above");
+        let after_error = token.after_error;
+        let mut error = SyntaxError::new(self.break_range(), codes::EARLY_LINE_BREAK, message);
+        if !commented {
+            error = error.with_fix(
+                "join the lines",
+                Applicability::Safe,
+                vec![(gap, " ".into())],
+            );
+        }
+        if !self.recovering && !after_error {
+            self.emit(error);
+        }
+        self.joined = Some(self.pos);
     }
 
     /// What the current `>` and the token after it join into, `>>` or `>=`, when no trivia
@@ -801,6 +871,7 @@ impl<'t> Parser<'t> {
             recovering: self.recovering,
             closed_early: self.closed_early,
             after_operator: self.after_operator,
+            joined: self.joined,
         }
     }
 
@@ -818,6 +889,7 @@ impl<'t> Parser<'t> {
         self.recovering = checkpoint.recovering;
         self.closed_early = checkpoint.closed_early;
         self.after_operator = checkpoint.after_operator;
+        self.joined = checkpoint.joined;
         self.after_attributes = false;
         self.lookahead.set(0);
     }
