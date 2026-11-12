@@ -511,8 +511,8 @@ Layer 3 is three PRs (decided by David, 2026-11-12), since together they would r
 - [x] An expression in parentheses, which the fixes for E0019 write. Tuples wait for 3c.
 
 **Layer 3b: `m1/parser-type-args`**
-- [ ] Spec: questions 5 and 6, and a bump.
-- [ ] Type arguments in expressions, `.name<T>(...)` included; negative literals, unit-tested only (decision 11).
+- [x] Spec: questions 5 and 6, and a bump (v0.15).
+- [x] Type arguments in expressions, `.name<T>(...)` included; negative literals, unit-tested only (decision 11). [`expr.op.type-args`]
 
 **Layer 3c: `m1/parser-postfix`**
 - [ ] Postfix forms, tuples, maps, `{}` and E0025, named arguments (attribute arguments too), `..base`. [`lex.lit.collections`, `lex.lit.empty-map`, `expr.block.brace-map`, `item.struct.update`, `intro.excl.macros`]
@@ -541,6 +541,7 @@ Layer 3 is three PRs (decided by David, 2026-11-12), since together they would r
 - [ ] `validate` and the case check; E0021. [`lex.name.case`, `lex.name.enforced`, `lex.name.foreign-exempt`, `lex.ident-classes`]
 
 **Layer 9: `m1/parser-fuzz`**
+- [ ] Parsing ahead (layer 3b) nests type arguments as deep as the `<`s it meets, so `g(a < b, a < b, ...)` nests far deeper than its tree. The depth counter must cover parsing ahead, and an E0022 while parsing ahead is a slip, not an error (found in layer 3b's review).
 - [ ] `fuzz::check_parse` and its unit test over every fixture; the fuzz crate and its thin target; the command in `AGENTS.md`.
 - [ ] The nesting limit, measured; E0022; the deep-nesting tests on spawned threads.
 - [ ] Every grammar production cited by a passing fixture.

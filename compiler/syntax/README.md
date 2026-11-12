@@ -124,8 +124,8 @@ A node holds its tokens and child nodes in source order. A part the code leaves 
 | `Block` | `{`, its statements, and `}`. An expression statement is the expression's own node. |
 | `LetStmt` | `let`, a `Name`, `:` and a type if present, `=` and an expression. |
 | `Name` | The `Ident` of a name being declared. |
-| `NameRef` | The `Ident`, `self` or `Self` of a name being used. |
-| `Literal` | One `Int`, `Float`, `Char`, `true` or `false`, or a whole string: its `StringStart`, text, `Interp`s and `StringEnd`, which an unclosed string lacks. |
+| `NameRef` | The `Ident`, `self` or `Self` of a name being used, then, in an expression, the `TypeArgs` after an `Ident` when its `<` starts them. |
+| `Literal` | One `Int`, `Float`, `Char`, `true` or `false`; a negative number, its `-` and its `Int` or `Float`; or a whole string: its `StringStart`, text, `Interp`s and `StringEnd`, which an unclosed string lacks. |
 | `Interp` | An interpolation's `InterpStart`, the tokens of its path, and its `InterpEnd`. |
 | `ListLit` | `[`, expressions and their commas, and `]`. |
 | `Range` | An expression, `..` or `..=`, and an expression. |
@@ -157,6 +157,8 @@ The parser reads the significant tokens: every token but the trivia and the doc 
 - **Operators.** The parser accepts any mix of binary operators and builds the tree of the usual reading, then reports what the spec forbids. The usual reading puts the operators with no level where the spec's examples do, so the order, tightest first, is postfix, prefix, `*` `/` `%`, `+` `-`, `<<` `>>`, `&`, `^`, `|`, `..` `..=`, comparisons, `&&`, `||`. Every level groups to the left, comparisons and ranges included, and their chains are E0020s.
   - A `>` and a `>` or `=` right after it, with no trivia between, are one operator, `>>` or `>=`, which the tree holds as one `GtGt` or `GtEq` token. A closing `>` of type arguments is never joined.
   - After a binary operator a line break is spacing, `*` and `>` included, which `continues_line()` leaves to the parser. After `-` it is spacing too, since `-` can be binary, but after `!` or `~` it ends the line.
+  - A `<` after a name in an expression is examined by parsing ahead: the parser parses type arguments, and keeps them when they parse with no slip and the token after their `>` is one that may follow them. Otherwise it goes back to the `<`, dropping what it parsed and any error, and the `<` is less-than. While parsing ahead, the first slip makes the parser see the end of the file, so what it has open closes at once. It records the answer for every `<` it parses type arguments from, nested ones included, so no `<` is parsed ahead from twice and a file is parsed in linear time.
+  - A `-` in prefix position, directly followed by an `Int` or `Float` that no postfix operator follows, is part of a `Literal` with it.
   - E0019 is reported at each operand that needs parentheses, and E0020 at the second operator of a chain, once per chain. Neither is reported for an operator any of whose operands holds a syntax error, a missing operand included, since that error is the slip.
 - **Errors the parser leaves to the lexer.** Beyond the lexer's own list (above):
   - The parser drops an error it would report right after an `Error` token, with only trivia between, so `let x = $` is the E0001 alone.

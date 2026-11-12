@@ -116,6 +116,9 @@ a || b && c              // error: write a || (b && c)
 r[expr.op.compare.no-chain]
 - Comparison operators don't chain: `a < b > c` is a syntax error, and the suggested fix is `a < b && b < c`. So `json.decode<Order>(body)` has only one reading.
 
+r[expr.op.type-args]
+- In an expression, `<` after a name or path starts type arguments when what follows parses as type arguments closed by `>`, and the token after the `>` is `(`, `.`, `?`, `,`, `)`, `]`, `}` or a line break, and not a `=` directly after the `>`. Otherwise `<` is less-than.
+
 r[expr.op.keyword-forms]
 `return`, `break`, `continue` and `spawn` are keyword forms, not operators; `return expr` and `spawn expr` take everything to their right.
 

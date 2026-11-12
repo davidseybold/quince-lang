@@ -1,6 +1,7 @@
 //! Blocks, statements and expressions: `let`, literals, names, list literals, operators,
 //! calls, method calls and fields. Later layers of the parser add the rest.
 
+use super::input::Break;
 use super::{Completed, Holds, Parser, Sync, items, types};
 use crate::SyntaxKind::{self, *};
 use crate::{SyntaxError, codes};
@@ -351,6 +352,11 @@ fn prefix(p: &mut Parser) -> Option<Completed> {
         return postfix(p);
     }
     let marker = p.start();
+    if negative_literal(p) {
+        p.bump();
+        p.bump();
+        return Some(p.complete(marker, Literal));
+    }
     p.bump();
     if p.at_break() {
         p.expected("an expression");
@@ -358,6 +364,71 @@ fn prefix(p: &mut Parser) -> Option<Completed> {
         prefix(p);
     }
     Some(p.complete(marker, Prefix))
+}
+
+/// The current `-` and the number after it are one literal (`r[lex.lit.int.neg]`,
+/// `r[lex.lit.neg-adjacent]`): nothing comes between them, and no postfix operator follows the
+/// number. A `.` after it on the next line is one, as it continues the line, unless a `;`
+/// ends the line.
+fn negative_literal(p: &Parser) -> bool {
+    let tokens = &p.input.tokens[p.pos..];
+    let [minus, number, ..] = tokens else {
+        return false;
+    };
+    if !matches!(number.kind, Int | Float) || number.range.start != minus.range.end {
+        return false;
+    }
+    match tokens.get(2) {
+        Some(next) if next.kind == Dot && next.brk != Break::Hard => false,
+        Some(next) if next.brk == Break::None => !matches!(next.kind, LParen | LBracket | Question),
+        _ => true,
+    }
+}
+
+/// A name being used, and its type arguments when a `<` after it starts them.
+fn name_ref(p: &mut Parser) -> Completed {
+    let marker = p.start();
+    p.bump();
+    if p.at(Lt) {
+        type_args(p);
+    }
+    p.complete(marker, NameRef)
+}
+
+/// Type arguments after a name in an expression, when the `<` starts them
+/// (`r[expr.op.type-args]`): what follows parses as type arguments closed by `>`, and the
+/// token after the `>` can follow them. Otherwise the `<` is less-than, and nothing is taken.
+/// The parser parses ahead from each `<` once, and keeps what it parsed when they are type
+/// arguments.
+fn type_args(p: &mut Parser) {
+    let at = p.pos;
+    if let Some(&end) = p.type_args_end.get(&at) {
+        if end.is_some_and(|end| follows_type_args(p, end)) {
+            types::expr_type_args(p);
+        }
+        return;
+    }
+    let checkpoint = p.checkpoint();
+    p.speculating = true;
+    types::expr_type_args(p);
+    p.speculating = false;
+    p.speculation_failed = false;
+    let end = p.type_args_end[&at];
+    if !end.is_some_and(|end| follows_type_args(p, end)) {
+        p.rewind(checkpoint);
+    }
+}
+
+/// The significant token at `end`, after type arguments' `>`, is `(`, `.`, `?`, `,`, `)`, `]`,
+/// `}`, or comes after a line break or at the end of the file. So `=` and `>` aren't.
+fn follows_type_args(p: &Parser, end: usize) -> bool {
+    match p.input.tokens.get(end) {
+        Some(next) if next.brk == Break::None => matches!(
+            next.kind,
+            LParen | Dot | Question | Comma | RParen | RBracket | RBrace
+        ),
+        _ => true,
+    }
 }
 
 /// A primary expression and its calls, method calls and fields (`grammar.postfix`). `None`
@@ -373,7 +444,9 @@ fn postfix(p: &mut Parser) -> Option<Completed> {
             let marker = p.precede(done);
             p.bump();
             match p.kind() {
-                Ident if !p.at_break() => p.bump_node(NameRef),
+                Ident if !p.at_break() => {
+                    name_ref(p);
+                }
                 Int if !p.at_break() => p.bump(),
                 _ => p.expected("a field or method name"),
             }
@@ -403,7 +476,11 @@ fn primary(p: &mut Parser) -> Option<Completed> {
             p.abandon(marker);
             return Some(literal(p));
         }
-        Ident | SelfKw | SelfTypeKw => {
+        Ident => {
+            p.abandon(marker);
+            return Some(name_ref(p));
+        }
+        SelfKw | SelfTypeKw => {
             p.bump();
             NameRef
         }
