@@ -45,6 +45,9 @@ r[expr.block.no-bare]
 r[expr.block.brace-map]
 - Anywhere else, `{` where an expression is expected starts a map literal.
 
+r[expr.block.cond-brace]
+- In the condition of an `if` or `while`, `{` always starts the block. A map literal there is written in parentheses.
+
 r[expr.block.positions]
 - Blocks appear only as the bodies of functions, closures, `if`, `else`, match arms, `for`, `while`, `test` and the keyword forms.
 

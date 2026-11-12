@@ -439,6 +439,8 @@ fn make_logged() -> (fn(Int) -> Int uses Io) uses Net { // both
 - An alias, `type Transform = fn(Int) -> Int uses Io`, as the only way. Rejected: it hides the effects from the signature, and the linter flags it in public APIs.
 - The innermost function type takes the `uses`, as a greedy parse would. Rejected: a declaration that returns a function would then need parentheses or an alias to state its own effects.
 
+**15. `{` in a condition (layer 4a).** Found in layer 4's review: in `while n > {`, `{` where an expression is expected starts a map (`r[expr.block.brace-map]`), so the block became the map's and the slip gave two errors. Decided by David, 2026-11-12: `r[expr.block.cond-brace]` "In the condition of an `if` or `while`, `{` always starts the block. A map literal there is written in parentheses." Rust restricts struct literals in conditions the same way. A `{` where an expression goes at the top of a condition is an E0016. When another `{` follows its braces on their line, they were meant as a map: the fix puts them in parentheses (`needs-review`), and the parser skips them, so the block after them is still the block. Inside brackets in a condition, `{` starts a map as anywhere else. Layer 5 applies the same rule to a `match` subject and a `for` loop's `in` expression.
+
 ## Risks and trade-offs
 
 - [The tree's shape is wrong for the formatter or name resolution] → Both arrive within M1 and M2, while the only consumers are tests. The formatter doc comes next and can amend this one, and the events keep the parser independent of the tree. Node kinds are internal to `quince_syntax`.
@@ -525,6 +527,7 @@ Layer 4 is three PRs (decided by David, 2026-11-12), since together they would r
 
 **Layer 4a: `m1/parser-stmts`**
 - [x] Spec: question 13, and a bump (v0.16).
+- [x] Spec (decided by David, 2026-11-12, spec question 15): `r[expr.block.cond-brace]`, in v0.16. `{` at the top of a condition is the block, never a map. [`expr.block.cond-brace`]
 - [x] `var`, `while`, `if` and `else` on one line; assignment, places, E0026. Until 4b, `else` at the start of a line is an E0016. [`grammar.stmt`, `grammar.place`, `grammar.if_expr`, `stmt.assign.stmt`, `stmt.assign.place`, `stmt.assign.no-chain`, `stmt.loop.forms`]
 
 **Layer 4b: `m1/parser-lines`**

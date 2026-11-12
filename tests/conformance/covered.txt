@@ -1,5 +1,6 @@
 effect.uses-list
 expr.block.brace-map
+expr.block.cond-brace
 expr.block.last-newline
 expr.op.bits.chain
 expr.op.bits.parens

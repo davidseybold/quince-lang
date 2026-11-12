@@ -152,12 +152,18 @@ fn condition_and_block(p: &mut Parser) -> bool {
     let missing = p.at_break();
     if missing {
         p.expected("an expression");
+        // A frame that closes here closes the condition too, with its own E0017.
+        if p.frame_closes_here() {
+            return false;
+        }
         if p.kind() == LBrace {
             block(p);
             return true;
         }
     }
+    let outer = p.condition_frames.replace(p.frames.len());
     expr(p);
+    p.condition_frames = outer;
     if !p.at(LBrace) {
         // A block missing after a condition taken from the next line is part of that slip.
         p.recovering |= missing;
@@ -641,6 +647,13 @@ fn primary(p: &mut Parser) -> Option<Completed> {
             p.abandon(marker);
             return Some(if_expr(p));
         }
+        // At the top of a condition, `{` is the block, so there is no expression
+        // (`r[expr.block.cond-brace]`). Inside brackets in it, `{` starts a map.
+        LBrace if p.condition_frames == Some(p.frames.len()) => {
+            p.abandon(marker);
+            condition_map(p);
+            return None;
+        }
         LBrace => {
             p.abandon(marker);
             return Some(map_lit(p));
@@ -652,6 +665,55 @@ fn primary(p: &mut Parser) -> Option<Completed> {
         }
     };
     Some(p.complete(marker, kind))
+}
+
+/// A `{` where an expression goes at the top of a condition, which starts the block
+/// (`r[expr.block.cond-brace]`): an E0016. When another `{` follows its braces on their line,
+/// the braces were meant as a map, so the fix puts them in parentheses (`needs-review`), and they
+/// are skipped, so the block after them is still the block.
+fn condition_map(p: &mut Parser) {
+    let tokens = &p.input.tokens[p.pos..];
+    let mut open = 0usize;
+    let close = tokens.iter().position(|token| {
+        if super::closer_of(token.kind).is_some() {
+            open += 1;
+        } else if super::is_closer(token.kind) {
+            open = open.saturating_sub(1);
+        }
+        open == 0
+    });
+    let map_end = close.filter(|&close| {
+        tokens
+            .get(close + 1)
+            .is_some_and(|next| next.kind == LBrace && next.brk == Break::None)
+            && tokens[1..=close]
+                .iter()
+                .all(|token| token.brk == Break::None)
+    });
+    let Some(end) = map_end else {
+        return p.expected("an expression");
+    };
+    let range = tokens[0].range.start..tokens[end].range.end;
+    let mut error = p.unexpected("an expression", false);
+    if p.lexed.tokens[tokens[0].index..tokens[end].index]
+        .iter()
+        .all(|t| !matches!(t.kind, Comment | BlockComment | DocComment))
+    {
+        error = error.with_fix(
+            "put the map in parentheses",
+            Applicability::NeedsReview,
+            vec![
+                (range.start..range.start, "(".to_string()),
+                (range.end..range.end, ")".to_string()),
+            ],
+        );
+    }
+    p.report(error);
+    let marker = p.start();
+    for _ in 0..=end {
+        p.take();
+    }
+    p.complete(marker, Skipped);
 }
 
 /// One expression and the closing bracket after it, after the opening one, which the caller

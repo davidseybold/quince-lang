@@ -23,6 +23,10 @@ fn errors(body: &str) -> Vec<String> {
         .collect()
 }
 
+fn codes(parse: &crate::Parse) -> Vec<&'static str> {
+    parse.errors().iter().map(|e| e.code).collect()
+}
+
 fn messages(body: &str) -> Vec<String> {
     let text = format!("{PREFIX}{body}\n}}\n");
     let parse = checked(&text);
@@ -282,6 +286,13 @@ fn a_missing_condition_block_or_else_branch() {
     assert_eq!(errors("  if\n  a {}"), ["E0016 4..5"]);
     assert_eq!(errors("  while\n  n > 0 { n -= 1 }"), ["E0016 7..8"]);
     assert_eq!(errors("  if\n  {}"), ["E0016 4..5"]);
+    // A frame that closes at the next line keeps its E0017.
+    for keyword in ["if", "while"] {
+        let text = format!("fn f() {{\n  {keyword}\n");
+        assert_eq!(codes(&checked(&text)), ["E0017"], "{text:?}");
+        let text = format!("fn f() {{\n  {keyword}\nfn g() {{}}\n");
+        assert_eq!(codes(&checked(&text)), ["E0017"], "{text:?}");
+    }
     assert_eq!(errors("  if\n  g()"), ["E0016 4..5"]);
     assert_eq!(
         messages("  if\n  g()"),
@@ -295,6 +306,37 @@ fn a_missing_condition_block_or_else_branch() {
     );
     assert_eq!(errors("  var (a, b) = c"), ["E0016 6..7"]);
     assert_eq!(messages("  var (a, b) = c"), ["expected a name, found `(`"]);
+}
+
+/// At the top of a condition, `{` is the block, never a map: one E0016 where an expression is
+/// missing (`r[expr.block.cond-brace]`). In parentheses it is a map.
+#[test]
+fn a_brace_in_a_condition_is_the_block() {
+    // Braces another `{` follows on their line were meant as a map: the fix puts them in
+    // parentheses, and the block after them is still the block.
+    let text = "fn f() {\n  if m == {:} { g() }\n}\n";
+    let found: Vec<_> = checked(text)
+        .errors()
+        .iter()
+        .map(|e| describe(text, e))
+        .collect();
+    assert_eq!(
+        found,
+        [r#"E0016 19..20 => "fn f() {\n  if m == ({:}) { g() }\n}\n""#]
+    );
+    assert_eq!(errors("  while n > { n -= 1 }"), ["E0016 12..13"]);
+    assert_eq!(
+        messages("  while n > { n -= 1 }"),
+        ["expected an expression, found `{`"]
+    );
+    assert_eq!(errors("  if { x }"), ["E0016 5..6"]);
+    assert_eq!(errors("  if m == {:} {}"), ["E0016 10..11"]);
+    assert_eq!(errors("  if m == ({:}) {}"), [] as [String; 0]);
+    assert_eq!(errors("  if f({\"a\": 1}) {}"), [] as [String; 0]);
+    assert_eq!(
+        errors("  if if a { {\"x\": 1} } else { m } == m {}"),
+        [] as [String; 0]
+    );
 }
 
 /// Blocks nest, and a missing `}` is one E0017 at the `{` the next declaration closes.
