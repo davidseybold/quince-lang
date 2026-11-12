@@ -48,7 +48,8 @@ bound_arg    = type_arg | Name "=" type   // Item = Int, Output = T
 attribute    = "@" name [ "(" arg { "," arg } ")" ]
 
 type         = type_path [ type_args ] | "(" ")" | "(" type "," type { "," type } [ "," ] ")"
-             | "fn" "(" [ type { "," type } ] ")" [ "->" type ] [ "uses" effects ]
+             | fn_type | "(" fn_type ")"
+fn_type      = "fn" "(" [ type { "," type } ] ")" [ "->" type ] [ "uses" effects ]   // a trailing uses after a bare fn_type return belongs to the outer fn
 type_args    = "<" type_arg { "," type_arg } ">"
 type_arg     = type | "uses" effects   // uses comes last and takes the rest of the list
 type_path    = [ name "." ] Name { "." Name } | "Self" { "." Name } | c_name   // a type declared in a foreign block
