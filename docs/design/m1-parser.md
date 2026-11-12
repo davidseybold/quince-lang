@@ -419,7 +419,7 @@ So `t.0 = 1` and `pair.0.1 = 2` assign one position of a `var` tuple, and `id.0 
 ```
 type         = type_path [ type_args ] | "(" ")" | "(" type "," type { "," type } [ "," ] ")"
              | fn_type | "(" fn_type ")"
-fn_type      = "fn" "(" [ type { "," type } ] ")" [ "->" type ] [ "uses" effects ]   // a trailing uses after a bare fn_type return belongs to the outer fn
+fn_type      = "fn" "(" [ type { "," type } [ "," ] ] ")" [ "->" type ] [ "uses" effects ]   // a trailing uses after a bare fn_type return belongs to the outer fn
 ```
 
 So the three cases read:
@@ -495,6 +495,7 @@ Layer 2 is two PRs, since types and declarations are separate pieces of work and
 - [x] Spec: questions 8 and 14, and a bump (v0.13).
 - [x] Types, generics, bounds, effect lists; parenthesized function types (question 14); a closing `>` is never joined, so `>>` and `>=` close type arguments. Type arguments and generics are lists closed by `>`, so an error in them stays inside them. [`grammar.type`, `grammar.type_path`, `grammar.fn_type`, `grammar.type_args`, `grammar.type_arg`, `grammar.generics`, `grammar.generic`, `grammar.bounds`, `grammar.bound`, `grammar.bound_arg`, `grammar.effects`, `grammar.effect_ref`, `lex.no-shift-token`, `effect.uses-list`, `type.fn-parens`]
 - [x] `effect.uses-return` is about the tree's shape, which no diagnostic shows, so it is unit-tested only (decision 11). M2's `check` fixtures cite it.
+- [x] Trailing commas (decided by David, 2026-11-12): every bracketed list the formatter breaks across lines takes an optional trailing `,`, as `r[tool.fmt.trailing-comma]` adds one. The grammar's `fn_type`, `type_args`, `generics` and `bound` gain `[ "," ]` here, `attribute` in 2b, and the pattern and `concurrent` lists in layers 5 and 6. `effects` and `with` aren't bracketed, so a trailing `,` there stays an error.
 
 **Layer 2b: `m1/parser-decls`**
 - [ ] Spec: question 11, and a bump.
@@ -515,10 +516,11 @@ Layer 2 is two PRs, since types and declarations are separate pieces of work and
 - [ ] `member_holder` peeks the line's leading kinds once, so its cost doesn't grow with the number of open frames; a deep-nesting test of valid blocks stays under `LOOKAHEAD_LIMIT`. Blocks first nest in this layer, and today each open block costs a look on every `stop()` (found in layer 1's review).
 
 **Layer 5: `m1/parser-patterns`**
+- [ ] Spec: `variant_pat` and `pfields` take an optional trailing `,` (layer 2a's trailing-comma decision).
 - [ ] Patterns, `match`, guards, `is`, `for`. [`grammar.pattern`, `grammar.match_expr`, `expr.match.arm-syntax`, `expr.match.arm-comma`, `pat.negative`, `pat.const`, `expr.range.pattern`, `lex.grammar-rules`]
 
 **Layer 6: `m1/parser-keyword-forms`**
-- [ ] Spec: question 7, and a bump.
+- [ ] Spec: question 7, and a bump. `concurrent`'s arguments take an optional trailing `,` (layer 2a's trailing-comma decision).
 - [ ] Closures, `concurrent`, `background`, `select`, `with`, `spawn`, `return`, contracts. [`grammar.closure`, `grammar.concurrent`, `grammar.background`, `grammar.select`, `grammar.with_expr`, `grammar.jump`, `grammar.contract`, `expr.op.keyword-forms`]
 
 **Layer 7: `m1/parser-items`**

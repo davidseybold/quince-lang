@@ -3,7 +3,7 @@
 // rule: lex.no-shift-token
 // mode: parse
 // Type arguments are types in angle brackets, separated by commas, and a `uses` list may come
-// last. Nested lists close with `>>`, which the lexer never makes one token, and a `>` before
+// last, and a trailing comma may end them. Nested lists close with `>>`, which the lexer never makes one token, and a `>` before
 // `=` closes them too.
 fn args(
   a: List<List<Int>>,
@@ -15,6 +15,7 @@ fn args(
   let x: Option<Int>= y
 }
 fn empty(a: List<>) {} //~ E0016
-fn trailing(a: Map<String, Int,>) {} //~ E0016
+fn trailing(a: Map<String, Int,>) {}
+fn only_comma(a: List<,>) {} //~ E0016
 fn unclosed(a: List<Int) {} //~ E0017
 fn uses_not_last(a: Pool<uses Net, (Int, Int)>) {} //~ E0016

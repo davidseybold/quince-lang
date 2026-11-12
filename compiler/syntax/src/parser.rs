@@ -175,13 +175,6 @@ enum Stop {
     LineEnd,
 }
 
-/// Whether a list may end with a `,`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Trailing {
-    Allowed,
-    Rejected,
-}
-
 /// Where error recovery stops skipping.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Sync {
@@ -615,17 +608,17 @@ impl<'t> Parser<'t> {
     // Shared shapes.
 
     /// A comma-separated list, after its opening bracket, which the caller took: items until
-    /// `closer`, each parsed by `item`. Line breaks in it are spacing.
+    /// `closer`, each parsed by `item`, with an optional trailing `,`. Line breaks in it are
+    /// spacing.
     fn list(
         &mut self,
         closer: SyntaxKind,
         what_item: &str,
         item: fn(&mut Parser),
         starts_item: fn(SyntaxKind) -> bool,
-        trailing: Trailing,
     ) {
         self.push_frame(Holds::Items, Some(closer));
-        self.list_items(closer, what_item, item, starts_item, trailing, false);
+        self.list_items(closer, what_item, item, starts_item, false);
     }
 
     /// The rest of a [`Parser::list`] whose frame is open. With `after_item`, the caller has
@@ -636,17 +629,12 @@ impl<'t> Parser<'t> {
         what_item: &str,
         item: fn(&mut Parser),
         starts_item: fn(SyntaxKind) -> bool,
-        trailing: Trailing,
         mut after_item: bool,
     ) {
         let close = format!("`{}`", punctuation(closer));
-        let mut after_comma = false;
         loop {
             if !after_item {
                 if self.kind() == closer {
-                    if after_comma && trailing == Trailing::Rejected {
-                        self.expected(what_item);
-                    }
                     self.pop_frame();
                     self.bump();
                     return;
@@ -662,12 +650,8 @@ impl<'t> Parser<'t> {
                 item(self);
             }
             after_item = false;
-            after_comma = false;
             match self.kind() {
-                Comma => {
-                    self.bump();
-                    after_comma = true;
-                }
+                Comma => self.bump(),
                 kind if kind == closer => {}
                 _ if self.stop().is_some() => {}
                 _ if self.unmatched_closer() => {

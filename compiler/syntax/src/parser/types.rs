@@ -1,7 +1,7 @@
 //! Types (`grammar.type`): type paths with type arguments, tuples, function types bare or in
 //! parentheses, generic parameters with their bounds, and `uses` lists.
 
-use super::{Holds, Marker, Parser, Sync, Trailing, items};
+use super::{Holds, Marker, Parser, Sync, items};
 use crate::SyntaxKind::{self, *};
 use quince_diagnostics::Applicability;
 
@@ -88,7 +88,7 @@ fn angle_list(p: &mut Parser, what_item: &str, item: fn(&mut Parser)) {
     if p.kind() == Gt {
         p.expected(what_item);
     }
-    p.list(Gt, what_item, item, starts_angle_item, Trailing::Rejected);
+    p.list(Gt, what_item, item, starts_angle_item);
 }
 
 fn starts_angle_item(kind: SyntaxKind) -> bool {
@@ -138,7 +138,7 @@ fn fn_type(p: &mut Parser, uses: Uses) -> bool {
     let mut ok = p.at(LParen);
     if ok {
         p.bump();
-        p.list(RParen, "a type", type_item, starts_type, Trailing::Rejected);
+        p.list(RParen, "a type", type_item, starts_type);
     } else {
         p.expected("`(`");
     }
@@ -212,14 +212,7 @@ fn paren_type(p: &mut Parser) -> bool {
         p.complete(marker, TupleType);
         return true;
     }
-    p.list_items(
-        RParen,
-        "a type",
-        type_item,
-        starts_type,
-        Trailing::Allowed,
-        true,
-    );
+    p.list_items(RParen, "a type", type_item, starts_type, true);
     p.complete(marker, TupleType);
     true
 }

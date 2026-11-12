@@ -1,6 +1,6 @@
 //! Declarations: the file, `fn`, `test`, `const` and `impl`, and their parts.
 
-use super::{Break, Holds, Parser, Sync, Trailing, exprs, types};
+use super::{Break, Holds, Parser, Sync, exprs, types};
 use crate::SyntaxKind::{self, *};
 
 /// The file: declarations, one per line (`grammar.file`).
@@ -88,13 +88,7 @@ fn param_list(p: &mut Parser) -> bool {
     }
     let marker = p.start();
     p.bump();
-    p.list(
-        RParen,
-        "a parameter",
-        param,
-        starts_param,
-        Trailing::Allowed,
-    );
+    p.list(RParen, "a parameter", param, starts_param);
     p.complete(marker, ParamList);
     true
 }

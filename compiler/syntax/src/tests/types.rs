@@ -365,14 +365,18 @@ fn errors_in_types() {
     let parse = checked("fn f(a: (1)) {}");
     assert_eq!(parse.errors().len(), 1);
     assert!(parse.syntax().descendants().any(|n| n.kind() == ParenType));
-    // A function type's parameters and type arguments take no trailing comma.
+    // A trailing comma may end any of the lists, but a comma alone isn't one.
+    for ok in [
+        "fn f(a: fn(Int,)) {}",
+        "fn f(a: Map<A, B,>) {}",
+        "fn f<T,>() {}",
+        "fn f<I: Iterator<Item = Int,>>() {}",
+    ] {
+        assert_eq!(errors(ok), Vec::<String>::new(), "{ok}");
+    }
     assert_eq!(
-        messages("fn f(a: fn(Int,)) {}"),
-        ["expected a type, found `)`"]
-    );
-    assert_eq!(
-        messages("fn f(a: Map<A, B,>) {}"),
-        ["expected a type, found `>`"]
+        messages("fn f(a: fn(,)) {}"),
+        ["expected a type, found `,`"]
     );
     assert_eq!(
         messages("fn f(a: List<>) {}"),

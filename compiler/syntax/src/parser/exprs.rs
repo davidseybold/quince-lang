@@ -1,7 +1,7 @@
 //! Blocks, statements and expressions: `let`, literals, names, list literals, ranges, calls,
 //! method calls and fields. Later layers of the parser add the operators and the rest.
 
-use super::{Completed, Holds, Parser, Sync, Trailing, items, types};
+use super::{Completed, Holds, Parser, Sync, items, types};
 use crate::SyntaxKind::{self, *};
 
 /// `{` { stmt NEWLINE } [ stmt ] `}` (`grammar.block`). The last statement needs no line break
@@ -114,13 +114,7 @@ fn primary(p: &mut Parser) -> Option<Completed> {
         }
         LBracket => {
             p.bump();
-            p.list(
-                RBracket,
-                "an expression",
-                expr,
-                starts_expr,
-                Trailing::Allowed,
-            );
+            p.list(RBracket, "an expression", expr, starts_expr);
             ListLit
         }
         _ => {
@@ -182,12 +176,6 @@ pub(super) fn literal(p: &mut Parser) -> Completed {
 fn arg_list(p: &mut Parser) {
     let marker = p.start();
     p.bump();
-    p.list(
-        RParen,
-        "an expression",
-        expr,
-        starts_expr,
-        Trailing::Allowed,
-    );
+    p.list(RParen, "an expression", expr, starts_expr);
     p.complete(marker, ArgList);
 }

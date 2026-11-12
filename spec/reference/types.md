@@ -9,8 +9,8 @@ There is no `any` type and no unchecked cast.
 ```ebnf
 type         = type_path [ type_args ] | "(" ")" | "(" type "," type { "," type } [ "," ] ")"
              | fn_type | "(" fn_type ")"
-fn_type      = "fn" "(" [ type { "," type } ] ")" [ "->" type ] [ "uses" effects ]   // a trailing uses after a bare fn_type return belongs to the outer fn
-type_args    = "<" type_arg { "," type_arg } ">"
+fn_type      = "fn" "(" [ type { "," type } [ "," ] ] ")" [ "->" type ] [ "uses" effects ]   // a trailing uses after a bare fn_type return belongs to the outer fn
+type_args    = "<" type_arg { "," type_arg } [ "," ] ">"
 type_arg     = type | "uses" effects   // uses comes last and takes the rest of the list
 type_path    = [ name "." ] Name { "." Name } | "Self" { "." Name } | c_name   // a type declared in a foreign block
 ```
