@@ -36,7 +36,7 @@ The lexer, the parser and its CST now, and the formatter later. This file holds 
 
 The lexer reports each lexical problem once, and the parser must not report it again:
 - An `Error` token is trivia. A fixture or a fix that adds a bad character puts it where trivia may go.
-- A `;` is a `Semicolon` token, reported as E0002. The parser reads it as a line break that ends a statement, so `a; b` is two statements with only the E0002. It ends the statement outright: `a;` followed by a line that starts with `.` is two statements, not a method chain. Where a construct can't end, the E0002 is the only error: the parser reports nothing at a break that holds a `;`, so `fn f() ->; Int {}` is the E0002 alone.
+- A `;` is a `Semicolon` token, reported as E0002. The parser reads it as a line break that ends a statement, so `a; b` is two statements with only the E0002. It ends the statement outright: `a;` followed by a line that starts with `.` is two statements, not a method chain. Where a construct can't end, the E0002 is the only error: the parser reports nothing at a break that holds a `;`, so `fn f() ->; Int {}` is the E0002 alone. That includes the end of the file after a `;`, as in `fn f() ->;`.
 - A `BlockComment`, reported as E0003, is a comment to the parser.
 - A malformed number, reported as E0008, keeps its `Int` or `Float` kind, glued letters included (`1u8` is one `Int`), so the parser accepts it as a literal.
 - An invalid escape, reported as E0006, stays part of its `StringText`, or its `Char`.

@@ -272,6 +272,10 @@ fn a_semicolon_ends_a_statement() {
     assert_eq!(errors("fn f() ->; Int {}"), ["E0002 9..10"]);
     assert_eq!(errors("fn f() ->\n; Int {}"), ["E0002 10..11"]);
     assert_eq!(errors("fn f() {\n  let a =; 1\n}\n"), ["E0002 18..19"]);
+    // The same holds when the end of the file comes after the `;`.
+    assert_eq!(errors("fn f() ->;"), [r#"E0002 9..10 => "fn f() ->""#]);
+    assert_eq!(errors("fn f() ->;\n"), [r#"E0002 9..10 => "fn f() ->\n""#]);
+    assert_eq!(codes("const A: Int =; // done\n"), ["E0002"]);
 }
 
 /// Two expressions on one line are an E0016 that expects a line break.

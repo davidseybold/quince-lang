@@ -37,6 +37,8 @@ pub(super) struct Input {
     pub unclosed_lines: Vec<Range<usize>>,
     /// An `Error` token lies after the last significant token.
     pub eof_after_error: bool,
+    /// The break between the last significant token and the end of the file.
+    pub eof_brk: Break,
     /// A multi-line string or a block comment runs to the end of the file unclosed, so what
     /// the parser would report there is part of that slip.
     pub eof_swallowed: bool,
@@ -49,6 +51,7 @@ impl Input {
             tokens: Vec::new(),
             unclosed_lines: Vec::new(),
             eof_after_error: false,
+            eof_brk: Break::None,
             eof_swallowed: false,
         };
         let mut brk = Break::None;
@@ -110,6 +113,7 @@ impl Input {
             input.unclosed_lines.push(line_start..text.len());
         }
         input.eof_after_error = after_error;
+        input.eof_brk = brk;
         let unclosed_comment = lexed.tokens.last().is_some_and(|last| {
             let comment = &text[text.len() - last.len as usize..];
             last.kind == BlockComment && (comment.len() < 4 || !comment.ends_with("*/"))
