@@ -558,8 +558,8 @@ impl<'t> Parser<'t> {
     /// Skips tokens into a `Skipped` node up to the next sync point of the innermost frame:
     /// `sync`, its closing bracket, or a [`Stop`]. With `force`, the current token is skipped
     /// even where it is a sync point. A bracket the skip opens is skipped up to its closing
-    /// bracket, and so is a `<` in a list, unless a frame's closing bracket or a member start of the file or an `impl`
-    /// body comes first.
+    /// bracket, and so is a `<` in a list, unless a frame's closing bracket or a member start of
+    /// the file or an `impl` body comes first.
     fn recover(&mut self, sync: Sync, force: bool) {
         let marker = self.start();
         let mut skipped = false;
