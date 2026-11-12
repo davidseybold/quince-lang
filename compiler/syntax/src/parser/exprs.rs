@@ -90,14 +90,13 @@ fn binary(p: &mut Parser, min_power: u8) -> Option<Operand> {
         }
         p.after_operator = true;
         let op_range = p.input.tokens[at].range.start..p.input.tokens[p.pos - 1].range.end;
-        let slips = p.slips;
         let rhs = binary(p, power);
         let kind = match op {
             DotDot | DotDotEq => SyntaxKind::Range,
             _ => Binary,
         };
         let done = p.complete(marker, kind);
-        let Some(mut rhs) = rhs else {
+        let Some(rhs) = rhs else {
             return Some(Operand {
                 done,
                 op: Some(op),
@@ -108,7 +107,6 @@ fn binary(p: &mut Parser, min_power: u8) -> Option<Operand> {
                 broken: true,
             });
         };
-        rhs.broken |= p.slips != slips;
         lhs = combine(p, lhs, op, op_range, rhs, done);
         if p.recovering {
             break;
@@ -217,6 +215,14 @@ fn combine(
         }
         needs_parens(p, &rhs, op, false);
         report_chain(p, rhs.chain, rhs.tokens, Some(op));
+    } else {
+        // A chain in an operand that holds no error is complete, so it is still reported.
+        if !lhs.broken {
+            report_chain(p, lhs.chain, lhs.tokens, Some(op));
+        }
+        if !rhs.broken {
+            report_chain(p, rhs.chain, rhs.tokens, Some(op));
+        }
     }
     Operand {
         done,

@@ -574,6 +574,7 @@ impl<'t> Parser<'t> {
     /// so the parser only recovers.
     fn expected(&mut self, what: &str) {
         if self.frame_closes_here() {
+            self.slip();
             return;
         }
         let brk = self.current().map_or(self.input.eof_brk, |t| t.brk);
@@ -597,6 +598,7 @@ impl<'t> Parser<'t> {
     /// current token starts another item on the next line.
     fn expected_in_list(&mut self, what: &str, starts_item: fn(SyntaxKind) -> bool) {
         if self.frame_closes_here() {
+            self.slip();
             return;
         }
         let mut error = self.unexpected(what, false);

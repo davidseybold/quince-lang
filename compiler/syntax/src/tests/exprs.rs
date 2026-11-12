@@ -381,5 +381,13 @@ fn a_syntax_error_is_the_one_error() {
     // A frame that closes at the missing operand reports its E0017 instead.
     assert_eq!(errors("g(a && b |"), ["E0017 1..2"]);
     assert_eq!(errors("g(1 << n -"), ["E0017 1..2"]);
+    // An error a closing frame silences, such as a missing field name, is still one.
+    assert_eq!(errors("g(a && b | c."), ["E0017 1..2"]);
+    assert_eq!(errors("g(a < b < c."), ["E0017 1..2"]);
+    // A chain whose own operands hold no error is reported, whatever its sibling holds.
+    assert_eq!(
+        errors("a < b < c && f(x y)"),
+        ["E0020 6..7 => a < b && b < c && f(x y)", "E0016 17..18"]
+    );
     assert_eq!(errors("a < b < c <"), ["E0016 12..13"]);
 }
