@@ -1,0 +1,24 @@
+// rule: grammar.fn_type
+// rule: type.fn-parens
+// mode: parse
+// A function type is `fn`, its parameter types in parentheses, an optional `->` and return
+// type, and an optional `uses` list. It may be written in parentheses, which end it, but no
+// other type may: a single type needs no grouping. A trailing comma may end the parameters.
+fn apply(
+  f: fn(),
+  g: fn(Int, String) -> Bool,
+  h: fn(Int) -> Int uses Io,
+  k: fn(fn(Int) -> Int) -> fn() -> Int,
+  m: (fn(Int) -> Int uses Io),
+  n: ((fn() uses Io), Int),
+  p: fn(
+    Int,
+    String,
+  ) -> Bool,
+) {}
+fn make() -> (fn(Int) -> Int uses Io) uses Net {}
+fn grouped(a: (Int)) {} //~ E0016
+fn grouped_path(a: (List<Int>)) {} //~ E0016
+fn no_params(f: fn -> Int) {} //~ E0016
+fn trailing(f: fn(Int,) -> Int) {}
+fn only_comma(f: fn(,)) {} //~ E0016

@@ -30,7 +30,7 @@ pub type SyntaxElement = rowan::SyntaxElement<QuinceLanguage>;
 #[derive(Debug)]
 #[cfg_attr(
     not(test),
-    expect(dead_code, reason = "layer 2 of the parser joins tokens")
+    expect(dead_code, reason = "layer 3 of the parser joins tokens")
 )]
 pub(crate) enum Event {
     /// Opens a node of this kind inside the innermost open one.

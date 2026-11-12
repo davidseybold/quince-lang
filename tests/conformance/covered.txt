@@ -1,10 +1,23 @@
+effect.uses-list
 expr.block.last-newline
 grammar.block
+grammar.bound
+grammar.bound_arg
+grammar.bounds
+grammar.effect_ref
+grammar.effects
 grammar.file
 grammar.fn_decl
 grammar.fn_sig
+grammar.fn_type
+grammar.generic
+grammar.generics
 grammar.list_lit
 grammar.params
+grammar.type
+grammar.type_arg
+grammar.type_args
+grammar.type_path
 lex.braces
 lex.comment.line
 lex.ident-not-keyword
@@ -39,6 +52,7 @@ lex.lit.tagged
 lex.lit.tagged.raw
 lex.lit.underscore
 lex.no-contextual
+lex.no-shift-token
 lex.source.ascii
 lex.source.bom
 lex.source.control
@@ -47,3 +61,4 @@ lex.source.utf8
 lex.source.whitespace
 test.name
 test.name-escapes
+type.fn-parens

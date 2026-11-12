@@ -214,10 +214,10 @@ r[item.iface.no-dyn]
 ## Generics
 
 ```ebnf
-generics     = "<" generic { "," generic } ">"
+generics     = "<" generic { "," generic } [ "," ] ">"
 generic      = Name [ ":" bounds ] | "uses" Name
 bounds       = bound { "+" bound }
-bound        = type_path [ "<" bound_arg { "," bound_arg } ">" ]
+bound        = type_path [ "<" bound_arg { "," bound_arg } [ "," ] ">" ]
 bound_arg    = type_arg | Name "=" type   // Item = Int, Output = T
 ```
 

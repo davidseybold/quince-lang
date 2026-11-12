@@ -14,6 +14,7 @@ mod parser;
 mod prefixed;
 mod recovery;
 mod strings;
+mod types;
 
 /// `Kind "text"`, one token per line, after checking the invariants.
 fn dump(text: &str) -> String {

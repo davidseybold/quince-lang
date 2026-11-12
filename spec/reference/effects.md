@@ -136,6 +136,12 @@ r[effect.fix-pub-review]
 r[effect.closure-type]
 - Closures carry effects in their type: `fn(Int) -> Int uses Log`.
 
+r[effect.uses-list]
+- A comma continues a `uses` list only when a type path follows it that isn't followed by `:` or `=`. So a parameter, a field or a named bound argument after a function type ends its effects. In a list of types, a function type's effects take every type path after them. That applies to type arguments, tuple types and a function type's parameters, so `Map<String, fn() uses Io, Db>` gives the function both effects.
+
+r[effect.uses-return]
+- When a function's return type is a function type written without parentheses, a `uses` after it belongs to the outer function. The same holds for closures, and for a function type whose return type is a function type.
+
 r[effect.pure-param]
 - A parameter type with no `uses` accepts only pure closures. A function that should accept effectful ones declares an [effect variable](#effect-variables).
 

@@ -52,18 +52,23 @@ fn skip(what: &str, p: &mut Parser) {
     p.recover(Sync::Line, true);
 }
 
-/// `fn` name `(` params `)` [ `->` type ] block (`grammar.fn_decl`, `grammar.fn_sig`). A line
-/// that starts with `->` or `{` continues the header (`r[lex.continue.signature]`).
+/// `fn` name [ generics ] `(` params `)` [ `->` type ] [ `uses` effects ] block
+/// (`grammar.fn_decl`, `grammar.fn_sig`). A line that starts with `->`, `uses` or `{`
+/// continues the header (`r[lex.continue.signature]`).
 fn fn_decl(p: &mut Parser) {
     p.bump();
     let outer_header = std::mem::replace(&mut p.in_fn_header, true);
-    let mut ok = name(p, "a function name") && param_list(p);
-    let mut what = "`->` or `{`";
+    let mut ok = name(p, "a function name") && (!p.at(Lt) || types::generics(p)) && param_list(p);
+    let mut what = "`->`, `uses` or `{`";
     if ok && p.at(Arrow) {
         let marker = p.start();
         p.bump();
-        ok = types::type_(p);
+        ok = types::return_type(p);
         p.complete(marker, RetType);
+        what = "`uses` or `{`";
+    }
+    if ok && p.at(UsesKw) {
+        ok = types::effects(p);
         what = "`{`";
     }
     if ok && p.at(LBrace) {

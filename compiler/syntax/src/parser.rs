@@ -560,8 +560,8 @@ impl<'t> Parser<'t> {
     /// Skips tokens into a `Skipped` node up to the next sync point of the innermost frame:
     /// `sync`, its closing bracket, or a [`Stop`]. With `force`, the current token is skipped
     /// even where it is a sync point. A bracket the skip opens is skipped up to its closing
-    /// bracket, unless a frame's closing bracket or a member start of the file or an `impl`
-    /// body comes first.
+    /// bracket, and so is a `<` in a list, unless a frame's closing bracket or a member start of
+    /// the file or an `impl` body comes first.
     fn recover(&mut self, sync: Sync, force: bool) {
         let marker = self.start();
         let mut skipped = false;
@@ -592,6 +592,10 @@ impl<'t> Parser<'t> {
             }
             if let Some(closer) = closer_of(kind) {
                 groups.push((closer, start));
+            } else if kind == Lt && self.top().holds == Holds::Items {
+                // In a list, `<` can only open type arguments or generics, so the skip stays
+                // out of their commas. In a line context it may be less-than.
+                groups.push((Gt, start));
             }
             self.take();
             skipped = true;
@@ -606,7 +610,8 @@ impl<'t> Parser<'t> {
     // Shared shapes.
 
     /// A comma-separated list, after its opening bracket, which the caller took: items until
-    /// `closer`, each parsed by `item`. Line breaks in it are spacing.
+    /// `closer`, each parsed by `item`, with an optional trailing `,`. Line breaks in it are
+    /// spacing.
     fn list(
         &mut self,
         closer: SyntaxKind,
@@ -615,22 +620,38 @@ impl<'t> Parser<'t> {
         starts_item: fn(SyntaxKind) -> bool,
     ) {
         self.push_frame(Holds::Items, Some(closer));
+        self.list_items(closer, what_item, item, starts_item, false);
+    }
+
+    /// The rest of a [`Parser::list`] whose frame is open. With `after_item`, the caller has
+    /// parsed an item, so the list goes on at the token after it.
+    fn list_items(
+        &mut self,
+        closer: SyntaxKind,
+        what_item: &str,
+        item: fn(&mut Parser),
+        starts_item: fn(SyntaxKind) -> bool,
+        mut after_item: bool,
+    ) {
         let close = format!("`{}`", punctuation(closer));
         loop {
-            if self.kind() == closer {
-                self.pop_frame();
-                self.bump();
-                return;
+            if !after_item {
+                if self.kind() == closer {
+                    self.pop_frame();
+                    self.bump();
+                    return;
+                }
+                if let Some(stop) = self.stop() {
+                    self.close_frame(stop);
+                    return;
+                }
+                if self.unmatched_closer() {
+                    self.close_in_place(&format!("{what_item} or {close}"));
+                    return;
+                }
+                item(self);
             }
-            if let Some(stop) = self.stop() {
-                self.close_frame(stop);
-                return;
-            }
-            if self.unmatched_closer() {
-                self.close_in_place(&format!("{what_item} or {close}"));
-                return;
-            }
-            item(self);
+            after_item = false;
             match self.kind() {
                 Comma => self.bump(),
                 kind if kind == closer => {}

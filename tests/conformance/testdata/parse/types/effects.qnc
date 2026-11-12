@@ -1,0 +1,15 @@
+// rule: grammar.effects
+// rule: grammar.effect_ref
+// rule: effect.uses-list
+// mode: parse
+// A `uses` list is `*` or effects separated by commas. A comma continues it only when a type
+// path follows that isn't followed by `:` or `=`, so a parameter or a named bound argument
+// after a function type ends its effects.
+fn main() uses * {}
+fn reads() -> Int uses Fs, db.Db, E {}
+fn serve<uses E>(handler: fn(Request) -> Response uses E, host: String) {}
+fn open(open: fn() -> Conn uses Net, Db, max: Int) {}
+fn bound<I: Iterator<Item = fn() uses Io, Output = Int>>() {}
+fn listed(a: Map<String, fn() uses Io, Db>) {}
+fn none() uses {} //~ E0016
+fn trailing() uses Io, {} //~ E0016
