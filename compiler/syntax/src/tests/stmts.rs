@@ -312,8 +312,8 @@ fn a_missing_condition_block_or_else_branch() {
 /// missing (`r[expr.block.cond-brace]`). In parentheses it is a map.
 #[test]
 fn a_brace_in_a_condition_is_the_block() {
-    // Braces another `{` follows on their line were meant as a map: the fix puts them in
-    // parentheses, and the block after them is still the block.
+    // Braces that hold an entry's `:` were meant as a map: the fix puts them in parentheses,
+    // and the block after them is still the block.
     let text = "fn f() {\n  if m == {:} { g() }\n}\n";
     let found: Vec<_> = checked(text)
         .errors()
@@ -330,9 +330,12 @@ fn a_brace_in_a_condition_is_the_block() {
         ["expected an expression, found `{`"]
     );
     assert_eq!(errors("  if { x }"), ["E0016 5..6"]);
-    // Braces that more of the condition follows on their line are a map, parsed as one, so the
-    // rest of the condition and the block are as written.
+    // Braces that hold an entry's `:` are a map, parsed as one, so the rest of the condition and
+    // the block are as written, on a line that continues the condition too.
     assert_eq!(errors("  if {\"a\": 1}.len() > 0 {}"), ["E0016 5..6"]);
+    assert_eq!(errors("  if {\"a\": 1}\n    .len() > 0 {}"), ["E0016 5..6"]);
+    assert_eq!(errors("  if {\"a\": 1}[k] {}"), ["E0016 5..6"]);
+    assert_eq!(errors("  if m == {\"a\": 1}?.x {}"), ["E0016 10..11"]);
     assert_eq!(errors("  while {\"a\": 1} != m {}"), ["E0016 8..9"]);
     assert_eq!(errors("  if m == {\"a\": 1} && ok {}"), ["E0016 10..11"]);
     assert_eq!(errors("  if m == {\"a\":\n    1} {}"), ["E0016 10..11"]);
@@ -343,6 +346,54 @@ fn a_brace_in_a_condition_is_the_block() {
         errors("  if if a { {\"x\": 1} } else { m } == m {}"),
         [] as [String; 0]
     );
+    // Braces with no entry's `:` are the block, whatever follows them: one E0016 where the
+    // expression is missing, with no fix, then one for what follows the block.
+    assert_eq!(errors("  if {x} {y}"), ["E0016 5..6", "E0016 9..10"]);
+    assert_eq!(
+        messages("  if {x} {y}"),
+        [
+            "expected an expression, found `{`",
+            "expected a line break or `}`, found `{`"
+        ]
+    );
+    assert_eq!(
+        errors("  if a > { b } == c {}"),
+        ["E0016 9..10", "E0016 20..21"]
+    );
+    // A block's `let x: T` holds a `:`, but no map holds a `let` line.
+    assert_eq!(
+        errors("  while n > {\n    let x: Int = 1\n  }"),
+        ["E0016 12..13"]
+    );
+}
+
+/// The block that a `{` in a condition starts is one E0016, wherever the `if` is, and the lines
+/// after it parse as written (`r[expr.block.cond-brace]`).
+#[test]
+fn a_brace_in_a_condition_is_one_error() {
+    assert_eq!(
+        errors("  let v = if a > { 1 } else { 2 }"),
+        ["E0016 17..18"]
+    );
+    assert_eq!(errors("  g(if a > { 1 })"), ["E0016 11..12"]);
+    assert_eq!(errors("  [if a > { 1 }, 2]"), ["E0016 10..11"]);
+    assert_eq!(
+        errors("  while n > {\n    g()\n  }\n  x = 2"),
+        ["E0016 12..13"]
+    );
+    // A map whose fix would move a comment gets none.
+    let fixes = |body: &str| {
+        let text = format!("{PREFIX}{body}\n}}\n");
+        checked(&text)
+            .errors()
+            .iter()
+            .map(|e| e.fixes.len())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(fixes("  if m == {\"a\": 1} {}"), [1]);
+    assert_eq!(fixes("  if m == {\"a\": 1, // c\n    \"b\": 2} {}"), [0]);
+    // Right after an error token, the map is part of that slip.
+    assert_eq!(errors("  if a == $ {\"a\": 1} {}"), ["E0001 10..11"]);
 }
 
 /// Blocks nest, and a missing `}` is one E0017 at the `{` the next declaration closes.

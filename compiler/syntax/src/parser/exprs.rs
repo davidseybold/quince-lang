@@ -667,20 +667,13 @@ fn primary(p: &mut Parser) -> Option<Completed> {
 }
 
 /// A `{` where an expression goes at the top of a condition, which starts the block
-/// (`r[expr.block.cond-brace]`). When more of the condition follows its braces on the line of
-/// their `}`, such as an operator, `.` or the block's `{`, the braces were meant as a map. That
-/// is an E0016 whose fix puts them in parentheses (`needs-review`), and the parser parses the map,
-/// so the rest of the condition and its block parse as written. Otherwise the braces are the
-/// block, and the expression is missing.
+/// (`r[expr.block.cond-brace]`). Braces that hold an entry's `:` at their top, `{:}` among them,
+/// were meant as a map: the same test a map's own entries use (`holds_entry`). That is an E0016
+/// whose fix puts them in parentheses (`needs-review`), and the parser parses the map, so the rest
+/// of the condition and its block parse as written. Other braces are the block, and the
+/// expression is missing.
 fn condition_brace(p: &mut Parser) -> Option<Completed> {
-    let map_end = matching_brace(p).filter(|&close| {
-        p.input.tokens.get(close + 1).is_some_and(|next| {
-            next.brk == Break::None
-                && !matches!(next.kind, ElseKw | Comma)
-                && !super::is_closer(next.kind)
-        })
-    });
-    let Some(end) = map_end else {
+    let Some(end) = map_close(p) else {
         p.expected("an expression");
         return None;
     };
@@ -708,11 +701,13 @@ fn condition_brace(p: &mut Parser) -> Option<Completed> {
     Some(map_lit(p))
 }
 
-/// The index among the significant tokens of the `}` that closes the current `{`. A line that
-/// starts with a member start, which no braces in a condition hold, ends the scan, so it reads
-/// no further than the braces' own lines. A direct scan, done once, at an error.
-fn matching_brace(p: &Parser) -> Option<usize> {
+/// The index among the significant tokens of the `}` that closes the current `{`, when the braces
+/// hold an entry's `:` at their top, as a map does. A line that starts with a member start, which
+/// no map holds, ends the scan, so a block's `let x: T` is never taken for an entry, and the scan
+/// reads no further than the braces' own lines. A direct scan, done once, at an error.
+fn map_close(p: &Parser) -> Option<usize> {
     let mut open = 0usize;
+    let mut entry = false;
     for (i, token) in p.input.tokens.iter().enumerate().skip(p.pos) {
         if i > p.pos && token.brk != Break::None && super::starts_member(token.kind) {
             return None;
@@ -722,8 +717,10 @@ fn matching_brace(p: &Parser) -> Option<usize> {
         } else if super::is_closer(token.kind) {
             open = open.saturating_sub(1);
             if open == 0 {
-                return (token.kind == RBrace).then_some(i);
+                return (token.kind == RBrace && entry).then_some(i);
             }
+        } else if open == 1 && token.kind == Colon {
+            entry = true;
         }
     }
     None

@@ -15,6 +15,9 @@ fn f(m: Map<String, Int>, var n: Int) {
   if m == {:} { //~ E0016
     log("empty")
   }
+  if {"a": 1}.len() > 0 { //~ E0016
+    log("one")
+  }
   while n > { //~ E0016
     n -= 1
   }
