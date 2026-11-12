@@ -368,7 +368,8 @@ fn prefix(p: &mut Parser) -> Option<Completed> {
 
 /// The current `-` and the number after it are one literal (`r[lex.lit.int.neg]`,
 /// `r[lex.lit.neg-adjacent]`): nothing comes between them, and no postfix operator follows the
-/// number. A `.` after it on the next line is one, as it continues the line.
+/// number. A `.` after it on the next line is one, as it continues the line, unless a `;`
+/// ends the line.
 fn negative_literal(p: &Parser) -> bool {
     let tokens = &p.input.tokens[p.pos..];
     let [minus, number, ..] = tokens else {
@@ -378,7 +379,7 @@ fn negative_literal(p: &Parser) -> bool {
         return false;
     }
     match tokens.get(2) {
-        Some(next) if next.kind == Dot => false,
+        Some(next) if next.kind == Dot && next.brk != Break::Hard => false,
         Some(next) if next.brk == Break::None => !matches!(next.kind, LParen | LBracket | Question),
         _ => true,
     }

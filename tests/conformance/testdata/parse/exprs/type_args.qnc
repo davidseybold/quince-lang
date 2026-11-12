@@ -1,7 +1,7 @@
 // rule: expr.op.type-args
 // mode: parse
 // In an expression, `<` after a name or path starts type arguments when they parse, closed
-// by `>`, and the token after the `>` is `(`, `.`, `,`, `)`, `]`, `}` or a line break.
+// by `>`, and the token after the `>` is `(`, `.`, `?`, `,`, `)`, `]`, `}` or a line break.
 // Otherwise it is less-than, so these comparisons chain or need parentheses.
 fn f(body: String, a: Int, b: Int, c: Int) {
   let order = json.decode<Order>(body)

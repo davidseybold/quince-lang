@@ -514,9 +514,18 @@ fn less_than_after_parsing_ahead() {
     assert_eq!(errors("a < b > c"), ["E0020 6..7 => a < b && b > c"]);
     assert_eq!(errors("x < Y >= z"), ["E0020 6..8 => x < Y && Y >= z"]);
     assert_eq!(errors("a < b >> c"), ["E0019 4..10 => a < (b >> c)"]);
-    // A long chain is parsed ahead from each `<` once, and is one error.
+    // A long chain is one error, and is parsed ahead from each `<` once: the first `<` parses
+    // ahead through the rest, and records every `<` it meets.
     let chain = vec!["a"; 200].join(" < ");
     assert_eq!(errors(&chain).len(), 1);
+    let text = format!("{PREFIX}{chain}\n}}\n");
+    let tokens = 400 + 10;
+    assert!(crate::parser::speculated_tokens(&text) <= tokens);
+    // Parsing ahead leaves no slip behind, so the operands around it are still checked.
+    assert_eq!(
+        errors("a < b + 1 < c"),
+        ["E0020 10..11 => a < b + 1 && b + 1 < c"]
+    );
 }
 
 /// `r[lex.lit.int.neg]` and `r[lex.lit.neg-adjacent]`: a `-` in prefix position directly
@@ -563,6 +572,14 @@ fn negative_literals() {
 "#
     );
     assert!(tree("-2\n    .pow(2)").starts_with("Prefix\n"));
+    // After a `;`, a `.` starts a statement, so it isn't a postfix operator.
+    let parse = checked("fn f() {\n  -2;\n  .x\n}\n");
+    let block = parse
+        .syntax()
+        .descendants()
+        .find(|node| node.kind() == SyntaxKind::Block)
+        .unwrap();
+    assert_eq!(block.first_child().unwrap().kind(), SyntaxKind::Literal);
     // A `(` on the next line starts a statement, so it isn't a postfix operator.
     assert_eq!(
         stmts("  -1\n  (2)"),

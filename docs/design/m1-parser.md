@@ -541,6 +541,7 @@ Layer 3 is three PRs (decided by David, 2026-11-12), since together they would r
 - [ ] `validate` and the case check; E0021. [`lex.name.case`, `lex.name.enforced`, `lex.name.foreign-exempt`, `lex.ident-classes`]
 
 **Layer 9: `m1/parser-fuzz`**
+- [ ] Parsing ahead (layer 3b) nests type arguments as deep as the `<`s it meets, so `g(a < b, a < b, ...)` nests far deeper than its tree. The depth counter must cover parsing ahead, and an E0022 while parsing ahead is a slip, not an error (found in layer 3b's review).
 - [ ] `fuzz::check_parse` and its unit test over every fixture; the fuzz crate and its thin target; the command in `AGENTS.md`.
 - [ ] The nesting limit, measured; E0022; the deep-nesting tests on spawned threads.
 - [ ] Every grammar production cited by a passing fixture.

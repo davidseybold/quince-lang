@@ -79,6 +79,15 @@ fn parse_lexed(text: &str, lexed: Lexed) -> Parse {
     Parse { green, errors }
 }
 
+/// How many tokens parsing `text` takes while parsing ahead from `<`s.
+#[cfg(test)]
+pub(crate) fn speculated_tokens(text: &str) -> usize {
+    let lexed = lex_str(text);
+    let mut parser = Parser::new(text, &lexed, Input::new(text, &lexed));
+    items::file(&mut parser);
+    parser.speculated
+}
+
 /// The kind [`Parser::kind`] gives past the last token. It is a node kind, so no token has it.
 const EOF: SyntaxKind = File;
 
@@ -244,6 +253,10 @@ struct Parser<'t> {
     /// the significant tokens: the index after the `>` that closes its type arguments, or
     /// `None` when what follows isn't type arguments. So each `<` is examined once.
     type_args_end: HashMap<usize, Option<usize>>,
+    /// How many tokens the parser has taken while parsing ahead, for the test that it stays
+    /// linear.
+    #[cfg(test)]
+    speculated: usize,
 }
 
 /// Where the parser was, so it can go back there after parsing ahead.
@@ -279,6 +292,8 @@ impl<'t> Parser<'t> {
             speculating: false,
             speculation_failed: false,
             type_args_end: HashMap::new(),
+            #[cfg(test)]
+            speculated: 0,
         }
     }
 
@@ -372,6 +387,10 @@ impl<'t> Parser<'t> {
         self.steps.push(Step::Token);
         self.taken.push(self.input.tokens[self.pos].index);
         self.pos += 1;
+        #[cfg(test)]
+        if self.speculating {
+            self.speculated += 1;
+        }
         self.after_attributes = false;
         self.after_operator = false;
         self.lookahead.set(0);
