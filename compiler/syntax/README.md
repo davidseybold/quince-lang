@@ -138,7 +138,7 @@ A node holds its tokens and child nodes in source order. A part the code leaves 
 | `Index` | An expression, `[`, an expression, and `]`. |
 | `Try` | An expression and `?`. |
 | `Call` | The callee, any expression, and an `ArgList`. A method call is a `Call` whose callee is a `Field`, and a struct literal or a variant is a `Call` too, since only name resolution can tell them apart. |
-| `ArgList` | `(`, the arguments and their commas, and `)`. An argument is an expression or a `NamedArg`, and the first may be an `UpdateArg`. |
+| `ArgList` | `(`, the arguments and their commas, and `)`. An argument is an expression or a `NamedArg`. The first may be an `UpdateArg`, and then each argument after it is a `NamedArg`, at least one. |
 | `NamedArg` | A `NameRef`, `:`, and an expression if there is one. |
 | `UpdateArg` | `..` and an expression: the base of a struct update. |
 | `Field` | An expression, `.`, and a `NameRef` or a tuple position's `Int`. |

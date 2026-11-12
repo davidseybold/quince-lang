@@ -498,11 +498,11 @@ impl<'t> Parser<'t> {
         self.slip();
         let frame = self.frames.pop().expect("a frame to close");
         self.lookahead.set(0);
-        let after_close = std::mem::replace(&mut self.closed_early, true);
+        self.closed_early = true;
         let Some((closer, opener)) = frame.bracket else {
             return;
         };
-        if frame.holds == Holds::Map && stop == Stop::Outer && !after_close {
+        if frame.holds == Holds::Map && stop == Stop::Outer {
             let block_member = self
                 .member_holder()
                 .is_some_and(|at| self.frames[at].holds == Holds::Block);

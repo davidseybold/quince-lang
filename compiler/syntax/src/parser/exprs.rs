@@ -708,7 +708,9 @@ pub(super) fn attribute_args(p: &mut Parser) {
 
 /// `(` [ arg { `,` arg } [ `,` ] ] `)` (`grammar.args`), where the first argument may be
 /// `..` and an expression, the base of a struct update (`r[item.struct.update]`). Only name
-/// resolution can tell a struct from a function, so any call takes one.
+/// resolution can tell a struct from a function, so any call takes one. After the base come
+/// one or more named fields (`grammar.struct_lit`), so `User(..user)`, which would mean
+/// `user`, is an error.
 fn arg_list(p: &mut Parser) {
     let marker = p.start();
     p.bump();
@@ -722,7 +724,13 @@ fn arg_list(p: &mut Parser) {
             expr(p);
         }
         p.complete(base, UpdateArg);
-        p.list_items(RParen, "an expression", arg, starts_expr, true);
+        if p.kind() == RParen {
+            p.expected("`,` and `name:`");
+        } else if p.kind() == Comma && p.nth_kind(1) == RParen {
+            p.bump();
+            p.expected("`name:`");
+        }
+        p.list_items(RParen, "`name:`", field_arg, |kind| kind == Ident, true);
     } else {
         p.list(RParen, "an expression", arg, starts_expr);
     }
@@ -733,13 +741,30 @@ fn arg_list(p: &mut Parser) {
 /// alone, before a `,` or the `)`, passes the binding of that name. A line break in the list is
 /// spacing, after the `:` too.
 fn arg(p: &mut Parser) {
-    let named = p.kind() == Ident && p.nth_kind(1) == Colon;
-    if !named {
-        if p.kind() == DotDot {
-            return p.expected("an expression or `name:`");
-        }
-        return expr(p);
+    if at_named(p) {
+        return named_arg(p);
     }
+    if p.kind() == DotDot {
+        return p.expected("an expression or `name:`");
+    }
+    expr(p);
+}
+
+/// A named argument after a struct update's base (`grammar.field_init`).
+fn field_arg(p: &mut Parser) {
+    if at_named(p) {
+        named_arg(p);
+    } else {
+        p.expected("`name:`");
+    }
+}
+
+fn at_named(p: &Parser) -> bool {
+    p.kind() == Ident && p.nth_kind(1) == Colon
+}
+
+/// A name, `:` and an expression if there is one: `name:` alone, before a `,` or the `)`.
+fn named_arg(p: &mut Parser) {
     let marker = p.start();
     p.bump_node(NameRef);
     p.bump();

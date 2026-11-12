@@ -29,6 +29,7 @@ grammar.enum_decl
 grammar.evariant
 grammar.expr
 grammar.field
+grammar.field_init
 grammar.file
 grammar.fn_decl
 grammar.fn_sig
@@ -48,6 +49,7 @@ grammar.prefix
 grammar.primary
 grammar.range
 grammar.struct_decl
+grammar.struct_lit
 grammar.term
 grammar.tuple
 grammar.type

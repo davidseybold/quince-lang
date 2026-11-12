@@ -1,9 +1,15 @@
 // rule: item.struct.update
+// rule: grammar.struct_lit
+// rule: grammar.field_init
 // mode: parse
-// `..base` comes first in a struct literal's arguments.
+// `..base` comes first in a struct literal's arguments, and named fields follow it: at least
+// one, since an update that changes nothing would only be the base.
 fn f(user: User) -> User {
   let renamed = User(..user, name: "New")
   let trailing = User(..user, name: "New",)
   let late = User(name: "New", ..user) //~ E0016
+  let copy = User(..user) //~ E0016
+  let comma = User(..user,) //~ E0016
+  let positional = User(..user, "New") //~ E0016
   renamed
 }

@@ -740,6 +740,18 @@ fn arguments() {
     );
     assert_eq!(errors("f(email:\n  )"), Vec::<String>::new());
     assert_eq!(errors("User(id: 1, ..u)"), ["E0016 12..14"]);
+    // After the base come one or more named fields (`grammar.struct_lit`).
+    assert_eq!(errors("User(..u)"), ["E0016 8..9"]);
+    assert_eq!(
+        messages("User(..u)"),
+        ["expected `,` and `name:`, found `)`"]
+    );
+    assert_eq!(errors("User(..u,)"), ["E0016 9..10"]);
+    assert_eq!(
+        messages("User(..u, 1)"),
+        ["expected `name:`, found the number `1`"]
+    );
+    assert_eq!(errors("User(..u, id: 1, 2)"), ["E0016 17..18"]);
     assert_eq!(
         messages("User(id: 1, ..u)"),
         ["expected an expression or `name:`, found `..`"]
@@ -764,6 +776,11 @@ fn a_bare_block_is_one_error() {
     assert_eq!(
         errors("{\n    log(1)\n    var y = {\n      while ok {}\n    }\n  } + 1"),
         ["E0016 0..1"]
+    );
+    // A bracket left open in the block is its own slip, and the block still skips to its `}`.
+    assert_eq!(
+        errors("{\n    g(1\n    let y = 1\n  }"),
+        ["E0016 0..1", "E0017 7..8"]
     );
     // A map with an entry is a map missing its `}`.
     assert_eq!(errors("{\"a\": 1\n  let y = 1"), ["E0017 0..1"]);
