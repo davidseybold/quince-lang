@@ -4,3 +4,5 @@
 lex.lit.string.interp-path
 lex.lit.multiline-close
 item.struct.unit
+item.attr.test
+test.attr

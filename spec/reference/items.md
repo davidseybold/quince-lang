@@ -321,8 +321,8 @@ r[item.attr.deprecated]
 r[item.attr.opaque]
 - `@opaque` (Structs and enums): No automatic Eq, Hash, debug form, test generator, Encode or Decode, for handle-like types ([Prelude and special interfaces](prelude.md))
 
-r[item.attr.test]
-- `@test` (Top-level declarations): Compiled only by `quince` `test`; naming it from code that isn't a test is a compile error. Impls of a `@test` type are test-only too, without their own `@test` ([Testing](testing.md))
+r[item.attr.test-only]
+- `@test_only` (Top-level declarations): Compiled only by `quince` `test`; naming it from code that isn't a test is a compile error. Impls of a `@test_only` type are test-only too, without their own `@test_only` ([Testing](testing.md))
 
 r[item.attr.wire]
 - `@wire("name")`, `@wire(case: camel)`, `@wire(tag: "kind")` (Fields and variants (name); structs and enums (case, tag)): Set the wire name, the naming case, or the enum tag field used by Encode and Decode ([Serialization](prelude.md#serialization))

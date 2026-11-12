@@ -184,7 +184,7 @@ A keyword where a name goes is an E0016 that names the keyword (`r[lex.keyword-n
 - **Attributes.** An attribute goes on its own line (`r[item.attr.placement]`). One on its declaration's line is an E0016 whose fix inserts a line break (`safe`). Whether the attribute's name is known (`r[item.attr.unknown]`) is checked by a later stage, since the set depends on the edition.
 - **Imports** come before declarations (`grammar.file`). An import after a declaration is an E0016.
 - **What the grammar rejects is an E0016:** `pub` on a variant field (`grammar.vfield`, `r[item.enum.field-visibility]`), a `const` in an interface (`grammar.interface_decl`, `r[item.const.assoc.no-interface]`), and a wildcard import (`r[intro.excl.wildcard-imports]`).
-- **What the grammar accepts goes to later stages,** each with a code and a fixture there: `pub` on an `impl` or a `test`, and `@test` on a method.
+- **What the grammar accepts goes to later stages,** each with a code and a fixture there: `pub` on an `impl` or a `test`, and `@test_only` on a method.
 
 ### 9. Error recovery
 
