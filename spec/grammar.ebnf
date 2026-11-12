@@ -21,7 +21,7 @@ param        = [ "var" ] "self" | [ "var" ] ( name | "_" ) ":" type [ "=" expr ]
 
 const_decl   = "const" NAME ":" type "=" expr
 
-struct_decl  = "struct" Name [ generics ] [ "{" [ field { "," field } [ "," ] ] "}" [ "requires" expr ] ]   // no braces: no fields
+struct_decl  = "struct" Name [ generics ] [ "{" field { "," field } [ "," ] "}" [ "requires" expr ] ]   // no braces: no fields
 field        = { doc_comment } { attribute NEWLINE } [ "pub" ] name ":" type
 struct_lit  = type_path [ type_args ] "(" [ ".." expr "," ] field_init { "," field_init } [ "," ] ")"
 field_init  = name ":" [ expr ]

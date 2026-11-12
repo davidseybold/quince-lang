@@ -64,7 +64,7 @@ pub struct User {
 ```
 
 ```ebnf
-struct_decl  = "struct" Name [ generics ] [ "{" [ field { "," field } [ "," ] ] "}" [ "requires" expr ] ]   // no braces: no fields
+struct_decl  = "struct" Name [ generics ] [ "{" field { "," field } [ "," ] "}" [ "requires" expr ] ]   // no braces: no fields
 field        = { doc_comment } { attribute NEWLINE } [ "pub" ] name ":" type
 struct_lit  = type_path [ type_args ] "(" [ ".." expr "," ] field_init { "," field_init } [ "," ] ")"
 field_init  = name ":" [ expr ]
@@ -73,8 +73,8 @@ field_init  = name ":" [ expr ]
 r[item.struct.init-all]
 - All fields must be initialized at construction. No default constructors, no partially built values.
 
-r[item.struct.unit]
-- A struct with no fields is declared without braces, as in `pub struct ChannelClosed`, and its one value is written as its name, `ChannelClosed`.
+r[item.struct.no-fields]
+- A struct with no fields is declared without braces, as in `pub struct ChannelClosed`, and its one value is written as its name, `ChannelClosed`. Writing `{}` is a compile error, whose fix removes the braces.
 
 r[item.struct.literal]
 - A struct is built with its name and every field named, in declaration order: `User(id: UserId(1), email:, name: "Ada", created_at: now)`.
