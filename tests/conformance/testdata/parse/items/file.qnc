@@ -1,0 +1,20 @@
+// rule: grammar.file
+// mode: parse
+// A file is a sequence of declarations, each on its own line, with blank lines and comments
+// between them.
+const LIMIT: Int = 10
+
+pub fn start() {}
+fn stop() {}
+
+// A comment above a declaration.
+impl Counter {
+  pub fn get(self) -> Int { 0 }
+
+  fn reset(var self) {}
+}
+test "start and stop" {
+  start()
+  stop()
+}
+pub const NAME: String = "counter"

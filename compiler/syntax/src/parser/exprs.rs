@@ -1,5 +1,5 @@
-//! Blocks, statements and expressions: `let`, literals, names, calls, method calls and fields.
-//! Later layers of the parser add the operators and the rest.
+//! Blocks, statements and expressions: `let`, literals, names, list literals, ranges, calls,
+//! method calls and fields. Later layers of the parser add the operators and the rest.
 
 use super::{Completed, Holds, Parser, Sync, items, types};
 use crate::SyntaxKind::{self, *};
@@ -53,9 +53,17 @@ fn let_rest(p: &mut Parser) {
     expr(p);
 }
 
-/// An expression: so far, a postfix expression (`grammar.expr`).
+/// An expression: a range or a postfix expression (`grammar.expr`, `grammar.range`).
 pub(super) fn expr(p: &mut Parser) {
-    postfix(p);
+    let Some(start) = postfix(p) else {
+        return;
+    };
+    if p.at(DotDot) || p.at(DotDotEq) {
+        let marker = p.precede(start);
+        p.bump();
+        postfix(p);
+        p.complete(marker, Range);
+    }
 }
 
 /// A primary expression and its calls, method calls and fields (`grammar.postfix`). `None`
@@ -86,13 +94,13 @@ fn postfix(p: &mut Parser) -> Option<Completed> {
     Some(done)
 }
 
-/// A literal, a name, `self` or `Self` (`grammar.primary`). A statement starts
+/// A literal, a name, `self`, `Self` or a list literal (`grammar.primary`). A statement starts
 /// after a break, so this doesn't check for one: each caller has taken a token that continues
 /// the line, or is at the start of a statement.
 fn primary(p: &mut Parser) -> Option<Completed> {
     let marker = p.start();
     let kind = match p.kind() {
-        Int | Float | Char => {
+        Int | Float | Char | TrueKw | FalseKw => {
             p.bump();
             Literal
         }
@@ -103,6 +111,11 @@ fn primary(p: &mut Parser) -> Option<Completed> {
         Ident | SelfKw | SelfTypeKw => {
             p.bump();
             NameRef
+        }
+        LBracket => {
+            p.bump();
+            p.list(RBracket, "an expression", expr, starts_expr);
+            ListLit
         }
         _ => {
             p.abandon(marker);
@@ -117,13 +130,21 @@ fn primary(p: &mut Parser) -> Option<Completed> {
 fn starts_expr(kind: SyntaxKind) -> bool {
     matches!(
         kind,
-        Int | Float | Char | StringStart | Ident | SelfKw | SelfTypeKw
+        Int | Float
+            | Char
+            | StringStart
+            | TrueKw
+            | FalseKw
+            | Ident
+            | SelfKw
+            | SelfTypeKw
+            | LBracket
     )
 }
 
 /// A string literal, at its `StringStart`: its text, escapes and interpolations, and its
 /// `StringEnd` when it has one. The lexer reported a missing one.
-fn literal(p: &mut Parser) -> Completed {
+pub(super) fn literal(p: &mut Parser) -> Completed {
     let marker = p.start();
     p.bump();
     loop {

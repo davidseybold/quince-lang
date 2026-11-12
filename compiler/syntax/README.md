@@ -96,14 +96,19 @@ A node holds its tokens and child nodes in source order. A part the code leaves 
 | `ParamList` | `(`, `Param`s and their commas, and `)`. |
 | `Param` | `var` if present, then `self`, or a `Name` or `_` followed by `:`, a type, and `=` and an expression for a default. |
 | `RetType` | `->` and a type. |
+| `TestDecl` | `test`, its name as a `Literal`, and a `Block`. |
+| `ConstDecl` | `pub` if present, `const`, a `Name`, `:`, a type, `=` and an expression. |
+| `ImplDecl` | `impl`, a type, `{`, a `FnDecl` per method, and `}`. |
 | `TypePath` | Its names and the `.` tokens between them, whatever their case, then its `TypeArgs` if present. |
 | `TypeArgs` | `<`, types and their commas, and `>`. |
 | `Block` | `{`, its statements, and `}`. An expression statement is the expression's own node. |
 | `LetStmt` | `let`, a `Name`, `:` and a type if present, `=` and an expression. |
 | `Name` | The `Ident` of a name being declared. |
 | `NameRef` | The `Ident`, `self` or `Self` of a name being used. |
-| `Literal` | One `Int`, `Float` or `Char`, or a whole string: its `StringStart`, text, `Interp`s and `StringEnd`, which an unclosed string lacks. |
+| `Literal` | One `Int`, `Float`, `Char`, `true` or `false`, or a whole string: its `StringStart`, text, `Interp`s and `StringEnd`, which an unclosed string lacks. |
 | `Interp` | An interpolation's `InterpStart`, the tokens of its path, and its `InterpEnd`. |
+| `ListLit` | `[`, expressions and their commas, and `]`. |
+| `Range` | An expression, `..` or `..=`, and an expression. |
 | `Call` | The callee, any expression, and an `ArgList`. A method call is a `Call` whose callee is a `Field`, and a struct literal or a variant is a `Call` too, since only name resolution can tell them apart. |
 | `ArgList` | `(`, expressions and their commas, and `)`. |
 | `Field` | An expression, `.`, and a `NameRef` or a tuple position's `Int`. |
@@ -115,10 +120,10 @@ Postfix forms nest to the left: `a.b(c)` is a `Call` of a `Field` of a `NameRef`
 
 The parser reads the significant tokens: every token but the trivia and the doc comments, which are all trivia until doc comments get their own parsing. Each records the break before it: none, a line break, or a hard break, when a `;` comes between it and the token before. Nothing comes before the first token, so it has no break.
 
-- **Where a break ends a construct.** In a line context (the file and a block), a break ends the statement or declaration unless the token before it continues the line (`SyntaxKind::continues_line()`), the next token is `.`, or the parser is in a `fn` header and the next token is `->`, `uses`, `requires`, `ensures` or `{`. A hard break always ends it. Inside brackets, a break before a `,` or a closing bracket is spacing, but an expression in brackets still ends at a break, as a statement does.
+- **Where a break ends a construct.** In a line context (the file, a block, an `impl` body), a break ends the statement or declaration unless the token before it continues the line (`SyntaxKind::continues_line()`), the next token is `.`, or the parser is in a `fn` header and the next token is `->`, `uses`, `requires`, `ensures` or `{`. A hard break always ends it. Inside brackets, a break before a `,` or a closing bracket is spacing, but an expression in brackets still ends at a break, as a statement does.
 - **Errors.** Every syntax error is reported once, and then the parser skips to a sync point, reporting nothing more until it next takes a token as part of a construct. The skipped tokens go in a `Skipped` node, and a bracket the skip meets is skipped up to its closing bracket.
-  - A list syncs at its next `,` and at its closing bracket. A line context syncs at its next break, which ends the member that went wrong.
-  - A token at the start of a line that can only start a member of some open container closes every construct inside the innermost such container, with an E0017 at each opening bracket it closes. For the file those tokens are `fn` and a name, `struct`, `enum`, `type`, `interface`, `impl`, `effect`, `foreign`, `import`, `const` and `test`, each also after `pub`. For a block they are `let`, `var` and `while`.
+  - A list syncs at its next `,` and at its closing bracket. A line context syncs at its next break, which ends the member that went wrong. An `impl` header syncs at the `{` on its line, so its body is still parsed as its body.
+  - A token at the start of a line that can only start a member of some open container closes every construct inside the innermost such container, with an E0017 at each opening bracket it closes. For the file those tokens are `fn` and a name, `struct`, `enum`, `type`, `interface`, `impl`, `effect`, `foreign`, `import`, `const` and `test`, each also after `pub`. For an `impl` body they are `fn` and a name, `type` and `const`. For a block they are `let`, `var` and `while`.
   - A closing bracket that matches a bracket further out closes everything inside it, with an E0017 at each opener. One that matches nothing open closes the innermost list in its place, with one E0016 that names the bracket expected, and in a line context it is skipped as an E0016. The end of the file closes everything still open, with an E0017 at each opener.
   - A bracket closed while the parser is skipping after an error gets no E0017, since that error covers the slip.
   - After a bracket closes without its closing bracket, what the constructs around it lack is part of that slip, until the parser next takes a token. A line break there ends them, whatever token comes before it.

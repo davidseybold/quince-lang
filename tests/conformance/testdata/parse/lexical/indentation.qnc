@@ -1,0 +1,15 @@
+// rule: lex.indentation
+// mode: parse
+// Indentation means nothing: any amount, tabs or spaces, on any line, parses the same.
+fn f(a: Int) -> List<Int> {
+let b = a
+        let c = b
+	let d = c
+  [b,
+c,
+            d]
+          }
+   fn g() {}
+	test "indented" {
+g()
+		}

@@ -1,0 +1,16 @@
+// rule: grammar.params
+// mode: parse
+// Parameters are separated by commas, with an optional trailing one. Each is `self`, or a
+// name or `_` with a type and an optional default, and either may follow `var`.
+impl Counter {
+  fn add(var self, n: Int, _: Int, step: Int = 1,) -> Int {
+    n
+  }
+  fn get(self) -> Int { 0 }
+}
+fn spread(
+  a: Int,
+  b: List<String>,
+) {}
+fn no_type(a) {} //~ E0016
+fn no_comma(a: Int b: Int) {} //~ E0016

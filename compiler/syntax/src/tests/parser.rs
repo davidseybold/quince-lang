@@ -2,7 +2,8 @@
 //! where trivia sits. Each expected dump is written by hand. Errors are in `recovery`.
 
 use super::cst::{check_lossless, dump_tree, dump_tree_without_trivia};
-use crate::{Parse, SyntaxError, SyntaxKind, lex_str, parse_str};
+use super::repo_root;
+use crate::{Parse, SyntaxError, SyntaxKind, decode_source, lex, lex_str, parse, parse_str};
 
 /// The tree without trivia, after checking that the text parses with no error.
 fn valid(text: &str) -> String {
@@ -57,6 +58,26 @@ pub(super) fn check_error_ranges(text: &str, errors: &[SyntaxError]) {
         errors.is_sorted_by_key(|e| e.range.start),
         "{text:?}: errors out of order: {errors:?}"
     );
+}
+
+/// The `lex/` fixtures are valid syntax: the parser adds no error to the lexer's.
+#[test]
+fn the_lex_fixtures_parse() {
+    let dir = repo_root().join("tests/conformance/testdata/lex");
+    let mut paths: Vec<_> = std::fs::read_dir(dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    paths.sort();
+    for path in paths {
+        let decoded = decode_source(&std::fs::read(&path).unwrap()).unwrap();
+        let lexed = lex(&decoded);
+        let parse = parse(&decoded);
+        let mut expected = lexed.errors.clone();
+        expected.sort_by_key(|e| e.range.start);
+        assert_eq!(parse.errors(), expected, "{}", path.display());
+        check_lossless(&decoded.text, &lexed, &parse.syntax());
+    }
 }
 
 #[test]
@@ -126,9 +147,58 @@ fn a_function_with_parameters() {
 }
 
 #[test]
-fn literals() {
+fn constants_impls_and_tests() {
     assert_eq!(
-        stmts("let a: Map<String, Int> = 1\n2.5\n'c'"),
+        valid("pub const MAX: Int = 3\nimpl a.User {\n  pub fn new() {}\n}\ntest \"t\" {\n}\n"),
+        r#"File
+  ConstDecl
+    PubKw "pub"
+    ConstKw "const"
+    Name
+      Ident "MAX"
+    Colon ":"
+    TypePath
+      Ident "Int"
+    Eq "="
+    Literal
+      Int "3"
+  ImplDecl
+    ImplKw "impl"
+    TypePath
+      Ident "a"
+      Dot "."
+      Ident "User"
+    LBrace "{"
+    FnDecl
+      PubKw "pub"
+      FnKw "fn"
+      Name
+        Ident "new"
+      ParamList
+        LParen "("
+        RParen ")"
+      Block
+        LBrace "{"
+        RBrace "}"
+    RBrace "}"
+  TestDecl
+    TestKw "test"
+    Literal
+      StringStart "\""
+      StringText "t"
+      StringEnd "\""
+    Block
+      LBrace "{"
+      RBrace "}"
+"#
+    );
+}
+
+/// `true` and `false` are literals, like numbers and chars (`r[lex.lit.bool]`).
+#[test]
+fn literals_and_list_literals() {
+    assert_eq!(
+        stmts("let a: Map<String, Int> = [1, 2.5, 'c', true, false,]\n[]"),
         r#"LetStmt
   LetKw "let"
   Name
@@ -145,12 +215,27 @@ fn literals() {
         Ident "Int"
       Gt ">"
   Eq "="
-  Literal
-    Int "1"
-Literal
-  Float "2.5"
-Literal
-  Char "'c'"
+  ListLit
+    LBracket "["
+    Literal
+      Int "1"
+    Comma ","
+    Literal
+      Float "2.5"
+    Comma ","
+    Literal
+      Char "'c'"
+    Comma ","
+    Literal
+      TrueKw "true"
+    Comma ","
+    Literal
+      FalseKw "false"
+    Comma ","
+    RBracket "]"
+ListLit
+  LBracket "["
+  RBracket "]"
 "#
     );
 }
@@ -235,6 +320,34 @@ Call
     );
 }
 
+#[test]
+fn ranges() {
+    assert_eq!(
+        stmts("0..=n.len()\n1..10"),
+        r#"Range
+  Literal
+    Int "0"
+  DotDotEq "..="
+  Call
+    Field
+      NameRef
+        Ident "n"
+      Dot "."
+      NameRef
+        Ident "len"
+    ArgList
+      LParen "("
+      RParen ")"
+Range
+  Literal
+    Int "1"
+  DotDot ".."
+  Literal
+    Int "10"
+"#
+    );
+}
+
 /// A line break ends a statement, unless the line ends with a token that continues it, or the
 /// next line starts with `.` (`r[lex.line-end]`, `r[lex.continue.more]`).
 #[test]
@@ -242,6 +355,10 @@ fn where_a_statement_ends() {
     assert_eq!(
         stmts("f\ng"),
         "NameRef\n  Ident \"f\"\nNameRef\n  Ident \"g\"\n"
+    );
+    assert_eq!(
+        stmts("f\n[x]"),
+        "NameRef\n  Ident \"f\"\nListLit\n  LBracket \"[\"\n  NameRef\n    Ident \"x\"\n  RBracket \"]\"\n"
     );
     assert_eq!(
         stmts("a\n  .b\n  .c()"),
@@ -260,6 +377,10 @@ fn where_a_statement_ends() {
     LParen "("
     RParen ")"
 "#
+    );
+    assert_eq!(
+        stmts("let r = 1..\n  10\ng(\n  a,\n  b,\n)"),
+        stmts("let r = 1..10\ng(a, b,)")
     );
     assert_eq!(stmts("g(\n  a,\n  b,\n)"), stmts("g(a, b,)"));
     // A `(` on the next line doesn't call `f`: it starts a statement, which it can't.

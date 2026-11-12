@@ -1,5 +1,17 @@
+expr.block.last-newline
+grammar.block
+grammar.file
+grammar.fn_decl
+grammar.fn_sig
+grammar.list_lit
+grammar.params
 lex.braces
 lex.comment.line
+lex.ident-not-keyword
+lex.indentation
+lex.keyword-not-name
+lex.keywords
+lex.lit.bool
 lex.lit.bytes
 lex.lit.bytes.hex-escape
 lex.lit.char
@@ -26,6 +38,7 @@ lex.lit.string.unicode-escape
 lex.lit.tagged
 lex.lit.tagged.raw
 lex.lit.underscore
+lex.no-contextual
 lex.source.ascii
 lex.source.bom
 lex.source.control

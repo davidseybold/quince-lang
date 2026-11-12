@@ -1,0 +1,16 @@
+// rule: grammar.block
+// rule: expr.block.last-newline
+// mode: parse
+// A block holds statements, one per line, between braces. The last needs no line break
+// before the `}`, so a block can sit on one line. A block with no `}` is never closed.
+fn one() -> Int { 1 }
+fn empty() {}
+fn two() -> List<Int> {
+  let a = 1
+  [a, 2]}
+test "one line" { one() }
+
+fn open() { //~ E0017
+  let b = 2
+
+fn after() {}

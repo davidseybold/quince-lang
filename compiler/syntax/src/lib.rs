@@ -57,9 +57,8 @@ pub mod codes {
         INVALID_UTF8,
         CONTROL_CHARACTER,
     ];
-    /// The codes the parser reports. Each joins this list when its conformance fixture can
-    /// run, once the parser is wired into the runner, since a registered code needs one.
-    pub const PARSER: &[&str] = &[];
+    /// The codes the parser reports.
+    pub const PARSER: &[&str] = &[UNEXPECTED_TOKEN, UNCLOSED_BRACKET];
 
     /// Every code this crate reports.
     pub fn all() -> impl Iterator<Item = &'static str> {

@@ -1,0 +1,8 @@
+// rule: lex.lit.bool
+// mode: parse
+// `true` and `false` are literals, so they go wherever an expression does.
+fn f(ready: Bool = true) -> List<Bool> {
+  let yes = true
+  let no: Bool = false
+  [yes, no, true, false]
+}

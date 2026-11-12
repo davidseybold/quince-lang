@@ -1,0 +1,16 @@
+// rule: grammar.list_lit
+// mode: parse
+// A list literal is expressions separated by commas between square brackets, with an
+// optional trailing comma. It may be empty and may span lines.
+fn f() -> List<List<Int>> {
+  let empty = []
+  let one = [1]
+  let trailing = [1, 2,]
+  let lines = [
+    1,
+    2,
+  ]
+  let open = [1, 2 //~ E0017
+  let gap = [1 2] //~ E0016
+  [empty, one, trailing, lines, [[]]]
+}

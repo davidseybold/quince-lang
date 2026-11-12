@@ -1,0 +1,12 @@
+// rule: lex.no-contextual
+// mode: parse
+// Only the reserved words are keywords. `main`, the tags, the named arguments of keyword
+// forms and `TaskScope` are ordinary names wherever a name goes.
+fn main() {}
+fn run(limit: Int, settle: Int, on_error: Int, scope: TaskScope) -> TaskScope {
+  let url = limit
+  let re = settle
+  let dur = on_error
+  let ts = [url, re, dur]
+  scope
+}

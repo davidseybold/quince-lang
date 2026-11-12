@@ -480,14 +480,14 @@ Rule IDs in brackets are what each task's fixtures cite. Grammar productions are
 - [x] Events, the tree builder and the CST; trivia placement (decision 3); the tree dumps, with and without trivia; tests on hand-built events. The README starts its CST section with the builder's rules.
 - [x] Correct the repo plan's step 3 to match decision 11.
 
-**Layer 1: `m1/parser-core`**
-- [ ] Spec: question 2, and a bump.
-- [ ] `parse`, `parse_str`, `Parse::diagnostics`; fixes cleared in a lossy text.
-- [ ] Significant tokens and breaks; `at_break()` in line contexts.
-- [ ] Recovery, E0016, E0017; the slip table's rows for this layer; nothing reported after an `Error` token, on the line of an unclosed one-line literal, or at the end of a file an unclosed string or comment swallowed.
-- [ ] `fn`, `test`, `const` and `impl` with methods; parameters including `self`; type paths with type arguments; blocks; `let` with a type; literals including booleans; names, list literals, ranges, calls, method calls and fields. [`grammar.file`, `grammar.fn_decl`, `grammar.fn_sig`, `grammar.params`, `grammar.block`, `grammar.list_lit`, `lex.no-contextual`, `lex.keywords`, `lex.keyword-not-name`, `lex.ident-not-keyword`, `lex.indentation`, `expr.block.last-newline`]
-- [ ] `SyntaxBackend::parse` runs the parser, and every `lex/` fixture still passes.
-- [ ] `compiler/syntax/README.md`: the CST contract. `AGENTS.md`'s map.
+**Layer 1: `m1/parser-core`, `m1/parser-recovery`, `m1/parser-wiring`** (split in three by size, 2026-11-11: the core, then recovery, then the rest of the syntax and the wiring)
+- [x] Spec: question 2, and a bump.
+- [x] `parse`, `parse_str`, `Parse::diagnostics`; fixes cleared in a lossy text.
+- [x] Significant tokens and breaks; `at_break()` in line contexts.
+- [x] Recovery, E0016, E0017; the slip table's rows for this layer; nothing reported after an `Error` token, on the line of an unclosed one-line literal, or at the end of a file an unclosed string or comment swallowed.
+- [x] `fn`, `test`, `const` and `impl` with methods; parameters including `self`; type paths with type arguments; blocks; `let` with a type; literals including booleans; names, list literals, ranges, calls, method calls and fields. [`grammar.file`, `grammar.fn_decl`, `grammar.fn_sig`, `grammar.params`, `grammar.block`, `grammar.list_lit`, `lex.no-contextual`, `lex.keywords`, `lex.keyword-not-name`, `lex.ident-not-keyword`, `lex.indentation`, `expr.block.last-newline`]
+- [x] `SyntaxBackend::parse` runs the parser, and every `lex/` fixture still passes.
+- [x] `compiler/syntax/README.md`: the CST contract. `AGENTS.md`'s map.
 
 **Layer 2: `m1/parser-types`**
 - [ ] Spec: questions 8, 11 and 14, and a bump.
@@ -504,6 +504,7 @@ Rule IDs in brackets are what each task's fixtures cite. Grammar productions are
 - [ ] Spec: questions 3, 12 and 13, and a bump.
 - [ ] Statements, places, E0026. [`grammar.stmt`, `grammar.place`, `stmt.assign.stmt`, `stmt.assign.place`, `stmt.assign.no-chain`, `stmt.loop.forms`]
 - [ ] Line and list contexts, E0018, `if` and `else`. [`lex.line-end`, `lex.continue.more`, `lex.continue.fn-header`, `lex.continue.lists`, `lex.else-same-line`, `expr.block.no-bare`]
+- [ ] `member_holder` peeks the line's leading kinds once, so its cost doesn't grow with the number of open frames; a deep-nesting test of valid blocks stays under `LOOKAHEAD_LIMIT`. Blocks first nest in this layer, and today each open block costs a look on every `stop()` (found in layer 1's review).
 
 **Layer 5: `m1/parser-patterns`**
 - [ ] Patterns, `match`, guards, `is`, `for`. [`grammar.pattern`, `grammar.match_expr`, `expr.match.arm-syntax`, `expr.match.arm-comma`, `pat.negative`, `pat.const`, `expr.range.pattern`, `lex.grammar-rules`]
