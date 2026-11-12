@@ -1,0 +1,17 @@
+// rule: grammar.import
+// rule: grammar.names
+// rule: grammar.name_ref
+// rule: intro.excl.wildcard-imports
+// mode: parse
+// An import names a package, then either the names it brings in, in braces, or `as` and a new
+// name for the package. Every imported name is listed: there are no wildcard imports.
+// Imports come before the declarations.
+import std.http.{Response}
+import std.log.{self, Log}
+import std.json
+import json as acme_json
+import acme.{Invoice, InvoiceError, MAX_RETRIES,}
+import std.http.* //~ E0016
+import std.log.{*} //~ E0016
+fn f() {}
+import std.late //~ E0016

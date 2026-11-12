@@ -1,0 +1,27 @@
+// rule: grammar.attribute
+// rule: item.attr.own-line
+// mode: parse
+// An attribute is `@`, a name and optional arguments, on its own line above the declaration,
+// field or variant it applies to. Blank lines may come between them, and a trailing comma may
+// end the arguments.
+@deprecated("use g")
+fn f() {}
+@deprecated(
+  "use h",
+)
+
+fn h() {}
+@test_only
+@opaque
+pub struct FakeDb { rows: List<Row> }
+@extensible
+pub enum Kind {
+  @wire("a")
+  A,
+  B,
+}
+struct Tagged {
+  @wire("user_name")
+  name: String,
+}
+@verify fn checked() {} //~ E0016

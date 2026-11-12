@@ -125,7 +125,7 @@ r[mod.pkg.dependents]
 * **Dependents** import only the library. Programs and test packages are never part of a project's public API, and `quince` `publish` compares only the library's.
 
 r[mod.pkg.test-deps]
-- Dependencies used only by tests (test packages, `test` blocks and `@test` declarations) are listed in their own section of the manifest. They never become dependencies of anyone who depends on the project.
+- Dependencies used only by tests (test packages, `test` blocks and `@test_only` declarations) are listed in their own section of the manifest. They never become dependencies of anyone who depends on the project.
 
 r[mod.pkg.nested-manifest]
 * A `quince``.toml` anywhere below the project root is a compile error.

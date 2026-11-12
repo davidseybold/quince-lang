@@ -64,7 +64,7 @@ pub struct User {
 ```
 
 ```ebnf
-struct_decl  = "struct" Name [ generics ] [ "{" [ field { "," field } [ "," ] ] "}" [ "requires" expr ] ]   // no braces: no fields
+struct_decl  = "struct" Name [ generics ] [ "{" field { "," field } [ "," ] "}" [ "requires" expr ] ]   // no braces: no fields
 field        = { doc_comment } { attribute NEWLINE } [ "pub" ] name ":" type
 struct_lit  = type_path [ type_args ] "(" [ ".." expr "," ] field_init { "," field_init } [ "," ] ")"
 field_init  = name ":" [ expr ]
@@ -73,8 +73,8 @@ field_init  = name ":" [ expr ]
 r[item.struct.init-all]
 - All fields must be initialized at construction. No default constructors, no partially built values.
 
-r[item.struct.unit]
-- A struct with no fields is declared without braces, as in `pub struct ChannelClosed`, and its one value is written as its name, `ChannelClosed`.
+r[item.struct.no-fields]
+- A struct with no fields is declared without braces, as in `pub struct ChannelClosed`, and its one value is written as its name, `ChannelClosed`. Writing `{}` is a compile error, whose fix removes the braces.
 
 r[item.struct.literal]
 - A struct is built with its name and every field named, in declaration order: `User(id: UserId(1), email:, name: "Ada", created_at: now)`.
@@ -285,7 +285,7 @@ r[item.arg.semver]
 ## Attributes
 
 ```ebnf
-attribute    = "@" name [ "(" arg { "," arg } ")" ]
+attribute    = "@" name [ "(" arg { "," arg } [ "," ] ")" ]
 ```
 
 r[item.attr.fixed]
@@ -321,8 +321,8 @@ r[item.attr.deprecated]
 r[item.attr.opaque]
 - `@opaque` (Structs and enums): No automatic Eq, Hash, debug form, test generator, Encode or Decode, for handle-like types ([Prelude and special interfaces](prelude.md))
 
-r[item.attr.test]
-- `@test` (Top-level declarations): Compiled only by `quince` `test`; naming it from code that isn't a test is a compile error. Impls of a `@test` type are test-only too, without their own `@test` ([Testing](testing.md))
+r[item.attr.test-only]
+- `@test_only` (Top-level declarations): Compiled only by `quince` `test`; naming it from code that isn't a test is a compile error. Impls of a `@test_only` type are test-only too, without their own `@test_only` ([Testing](testing.md))
 
 r[item.attr.wire]
 - `@wire("name")`, `@wire(case: camel)`, `@wire(tag: "kind")` (Fields and variants (name); structs and enums (case, tag)): Set the wire name, the naming case, or the enum tag field used by Encode and Decode ([Serialization](prelude.md#serialization))
@@ -330,5 +330,5 @@ r[item.attr.wire]
 r[item.attr.test-default]
 - `@test_default(f)` (Package effects): The handler a test gets when it reaches this effect with no `with` around it; `f` takes no arguments and returns a handler ([Effects](effects.md))
 
-r[item.attr.placement]
-An attribute goes on its own line directly above the declaration it applies to.
+r[item.attr.own-line]
+An attribute goes on its own line above the declaration it applies to. Blank lines may come between them.

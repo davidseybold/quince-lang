@@ -95,7 +95,7 @@ r[dep.lock.path]
 - A dependency with only `path` is listed with `path` alone.
 
 r[dep.test-only]
-- Names under `[test-dependencies]` may be imported by test packages, and by a library or program file only when every use is inside a `test` block or an `@test` declaration. Any other use is a compile error.
+- Names under `[test-dependencies]` may be imported by test packages, and by a library or program file only when every use is inside a `test` block or an `@test_only` declaration. Any other use is a compile error.
 
 r[dep.test-unused]
 - Such an import is never reported as unused in a non-test build.

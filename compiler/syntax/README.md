@@ -92,13 +92,26 @@ A node holds its tokens and child nodes in source order. A part the code leaves 
 | Kind | Holds |
 | --- | --- |
 | `File` | The declarations. |
-| `FnDecl` | `pub` if present, `fn`, a `Name`, `Generics` if present, a `ParamList`, a `RetType` and `Effects` if present, and a `Block`. A `uses` after a bare function type in the `RetType` is the declaration's `Effects` (`r[effect.uses-return]`). |
+| `FnDecl` | `DocComments` and `Attribute`s if present, as for every declaration of the file, then `pub` if present, `fn`, a `Name`, `Generics` if present, a `ParamList`, a `RetType` and `Effects` if present, and a `Block`. A `uses` after a bare function type in the `RetType` is the declaration's `Effects` (`r[effect.uses-return]`). |
 | `ParamList` | `(`, `Param`s and their commas, and `)`. |
 | `Param` | `var` if present, then `self`, or a `Name` or `_` followed by `:`, a type, and `=` and an expression for a default. |
 | `RetType` | `->` and a type. |
 | `TestDecl` | `test`, its name as a `Literal`, and a `Block`. |
 | `ConstDecl` | `pub` if present, `const`, a `Name`, `:`, a type, `=` and an expression. |
 | `ImplDecl` | `impl`, a type, `{`, a `FnDecl` per method, and `}`. |
+| `Import` | `import`, the package path's names and the `.` tokens between them, then `.` and `ImportNames`, or `as` and a `Name`, if present. |
+| `ImportNames` | `{`, a `NameRef` per name and their commas, and `}`. |
+| `StructDecl` | `DocComments` and `Attribute`s if present, `pub` if present, `struct`, a `Name`, `Generics`, then a `FieldList` and `requires` and an expression if present. |
+| `FieldList` | `{`, `FieldDecl`s and their commas, and `}`. |
+| `FieldDecl` | `DocComments` and `Attribute`s if present, `pub` if present, a `Name`, `:` and a type. |
+| `NewtypeDecl` | Its declaration's start, as for `StructDecl`, then `(`, `pub` if present, a type, and `)`. |
+| `EnumDecl` | Its declaration's start, as for `StructDecl`, with `enum`, then a `VariantList`. |
+| `VariantList` | `{`, `Variant`s and their commas, and `}`. |
+| `Variant` | `DocComments` and `Attribute`s if present, a `Name`, and `VariantFields` if present. |
+| `VariantFields` | `(`, `FieldDecl`s and their commas, and `)`. |
+| `AliasDecl` | Its declaration's start, as for `StructDecl`, with `type`, then `=` and a type. |
+| `Attribute` | `@`, a `NameRef`, and an `ArgList` if present. |
+| `DocComments` | The `DocComment` tokens before a declaration, a field or a variant, and the trivia between them. |
 | `TypePath` | Its names and the `.` tokens between them, whatever their case, then its `TypeArgs` if present. An effect in a `uses` list and a bound are `TypePath`s too. |
 | `TypeArgs` | `<`, types and their commas, and `>`. The last item may be `Effects`, and in a bound an item may be a `NamedTypeArg`. |
 | `NamedTypeArg` | A `NameRef`, `=` and a type: `Item = Int` in a bound. |
@@ -125,12 +138,15 @@ Postfix forms nest to the left: `a.b(c)` is a `Call` of a `Field` of a `NameRef`
 
 ## Parsing
 
-The parser reads the significant tokens: every token but the trivia and the doc comments, which are all trivia until doc comments get their own parsing. Each records the break before it: none, a line break, or a hard break, when a `;` comes between it and the token before. Nothing comes before the first token, so it has no break.
+The parser reads the significant tokens: every token but the trivia and the doc comments. Each records the break before it: none, a line break, or a hard break, when a `;` comes between it and the token before. Nothing comes before the first token, so it has no break.
+
+- **Doc comments** are taken by the declaration, field or variant whose first token they come before, into its `DocComments` node, and so become part of the tree's significant tokens. Any other doc comment stays trivia: one in a block, after an attribute, before an `import`, at the end of the file, or before an `impl` member, which takes its doc comments in layer 7.
+- **Attributes** come after the doc comments and before `pub`. Each goes on a line of its own, and the next line that isn't blank continues what they apply to. Something after an attribute on its line is an E0016. When it can start what the attribute applies to, the fix moves it to the next line. A keyword after `@` is an E0016 at the keyword, and the declaration after it is still parsed.
 
 - **Where a break ends a construct.** In a line context (the file, a block, an `impl` body), a break ends the statement or declaration unless the token before it continues the line (`SyntaxKind::continues_line()`), the next token is `.`, or the parser is in a `fn` header and the next token is `->`, `uses`, `requires`, `ensures` or `{`. A hard break always ends it. Inside brackets, a break before a `,` or a closing bracket is spacing, but an expression in brackets still ends at a break, as a statement does.
 - **Errors.** Every syntax error is reported once, and then the parser skips to a sync point, reporting nothing more until it next takes a token as part of a construct. The skipped tokens go in a `Skipped` node, and a bracket the skip meets is skipped up to its closing bracket. In a list, a `<` counts as a bracket, closed by `>`, so a skip there stays out of type arguments.
   - A list syncs at its next `,` and at its closing bracket. Type arguments and generics are lists closed by `>`, so their errors stay inside them, and a closing bracket further out closes them with an E0017 at the `<`. A line context syncs at its next break, which ends the member that went wrong. An `impl` header syncs at the `{` on its line, so its body is still parsed as its body.
-  - A token at the start of a line that can only start a member of some open container closes every construct inside the innermost such container, with an E0017 at each opening bracket it closes. For the file those tokens are `fn` and a name, `struct`, `enum`, `type`, `interface`, `impl`, `effect`, `foreign`, `import`, `const` and `test`, each also after `pub`. For an `impl` body they are `fn` and a name, `type` and `const`. For a block they are `let`, `var` and `while`.
+  - A token at the start of a line that can only start a member of some open container closes every construct inside the innermost such container, with an E0017 at each opening bracket it closes. For the file those tokens are `fn` and a name, `struct`, `enum`, `type`, `interface`, `impl`, `effect`, `foreign`, `import`, `const` and `test`, each also after `pub`. For an `impl` body they are `fn` and a name, `type` and `const`. For struct braces, enum braces and a variant's fields they are `pub` and a name. For a block they are `let`, `var` and `while`. The check looks past attributes to the token after them, so a member start after an attribute line closes what it closes, with no error at the `@`.
   - A closing bracket that matches a bracket further out closes everything inside it, with an E0017 at each opener. One that matches nothing open closes the innermost list in its place, with one E0016 that names the bracket expected, and in a line context it is skipped as an E0016. The end of the file closes everything still open, with an E0017 at each opener.
   - A bracket closed while the parser is skipping after an error gets no E0017, since that error covers the slip.
   - After a bracket closes without its closing bracket, what the constructs around it lack is part of that slip, until the parser next takes a token. A line break there ends them, whatever token comes before it.
@@ -143,5 +159,6 @@ The parser reads the significant tokens: every token but the trivia and the doc 
 
 | Code | Reported for | Fix |
 | --- | --- | --- |
-| E0016 | A token that can't go here: "expected X, found Y", where Y can be a line break or the end of the file. A keyword where a name goes is one, which the message names | Insert the missing `,` between list items on separate lines (`needs-review`). Remove the parentheses around one type that isn't a function type (`safe`). Otherwise none |
+| E0016 | A token that can't go here: "expected X, found Y", where Y can be a line break or the end of the file. A keyword where a name goes is one, which the message names | Insert the missing `,` between list items on separate lines (`needs-review`). Remove the parentheses around one type that isn't a function type (`safe`). Move what follows an attribute on its line to the next line (`safe`). Otherwise none |
 | E0017 | An opening bracket with no closing one, at the opener | None |
+| E0024 | A struct with no fields written with braces, at the braces | Remove them (`safe`), unless a `requires` follows or a comment lies before or between them |

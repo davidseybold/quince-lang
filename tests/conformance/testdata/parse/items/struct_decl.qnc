@@ -1,0 +1,16 @@
+// rule: grammar.struct_decl
+// rule: grammar.field
+// rule: item.struct.no-fields
+// mode: parse
+// A struct has fields in braces, separated by commas with an optional trailing one, and may
+// end with a `requires` condition. A struct with no fields has no braces, so `{}` is an error.
+pub struct ChannelClosed
+struct Point { x: Int, y: Int }
+pub struct User {
+  pub id: UserId,
+  name: String,
+}
+struct Span<T> { start: T, end: T } requires start.before(end)
+struct Empty {} //~ E0024
+struct NoType { x } //~ E0016
+struct NoComma { x: Int y: Int } //~ E0016

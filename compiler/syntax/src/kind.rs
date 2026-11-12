@@ -90,6 +90,23 @@ syntax_kinds! {
         /// Tokens the parser skipped while recovering from an error.
         Skipped,
         FnDecl, ParamList, Param, RetType, TestDecl, ConstDecl, ImplDecl,
+        Import,
+        /// The names an import brings in, in braces.
+        ImportNames,
+        StructDecl,
+        /// A struct's fields in braces.
+        FieldList,
+        /// A field being declared, in a struct or a variant.
+        FieldDecl,
+        NewtypeDecl, EnumDecl,
+        /// An enum's variants in braces.
+        VariantList,
+        Variant,
+        /// A variant's fields in parentheses.
+        VariantFields,
+        AliasDecl, Attribute,
+        /// The doc comments of a declaration, a field or a variant.
+        DocComments,
         /// A type path with its type arguments.
         TypePath, TypeArgs,
         /// A bound's type argument that names an associated type: `Item = Int`.
@@ -128,6 +145,10 @@ impl SyntaxKind {
             .map(|&(_, kind)| kind)
     }
 
+    pub fn is_keyword(self) -> bool {
+        Self::KEYWORDS.iter().any(|&(_, kind)| kind == self)
+    }
+
     /// True for the token kinds the parser never sees: whitespace, line endings, comments,
     /// block comments, the byte order mark, `Error` and `Semicolon`. A `DocComment` is trivia
     /// only where it documents nothing, which the parser decides, so it isn't one of these.
@@ -143,7 +164,20 @@ impl SyntaxKind {
     /// fields, enum variants, members and match arms. The README's CST section has the rule.
     pub fn attaches_comments(self) -> bool {
         use SyntaxKind::*;
-        matches!(self, FnDecl | TestDecl | ConstDecl | ImplDecl)
+        matches!(
+            self,
+            FnDecl
+                | TestDecl
+                | ConstDecl
+                | ImplDecl
+                | Import
+                | StructDecl
+                | NewtypeDecl
+                | EnumDecl
+                | AliasDecl
+                | FieldDecl
+                | Variant
+        )
     }
 
     /// True for the kinds after which a line always continues, whatever their role

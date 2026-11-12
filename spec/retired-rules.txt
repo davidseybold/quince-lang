@@ -3,3 +3,7 @@
 # the new rule a new ID. One ID per line.
 lex.lit.string.interp-path
 lex.lit.multiline-close
+item.struct.unit
+item.attr.test
+test.attr
+item.attr.placement

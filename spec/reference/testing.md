@@ -32,11 +32,11 @@ r[test.name]
 r[test.name-escapes]
 - A test's name takes the same escapes as a string, but `{` is plain text.
 
-r[test.attr]
-- A top-level declaration marked `@test`, such as a fake handler, is compiled only by `quince` `test`.
+r[test.attr-test-only]
+- A top-level declaration marked `@test_only`, such as a fake handler, is compiled only by `quince` `test`.
 
 r[test.attr-pub]
-- A `pub` `@test` declaration in a library is also visible to the test code of packages that depend on it, so a library can ship a fake for its own effect.
+- A `pub` `@test_only` declaration in a library is also visible to the test code of packages that depend on it, so a library can ship a fake for its own effect.
 
 r[test.attr-use]
 - Naming it from code that isn't a test is a compile error.
