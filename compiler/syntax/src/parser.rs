@@ -211,6 +211,8 @@ enum Sync {
     Line,
     /// At the next `,`, in a list.
     List,
+    /// At the `{` on the line, or the next break: in a condition, before its block.
+    Block,
 }
 
 struct Parser<'t> {
@@ -232,6 +234,9 @@ struct Parser<'t> {
     closed_early: bool,
     /// The parser is in a `fn` header, where a line that starts with `->` or `{` continues.
     in_fn_header: bool,
+    /// The parser is in the condition of an `if` or a `while`, and this many frames are open
+    /// at its top, where `{` always starts the block (`r[expr.block.cond-brace]`).
+    condition_frames: Option<usize>,
     /// The parser has just taken attributes, so the line after them continues what they
     /// apply to.
     after_attributes: bool,
@@ -290,6 +295,7 @@ impl<'t> Parser<'t> {
             recovering: false,
             closed_early: false,
             in_fn_header: false,
+            condition_frames: None,
             after_attributes: false,
             after_operator: false,
             slips: 0,
@@ -839,6 +845,7 @@ impl<'t> Parser<'t> {
                 let at_sync = match sync {
                     Sync::Line => self.at_break(),
                     Sync::List => kind == Comma,
+                    Sync::Block => kind == LBrace || self.at_break(),
                 };
                 let closes = Some(kind) == self.own_closer() || self.stop().is_some();
                 if closes || (at_sync && !(force && !skipped)) {

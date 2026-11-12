@@ -1,0 +1,24 @@
+// rule: expr.block.cond-brace
+// mode: parse
+// In the condition of an `if` or `while`, `{` always starts the block, so a map literal there
+// is written in parentheses.
+fn f(m: Map<String, Int>, var n: Int) {
+  if m == ({:}) {
+    log("empty")
+  }
+  while m != ({"a": n}) {
+    n += 1
+  }
+  if contains(m, {"a": 1}) {
+    log("found")
+  }
+  if m == {:} { //~ E0016
+    log("empty")
+  }
+  if {"a": 1}.len() > 0 { //~ E0016
+    log("one")
+  }
+  while n > { //~ E0016
+    n -= 1
+  }
+}

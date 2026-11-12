@@ -1,0 +1,13 @@
+// rule: grammar.stmt
+// mode: parse
+// `var` declares a mutable binding: a name, an optional type, `=` and an expression. It takes
+// a name, not a pattern.
+fn f() {
+  var count = 0
+  var name: String = "Ada"
+  var items: List<Int> =
+    [1, 2, 3]
+  var (a, b) = (1, 2) //~ E0016
+  var total: Int //~ E0016
+  var = 3 //~ E0016
+}

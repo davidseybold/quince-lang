@@ -439,6 +439,8 @@ fn make_logged() -> (fn(Int) -> Int uses Io) uses Net { // both
 - An alias, `type Transform = fn(Int) -> Int uses Io`, as the only way. Rejected: it hides the effects from the signature, and the linter flags it in public APIs.
 - The innermost function type takes the `uses`, as a greedy parse would. Rejected: a declaration that returns a function would then need parentheses or an alias to state its own effects.
 
+**15. `{` in a condition (layer 4a).** Found in layer 4's review: in `while n > {`, `{` where an expression is expected starts a map (`r[expr.block.brace-map]`), so the block became the map's and the slip gave two errors. Decided by David, 2026-11-12: `r[expr.block.cond-brace]` "In the condition of an `if` or `while`, `{` always starts the block. A map literal there is written in parentheses." Rust restricts struct literals in conditions the same way. A `{` where an expression goes at the top of a condition is an E0016. Braces that hold an entry's `:` at their top, `{:}` among them, were meant as a map: the fix puts them in parentheses (`needs-review`), and the parser parses the map, so the rest of the condition and its block parse as written. Other braces are the block. Map or block is judged by what the braces hold, the test a map's own entries use, so the two never disagree about the same `{` (decided by David, 2026-11-12, after review pass 4, replacing a test of what follows the `}` on its line, which gave two contradictory errors at one `{`). Inside brackets in a condition, `{` starts a map as anywhere else. The rule names only `if` and `while`. A `match` subject and a `for` loop's `in` expression have the same problem: decided by David, 2026-11-12, the rule extends to both, and the spec change lands with layer 5's code.
+
 ## Risks and trade-offs
 
 - [The tree's shape is wrong for the formatter or name resolution] → Both arrive within M1 and M2, while the only consumers are tests. The formatter doc comes next and can amend this one, and the events keep the parser independent of the tree. Node kinds are internal to `quince_syntax`.
@@ -521,13 +523,22 @@ Layer 3 is three PRs (decided by David, 2026-11-12), since together they would r
 **Layer 3c: `m1/parser-postfix`**
 - [x] Postfix forms, tuples, maps, `{}` and E0025, named arguments (attribute arguments too), `..base`. [`lex.lit.collections`, `lex.lit.empty-map`, `expr.block.brace-map`, `item.struct.update`, `intro.excl.macros`, `grammar.postfix`, `grammar.args`, `grammar.arg`, `grammar.tuple`, `grammar.primary`, `grammar.map_lit`, `grammar.entry`]
 
-**Layer 4: `m1/parser-stmts`**
-- [ ] Spec: questions 3, 12 and 13, and a bump.
-- [ ] Statements, places, E0026. [`grammar.stmt`, `grammar.place`, `stmt.assign.stmt`, `stmt.assign.place`, `stmt.assign.no-chain`, `stmt.loop.forms`]
-- [ ] Line and list contexts, E0018, `if` and `else`. [`lex.line-end`, `lex.continue.more`, `lex.continue.fn-header`, `lex.continue.lists`, `lex.else-same-line`, `expr.block.no-bare`]
+Layer 4 is three PRs (decided by David, 2026-11-12), since together they would run past 1,000 lines: statements, then line breaks, then the `member_holder` fix. Each spec change lands with its own bump.
+
+**Layer 4a: `m1/parser-stmts`**
+- [x] Spec: question 13, and a bump (v0.16).
+- [x] Spec (decided by David, 2026-11-12, spec question 15): `r[expr.block.cond-brace]`, in v0.16. `{` at the top of a condition is the block, never a map. [`expr.block.cond-brace`]
+- [x] `var`, `while`, `if` and `else` on one line; assignment, places, E0026. Until 4b, `else` at the start of a line is an E0016. [`grammar.stmt`, `grammar.place`, `grammar.if_expr`, `stmt.assign.stmt`, `stmt.assign.place`, `stmt.assign.no-chain`, `stmt.loop.forms`]
+
+**Layer 4b: `m1/parser-lines`**
+- [ ] Spec: questions 3 and 12, and a bump (v0.17).
+- [ ] Line and list contexts, E0018. 3c already treats a line break before a `,` or a closing bracket, after `name:` and before an entry's `:` as spacing, and a block closed by a `let`, `var` or `while` line as one E0016 at its `{` (3c's `block_at`). This layer makes every line break in a list spacing, and adds the bare-block cases 3c misses. [`lex.line-end`, `lex.continue.more`, `lex.continue.fn-header`, `lex.continue.lists`, `lex.else-same-line`, `expr.block.no-bare`]
+
+**Layer 4c: `m1/parser-member-peek`**
 - [ ] `member_holder` peeks the line's leading kinds once, so its cost doesn't grow with the number of open frames; a deep-nesting test of valid blocks stays under `LOOKAHEAD_LIMIT`. Blocks first nest in this layer, and today each open block costs a look on every `stop()` (found in layer 1's review).
 
 **Layer 5: `m1/parser-patterns`**
+- [ ] Spec (decided by David, 2026-11-12): extend `r[expr.block.cond-brace]` to a `match` subject and a `for` loop's `in` expression, whose `{` has the same problem (found in layer 4a's review). Wording: "In the condition of an `if` or `while`, the subject of a `match`, and the iterable of a `for`, `{` always starts the block. A map literal there is written in parentheses." It lands in the same PR as the `match` and `for` parsing, with a spec bump. [`expr.block.cond-brace`]
 - [ ] Spec: `variant_pat` and `pfields` take an optional trailing `,` (layer 2a's trailing-comma decision).
 - [ ] Patterns, `match`, guards, `is`, `for`. [`grammar.pattern`, `grammar.match_expr`, `expr.match.arm-syntax`, `expr.match.arm-comma`, `pat.negative`, `pat.const`, `expr.range.pattern`, `lex.grammar-rules`]
 

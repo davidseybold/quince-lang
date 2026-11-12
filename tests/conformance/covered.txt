@@ -1,5 +1,6 @@
 effect.uses-list
 expr.block.brace-map
+expr.block.cond-brace
 expr.block.last-newline
 expr.op.bits.chain
 expr.op.bits.parens
@@ -36,6 +37,7 @@ grammar.fn_sig
 grammar.fn_type
 grammar.generic
 grammar.generics
+grammar.if_expr
 grammar.import
 grammar.list_lit
 grammar.logic
@@ -44,10 +46,12 @@ grammar.name_ref
 grammar.names
 grammar.newtype_decl
 grammar.params
+grammar.place
 grammar.postfix
 grammar.prefix
 grammar.primary
 grammar.range
+grammar.stmt
 grammar.struct_decl
 grammar.struct_lit
 grammar.term
@@ -108,6 +112,10 @@ lex.source.control
 lex.source.line-end
 lex.source.utf8
 lex.source.whitespace
+stmt.assign.no-chain
+stmt.assign.place
+stmt.assign.stmt
+stmt.loop.forms
 test.name
 test.name-escapes
 type.fn-parens

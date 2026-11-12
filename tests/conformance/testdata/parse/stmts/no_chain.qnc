@@ -1,0 +1,12 @@
+// rule: stmt.assign.no-chain
+// mode: parse
+// Assignment is a statement, so it can't be chained or be part of an expression, such as a
+// condition or an argument.
+fn f(var a: Int, var b: Int) {
+  a = b = 1 //~ E0016
+  a += b = 1 //~ E0016
+  if a = 1 { b = 2 } //~ E0016
+  while b = 0 { a += 1 } //~ E0016
+  let c = (a = 2) //~ E0016
+  g(a = 2) //~ E0016
+}
