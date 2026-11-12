@@ -5,6 +5,7 @@
 mod exprs;
 mod input;
 mod items;
+mod patterns;
 mod types;
 
 use crate::cst::{self, Event};

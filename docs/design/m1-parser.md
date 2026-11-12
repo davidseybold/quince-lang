@@ -257,7 +257,7 @@ The operators Quince leaves out (`r[expr.op.excluded]`) get no code or hint of t
 
 | Code | Problem | Fix | Rule from |
 | --- | --- | --- | --- |
-| E0016 | A token that can't go here: "expected X, found Y" | Insert a line break after an attribute on its declaration's line (`safe`); insert a missing `,` between list items on separate lines (`needs-review`); remove parentheses around a type that isn't a function type (`safe`, Q14). Otherwise none | |
+| E0016 | A token that can't go here: "expected X, found Y" | Insert a line break after an attribute on its declaration's line (`safe`); insert a missing `,` between list items on separate lines (`needs-review`); remove parentheses around a type that isn't a function type (`safe`, Q14); delete the space between a pattern's `-` and its number (`safe`, decision 5). Otherwise none | |
 | E0017 | An opening bracket with no closing one, at the opener | None | |
 | E0018 | A line break that ends a statement too early, including before `else` or a body's `{` (decision 4) | Replace everything between the two tokens with a space (`safe`), unless a comment lies between them | Q3, Q12 |
 | E0019 | Operators that need parentheses (decision 6) | Add the parentheses for the usual reading (`needs-review`) | |
@@ -342,7 +342,7 @@ The layers:
 2. `m1/parser-types` (2a): the rest of types, generics, bounds and effect lists. `m1/parser-decls` (2b): struct, enum, newtype, alias and import declarations; attributes and doc comments; E0024.
 3. `m1/parser-exprs`: every operator and level, E0019 and E0020; the joined `>>` and `>=`; type arguments in expressions; negative literals; tuples, maps and E0025; `..base`.
 4. `m1/parser-stmts`: statements, assignment and E0026; list contexts; E0018; `if` and `else`.
-5. `m1/parser-patterns`: patterns, `match`, `is` and `for`.
+5. `m1/parser-patterns` (5a): patterns, `let` patterns and `is`. `m1/parser-match` (5b): `match`, guards and `for`.
 6. `m1/parser-keyword-forms`: closures, `concurrent`, `background`, `select`, `with`, `spawn` and contracts.
 7. `m1/parser-items`: the rest of `impl`, `interface`, `effect` and `foreign`; members' doc comments and attributes; E0023.
 8. `m1/parser-names`: `validate`, the case check and E0021.
@@ -542,11 +542,17 @@ Layer 4 is three PRs (decided by David, 2026-11-12), since together they would r
 **Layer 4d: `m1/spec-wording`**
 - [x] Spec (decided by David, 2026-11-12), and a bump (v0.18): `r[expr.block.cond-brace]` moves before `r[expr.block.brace-map]`, so "Anywhere else" follows the exception, and `r[item.struct.literal-visibility]` writes `Type(..x, field: v)`. No meaning or ID changes.
 
-**Layer 5: `m1/parser-patterns`**
-- [ ] Spec (decided by David, 2026-11-12): extend `r[expr.block.cond-brace]` to a `match` subject and a `for` loop's `in` expression, whose `{` has the same problem (found in layer 4a's review). Wording: "In the condition of an `if` or `while`, the subject of a `match`, and the iterable of a `for`, `{` always starts the block. A map literal there is written in parentheses." It lands in the same PR as the `match` and `for` parsing, with a spec bump. [`expr.block.cond-brace`]
-- [ ] Spec: `variant_pat` and `pfields` take an optional trailing `,` (layer 2a's trailing-comma decision).
-- [ ] Extend `parse/lexical/lists.qnc` with line breaks in match arms and patterns, which `r[lex.continue.lists]` covers (layer 4b).
-- [ ] Patterns, `match`, guards, `is`, `for`. [`grammar.pattern`, `grammar.match_expr`, `expr.match.arm-syntax`, `expr.match.arm-comma`, `pat.negative`, `pat.const`, `expr.range.pattern`, `lex.grammar-rules`]
+Layer 5 is two PRs (decided by David, 2026-11-12), since patterns with `match` and `for` would run past 1,000 lines. `let` and `is` give patterns a place to appear before `match` exists.
+
+**Layer 5a: `m1/parser-patterns`**
+- [x] Spec, and a bump (v0.19): a variant pattern's parentheses take an optional trailing `,` (layer 2a's trailing-comma decision). One `[ "," ]` in `variant_pat` covers fields by position and `pfields`, so `Shape.Rect(width:, ..,)` takes one too.
+- [x] Extend `parse/lexical/lists.qnc` with line breaks in patterns, which `r[lex.continue.lists]` covers (layer 4b).
+- [x] Patterns, `let` patterns and `is`. A pattern's `-` goes right before its number (decision 5): a space between them is an E0016 whose fix deletes it. [`grammar.pattern`, `grammar.alt`, `grammar.tuple_pat`, `grammar.variant_pat`, `grammar.pfields`, `grammar.pfield`, `pat.negative`, `pat.const`, `expr.range.pattern`, `lex.grammar-rules`]
+
+**Layer 5b: `m1/parser-match`**
+- [ ] Spec (decided by David, 2026-11-12): extend `r[expr.block.cond-brace]` to a `match` subject and a `for` loop's `in` expression, whose `{` has the same problem (found in layer 4a's review). Wording: "In the condition of an `if` or `while`, the subject of a `match`, and the iterable of a `for`, `{` always starts the block. A map literal there is written in parentheses." It lands in the same PR as the `match` and `for` parsing, with a spec bump (v0.20). [`expr.block.cond-brace`]
+- [ ] Extend `parse/lexical/lists.qnc` with line breaks in match arms, which `r[lex.continue.lists]` covers (layer 4b).
+- [ ] `match`, guards, `for`. [`grammar.match_expr`, `grammar.arm`, `expr.match.arm-syntax`, `expr.match.arm-comma`]
 
 **Layer 6: `m1/parser-keyword-forms`**
 - [ ] Spec: question 7, and a bump. `concurrent`'s arguments take an optional trailing `,` (layer 2a's trailing-comma decision).

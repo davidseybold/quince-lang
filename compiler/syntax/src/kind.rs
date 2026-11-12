@@ -154,6 +154,26 @@ syntax_kinds! {
         ArgList,
         /// A field or a tuple position of the expression before the `.`.
         Field,
+        /// An expression, `is` and a pattern.
+        IsExpr,
+        /// Two or more alternatives joined by `|`.
+        OrPat,
+        /// `_`.
+        WildcardPat,
+        /// A literal, as a `Literal`.
+        LiteralPat,
+        /// Two `Literal`s with `..` or `..=` between them.
+        RangePat,
+        /// A name the pattern binds, as a `Name`.
+        BindPat,
+        /// A path: a constant, or a variant with no fields.
+        PathPat,
+        /// A path and its fields in parentheses.
+        VariantPat,
+        /// A variant's field matched by name: `width: w`, or `width:` alone.
+        FieldPat,
+        /// Two or more patterns in parentheses.
+        TuplePat,
     ],
 }
 

@@ -1,0 +1,254 @@
+//! Patterns (`grammar.pattern`): wildcards, literals and ranges, bindings, paths, tuples,
+//! variants with their positional or named fields, and alternatives.
+
+use super::input::Break;
+use super::{Completed, Holds, Parser, exprs, types};
+use crate::SyntaxError;
+use crate::SyntaxKind::{self, *};
+use crate::codes;
+use quince_diagnostics::Applicability;
+
+/// A pattern: one or more alternatives joined by `|`. Inside a pattern `|` is always
+/// alternation (`r[lex.grammar-rules]`). `None` when there is no pattern, after reporting it.
+pub(super) fn pattern(p: &mut Parser) -> Option<Completed> {
+    let first = alt(p)?;
+    if p.recovering || !p.at_or_join(Pipe) {
+        return Some(first);
+    }
+    let marker = p.precede(first);
+    loop {
+        p.bump();
+        if alt(p).is_none() || p.recovering || !p.at_or_join(Pipe) {
+            break;
+        }
+    }
+    Some(p.complete(marker, OrPat))
+}
+
+/// The tokens that can start a pattern.
+pub(super) fn starts_pattern(kind: SyntaxKind) -> bool {
+    matches!(
+        kind,
+        Underscore
+            | Minus
+            | Int
+            | Float
+            | Char
+            | StringStart
+            | TrueKw
+            | FalseKw
+            | Ident
+            | SelfTypeKw
+            | LParen
+    )
+}
+
+/// One alternative (`grammar.alt`).
+fn alt(p: &mut Parser) -> Option<Completed> {
+    match p.kind() {
+        Underscore => {
+            let marker = p.start();
+            p.bump();
+            Some(p.complete(marker, WildcardPat))
+        }
+        Minus | Int | Float | Char | StringStart | TrueKw | FalseKw => Some(literal_pat(p)),
+        Ident | SelfTypeKw => Some(path_pat(p)),
+        LParen => Some(tuple_pat(p)),
+        _ => {
+            p.expected("a pattern");
+            None
+        }
+    }
+}
+
+/// A literal, or a range of two literals (`r[expr.range.pattern]`). Either may be a number
+/// with a `-` (`r[pat.negative]`).
+fn literal_pat(p: &mut Parser) -> Completed {
+    let marker = p.start();
+    if !bound(p) {
+        return p.complete(marker, LiteralPat);
+    }
+    let range = matches!(p.kind(), DotDot | DotDotEq) && p.at_or_join(p.kind());
+    if !range {
+        return p.complete(marker, LiteralPat);
+    }
+    p.bump();
+    if starts_bound(p.kind()) {
+        bound(p);
+    } else {
+        p.expected("a literal");
+    }
+    p.complete(marker, RangePat)
+}
+
+fn starts_bound(kind: SyntaxKind) -> bool {
+    matches!(
+        kind,
+        Minus | Int | Float | Char | StringStart | TrueKw | FalseKw
+    )
+}
+
+/// A literal, as a `Literal` node. A `-` goes right before its number, as in an expression
+/// (`r[lex.lit.neg-adjacent]`): a pattern has no prefix minus, so a space between them is an
+/// E0016, whose fix deletes it. False when there is no literal, after reporting it.
+fn bound(p: &mut Parser) -> bool {
+    let marker = p.start();
+    match p.kind() {
+        StringStart => {
+            p.abandon(marker);
+            exprs::literal(p);
+            return true;
+        }
+        Minus => {
+            let (minus, next) = (p.pos, p.pos + 1);
+            p.bump();
+            if !matches!(p.kind(), Int | Float) {
+                p.expected("a number right after `-`");
+                p.complete(marker, Literal);
+                return false;
+            }
+            let gap = p.input.tokens[minus].range.end..p.input.tokens[next].range.start;
+            if !gap.is_empty() {
+                minus_gap(p, minus, next, gap);
+            }
+            p.bump();
+        }
+        _ => p.bump(),
+    }
+    p.complete(marker, Literal);
+    true
+}
+
+/// Reports the space, comment or line break between a pattern's `-` and its number.
+fn minus_gap(p: &mut Parser, minus: usize, next: usize, gap: std::ops::Range<usize>) {
+    let between = &p.lexed.tokens[p.input.tokens[minus].index + 1..p.input.tokens[next].index];
+    let spaces = between.iter().all(|t| t.kind == Whitespace);
+    let found = if spaces {
+        "a space"
+    } else {
+        "a comment or a line break"
+    };
+    let message = format!("expected a number right after `-`, found {found}");
+    let mut error = SyntaxError::new(gap.clone(), codes::UNEXPECTED_TOKEN, message);
+    if spaces {
+        error = error.with_fix(
+            "delete the space",
+            Applicability::Safe,
+            vec![(gap, String::new())],
+        );
+    }
+    p.report(error);
+}
+
+/// A name or a path. A name that stands alone, with no `.` or `(` after it, binds a new
+/// variable unless it starts with an uppercase letter (`r[pat.const-exhaustive]`). Anything
+/// else is a path, and name resolution decides whether it is a constant, a variant or a struct
+/// (`r[pat.const]`): a `PathPat`, or a `VariantPat` when its fields follow in parentheses.
+fn path_pat(p: &mut Parser) -> Completed {
+    let marker = p.start();
+    // A `.` on the next line continues the path, as it continues a line (`r[lex.continue.more]`).
+    let continues = p.nth(1).is_some_and(|next| match next.kind {
+        Dot => next.brk != Break::Hard,
+        LParen => next.brk == Break::None,
+        _ => false,
+    });
+    if !continues && p.kind() == Ident && !starts_uppercase(p) {
+        p.bump_node(Name);
+        return p.complete(marker, BindPat);
+    }
+    let ok = types::pattern_path(p);
+    if !(ok && p.at(LParen)) {
+        return p.complete(marker, PathPat);
+    }
+    variant_fields(p);
+    p.complete(marker, VariantPat)
+}
+
+fn starts_uppercase(p: &Parser) -> bool {
+    let token = p.current().expect("a name");
+    p.text[token.range.clone()]
+        .chars()
+        .next()
+        .is_some_and(char::is_uppercase)
+}
+
+/// A variant's fields in parentheses (`grammar.variant_pat`): patterns by position, or fields
+/// by name with an optional `..` last (`grammar.pfields`), and an optional trailing `,`. The
+/// first item says which. At least one item.
+fn variant_fields(p: &mut Parser) {
+    p.bump();
+    let named = (p.kind() == Ident && p.nth_kind(1) == Colon) || p.kind() == DotDot;
+    if p.kind() == RParen {
+        p.expected("a pattern or `..`");
+    }
+    if named {
+        p.list(RParen, "`name:` or `..`", field_pat, starts_field);
+    } else {
+        p.list(RParen, "a pattern", item, starts_pattern);
+    }
+}
+
+fn item(p: &mut Parser) {
+    pattern(p);
+}
+
+fn starts_field(kind: SyntaxKind) -> bool {
+    matches!(kind, Ident | DotDot)
+}
+
+/// `name:` and a pattern if there is one (`grammar.pfield`), or `..` (`r[pat.rest]`), which
+/// comes last.
+fn field_pat(p: &mut Parser) {
+    let after_rest = p.pos >= 2
+        && p.input.tokens[p.pos - 2].kind == DotDot
+        && p.input.tokens[p.pos - 1].kind == Comma;
+    if after_rest {
+        return p.expected("`)` after `..`");
+    }
+    if p.kind() == DotDot {
+        return p.bump();
+    }
+    if !(p.kind() == Ident && p.nth_kind(1) == Colon) {
+        return p.expected("`name:` or `..`");
+    }
+    let marker = p.start();
+    p.bump_node(NameRef);
+    p.bump();
+    if !matches!(p.kind(), Comma | RParen) {
+        pattern(p);
+    }
+    p.complete(marker, FieldPat);
+}
+
+/// A tuple of two or more patterns (`grammar.tuple_pat`). One pattern and no `,` is an
+/// error, since there are no parentheses around a single pattern.
+fn tuple_pat(p: &mut Parser) -> Completed {
+    let marker = p.start();
+    p.bump();
+    p.push_frame(Holds::Items, Some(RParen));
+    if p.kind() == RParen {
+        p.expected("a pattern");
+        p.list_items(RParen, "a pattern", item, starts_pattern, false);
+        return p.complete(marker, TuplePat);
+    }
+    if let Some(stop) = p.stop() {
+        p.close_frame(stop);
+        return p.complete(marker, TuplePat);
+    }
+    pattern(p);
+    match p.kind() {
+        Comma => {
+            p.bump();
+            if p.kind() == RParen {
+                p.expected("a second pattern");
+            }
+            p.list_items(RParen, "a pattern", item, starts_pattern, false);
+        }
+        RParen => {
+            p.expected("`,` and a second pattern");
+            p.list_items(RParen, "a pattern", item, starts_pattern, true);
+        }
+        _ => p.list_items(RParen, "a pattern", item, starts_pattern, true),
+    }
+    p.complete(marker, TuplePat)
+}

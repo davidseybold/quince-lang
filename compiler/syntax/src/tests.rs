@@ -13,6 +13,7 @@ mod multiline;
 mod mutations;
 mod numbers;
 mod parser;
+mod patterns;
 mod prefixed;
 mod recovery;
 mod stmts;

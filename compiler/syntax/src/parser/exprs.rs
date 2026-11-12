@@ -1,8 +1,9 @@
 //! Blocks, statements and expressions: `let`, `var`, `while`, assignment, `if`, literals,
-//! names, collections, operators and postfix forms. Later layers of the parser add the rest.
+//! names, collections, operators, `is` and postfix forms. Later layers of the parser add the
+//! rest.
 
 use super::input::Break;
-use super::{Completed, Holds, Parser, Sync, items, types};
+use super::{Completed, Holds, Parser, Sync, items, patterns, types};
 use crate::SyntaxKind::{self, *};
 use crate::{SyntaxError, codes};
 use quince_diagnostics::Applicability;
@@ -104,23 +105,30 @@ fn is_place(p: &Parser, first: usize) -> bool {
     }
 }
 
-/// `let` name [ `:` type ] `=` expr. Layer 5 of the parser takes a pattern after `let`.
+/// `let` pattern [ `:` type ] `=` expr (`grammar.stmt`).
 fn let_stmt(p: &mut Parser) {
-    binding(p, LetStmt);
+    let marker = p.start();
+    p.bump();
+    let pattern = if p.at_break() {
+        p.expected("a pattern");
+        None
+    } else {
+        patterns::pattern(p)
+    };
+    if pattern.is_some() {
+        let_rest(p);
+    }
+    p.complete(marker, LetStmt);
 }
 
 /// `var` name [ `:` type ] `=` expr. A `var` takes a name, never a pattern.
 fn var_stmt(p: &mut Parser) {
-    binding(p, VarStmt);
-}
-
-fn binding(p: &mut Parser, kind: SyntaxKind) {
     let marker = p.start();
     p.bump();
     if items::name(p, "a name") {
         let_rest(p);
     }
-    p.complete(marker, kind);
+    p.complete(marker, VarStmt);
 }
 
 /// `while` expr block (`grammar.stmt`).
@@ -257,9 +265,13 @@ fn binary(p: &mut Parser, min_power: u8) -> Option<Operand> {
         }
         p.after_operator = true;
         let op_range = p.input.tokens[at].range.start..p.input.tokens[p.pos - 1].range.end;
-        let rhs = binary(p, power);
+        let rhs = match op {
+            IsKw => pattern_operand(p),
+            _ => binary(p, power),
+        };
         let kind = match op {
             DotDot | DotDotEq => SyntaxKind::Range,
+            IsKw => IsExpr,
             _ => Binary,
         };
         let done = p.complete(marker, kind);
@@ -282,6 +294,23 @@ fn binary(p: &mut Parser, min_power: u8) -> Option<Operand> {
     Some(lhs)
 }
 
+/// The pattern after `is`, as the right operand of a comparison
+/// (`compare = arith [ cmp_op arith | "is" pattern ]`). A pattern holds no operator the checks
+/// look at, and `|` in it is alternation (`r[lex.grammar-rules]`).
+fn pattern_operand(p: &mut Parser) -> Option<Operand> {
+    let (first, slips) = (p.pos, p.slips);
+    let done = patterns::pattern(p)?;
+    Some(Operand {
+        done,
+        op: None,
+        tokens: (first, p.pos - 1),
+        right: (first, p.pos - 1),
+        right_op: None,
+        chain: None,
+        broken: p.slips != slips,
+    })
+}
+
 /// The binary operator at the current token, joined with the token after it when it is `>`,
 /// and how tightly it binds: higher binds tighter. The order is decision 6's usual reading. A
 /// line that starts with one continues the line above, an E0018, unless it is `-`, which can
@@ -291,7 +320,7 @@ fn binary_op(p: &mut Parser) -> Option<(SyntaxKind, u8)> {
     let power = match op {
         PipePipe => 1,
         AmpAmp => 2,
-        EqEq | BangEq | Lt | LtEq | Gt | GtEq => 3,
+        EqEq | BangEq | Lt | LtEq | Gt | GtEq | IsKw => 3,
         DotDot | DotDotEq => 4,
         Pipe => 5,
         Caret => 6,
@@ -453,8 +482,9 @@ fn needs_parens(p: &mut Parser, operand: &Operand, op: SyntaxKind, left: bool) {
 /// The chain that `lhs`, a comparison or a range, and `op` after it make
 /// (`r[expr.op.compare.no-chain]`, `r[expr.op.range.no-chain]`). A comparison chain's fix
 /// repeats each middle operand, so `a < b < c` becomes `a < b && b < c`. There is none when a
-/// middle operand holds a comment or a line break, which repeating it would copy, or needs
-/// parentheses itself, whose E0019 has its own fix.
+/// middle operand holds a comment or a line break, which repeating it would copy, needs
+/// parentheses itself, whose E0019 has its own fix, or is the pattern of an `is`, which isn't
+/// an expression.
 fn extend_chain(p: &Parser, lhs: &mut Operand, op: SyntaxKind, op_range: Range<usize>) -> Chain {
     let mut chain = lhs.chain.take().unwrap_or_else(|| match group(op) {
         Group::Compare => Chain {
@@ -476,7 +506,7 @@ fn extend_chain(p: &Parser, lhs: &mut Operand, op: SyntaxKind, op_range: Range<u
         let bare = lhs
             .right_op
             .is_none_or(|op| !matches!(group(op), Group::Bit | Group::Shift | Group::Range));
-        if plain && bare {
+        if plain && bare && lhs.op != Some(IsKw) {
             let middle = &p.text[first.range.start..last.range.end];
             let end = last.range.end;
             edits.push((end..end, format!(" && {middle}")));

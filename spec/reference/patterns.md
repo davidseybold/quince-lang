@@ -4,7 +4,7 @@
 pattern      = alt { "|" alt }
 alt          = "_" | [ "-" ] literal [ ( ".." | "..=" ) [ "-" ] literal ] | name | NAME | type_path "." NAME | tuple_pat | variant_pat
 tuple_pat    = "(" pattern "," pattern { "," pattern } [ "," ] ")"
-variant_pat  = type_path [ "(" ( pattern { "," pattern } | pfields ) ")" ]
+variant_pat  = type_path [ "(" ( pattern { "," pattern } | pfields ) [ "," ] ")" ]
 pfields      = ".." | pfield { "," pfield } [ "," ".." ]
 pfield       = name ":" [ pattern ]
 ```

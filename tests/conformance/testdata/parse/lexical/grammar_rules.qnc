@@ -1,0 +1,9 @@
+// rule: lex.grammar-rules
+// mode: parse
+// `>>` is two `>` tokens, which the parser joins for a shift, `..=` is one token, and `|`
+// inside a pattern is alternation, so `x is A | B` tests for either variant.
+fn f(a: Int, shape: Shape) {
+  let half = a >> 1
+  let digits = 0..=9
+  let round = shape is Shape.Circle(..) | Shape.Rect(width:, ..)
+}

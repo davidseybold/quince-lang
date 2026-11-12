@@ -122,8 +122,8 @@ A node holds its tokens and child nodes in source order. A part the code leaves 
 | `Generics` | `<`, `GenericParam`s and their commas, and `>`. |
 | `GenericParam` | A `Name`, then `:` and bounds joined by `+` if present, or `uses` and a `Name`. |
 | `Block` | `{`, its statements, and `}`. An expression statement is the expression's own node. |
-| `LetStmt` | `let`, a `Name`, `:` and a type if present, `=` and an expression. |
-| `VarStmt` | `var`, then the rest as for `LetStmt`. |
+| `LetStmt` | `let`, a pattern, `:` and a type if present, `=` and an expression. |
+| `VarStmt` | `var`, a `Name`, `:` and a type if present, `=` and an expression. |
 | `WhileStmt` | `while`, an expression, and a `Block`. |
 | `AssignStmt` | An expression, `=` or a compound assignment, and an expression. The left one is a place unless the statement has an E0026. |
 | `IfExpr` | `if`, an expression and a `Block`, then `else` and an `IfExpr` or a `Block` if present. |
@@ -146,6 +146,16 @@ A node holds its tokens and child nodes in source order. A part the code leaves 
 | `NamedArg` | A `NameRef`, `:`, and an expression if there is one. |
 | `UpdateArg` | `..` and an expression: the base of a struct update. |
 | `Field` | An expression, `.`, and a `NameRef` or a tuple position's `Int`. |
+| `IsExpr` | An expression, `is` and a pattern. |
+| `OrPat` | Two or more patterns and the `\|` tokens between them. None of them is an `OrPat`. |
+| `WildcardPat` | `_`. |
+| `LiteralPat` | A `Literal`. A negative number is one `Literal`, as in an expression. |
+| `RangePat` | A `Literal`, `..` or `..=`, and a `Literal`. |
+| `BindPat` | The `Name` of a binding: a name that stands alone and doesn't start with an uppercase letter. |
+| `PathPat` | A `TypePath` with no type arguments: any other name, or a dotted path. Name resolution decides whether it is a constant or a variant. |
+| `VariantPat` | A `TypePath`, `(`, then patterns, or `FieldPat`s and a `..` token, and their commas, and `)`. |
+| `FieldPat` | A `NameRef`, `:`, and a pattern if there is one. |
+| `TuplePat` | `(`, two or more patterns and their commas, and `)`. |
 | `Skipped` | The tokens the parser skipped after an error, a bracket and what it holds included. |
 
 Postfix forms nest to the left: `a.b(c)` is a `Call` of a `Field` of a `NameRef`. The parser opens such a node after its left side is parsed. The parser's own steps say which node a later one wraps, as rust-analyzer's `forward_parent` does, and one pass turns them into the builder's events, so the builder never sees a node opened out of order.
@@ -176,6 +186,8 @@ The parser reads the significant tokens: every token but the trivia and the doc 
   - A `-` in prefix position, directly followed by an `Int` or `Float` that no postfix operator follows, is part of a `Literal` with it.
   - E0019 is reported at each operand that needs parentheses, and E0020 at the second operator of a chain, once per chain. Neither is reported for an operator any of whose operands holds a syntax error, a missing operand included, since that error is the slip.
 - **Assignment.** A statement that starts with an expression becomes an assignment when `=` or a compound assignment follows it on its line. The left side is parsed as an expression and then checked against `grammar.place`: a name or `self`, then `.` and a name or a tuple position, or an index, any number of times. Assignment is a statement, so a second `=` is an E0016 where the statement should end, and `=` in a condition or a list is an E0016 there.
+- **Patterns.** A pattern is parsed after `let` and `is`. `|` in it is always alternation, and a line that starts with `|` continues the pattern, an E0018, as a line that starts with a binary operator does. Case decides one thing: a name that stands alone, with no `.` or `(` after it on its line, is a `BindPat` unless it starts with an uppercase letter. Any other name or path is a `PathPat`, or a `VariantPat` when `(` follows it on its line, so `point(x)` is a variant too. A `.` on the next line continues the path. The first item in a variant's parentheses decides how its fields go: `name:` or `..` starts fields by name, and anything else fields by position. A field by position after one by name, and the reverse, is an E0016, and so is an item after `..`. A `-` in a pattern goes right before its number, since a pattern has no prefix minus: a space, a comment or a line break between them is an E0016, whose fix deletes a space. A range's bounds are literals, both of them.
+- **`is`** binds as a comparison does, and its right side is a pattern. It doesn't chain, so `a is A == b` and `a == b is C` are E0020s. The fix repeats the middle operand only when it is an expression, so the first has none.
 - **`if` and `else`.** `if` is an expression. At the top of an `if` or `while` condition, `{` is the block, never a map (`r[expr.block.cond-brace]`): a `{` where an expression goes there is an E0016. Braces that hold an entry's `:` at their top, `{:}` among them, were meant as a map, the same test a map's own entries use: the fix puts them in parentheses (`needs-review`), and the parser parses the map, so the rest of the condition and the block parse as written. Other braces are the block, and the condition's expression is missing. Braces that hold a comment get no fix. A slip in a condition is skipped up to the `{` on its line, and a condition missing from its line is taken from the next line. `else` goes on the line of the `}` before it, and on the next line it is an E0018 (above).
 - **Errors the parser leaves to the lexer.** Beyond the lexer's own list (above):
   - The parser drops an error it would report right after an `Error` token, with only trivia between, so `let x = $` is the E0001 alone.
@@ -185,7 +197,7 @@ The parser reads the significant tokens: every token but the trivia and the doc 
 
 | Code | Reported for | Fix |
 | --- | --- | --- |
-| E0016 | A token that can't go here: "expected X, found Y", where Y can be a line break or the end of the file. A keyword where a name goes is one, which the message names | Insert the missing `,` between list items on separate lines (`needs-review`). Remove the parentheses around one type that isn't a function type (`safe`). Move what follows an attribute on its line to the next line (`safe`). Otherwise none |
+| E0016 | A token that can't go here: "expected X, found Y", where Y can be a line break or the end of the file. A keyword where a name goes is one, which the message names | Insert the missing `,` between list items on separate lines (`needs-review`). Remove the parentheses around one type that isn't a function type (`safe`). Move what follows an attribute on its line to the next line (`safe`). Delete the space between a pattern's `-` and its number (`safe`). Otherwise none |
 | E0017 | An opening bracket with no closing one, at the opener | None |
 | E0018 | A line break that ends a construct before a token that continues it, at the break | Replace everything between the two tokens with a space (`safe`), unless a comment lies between them, or the token before the break is the `>` of type arguments that joining would make less-than |
 | E0019 | An operand that needs parentheses: `&&` mixed with `||`, a bit operator or a shift as an operand of another operator or with an arithmetic operand, `&`, `|` or `^` mixed, a shift of a shift, or a range as an operand | Add the parentheses of the usual reading (`needs-review`) |

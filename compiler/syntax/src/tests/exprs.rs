@@ -368,6 +368,60 @@ fn chains() {
     );
 }
 
+/// `is` and a pattern binds as a comparison does (`compare = arith [ cmp_op arith | "is"
+/// pattern ]`), and `|` after it is alternation (`r[lex.grammar-rules]`).
+#[test]
+fn is() {
+    assert_eq!(
+        tree("a + 1 is Some(_) && ok"),
+        r#"Binary
+  IsExpr
+    Binary
+      NameRef
+        Ident "a"
+      Plus "+"
+      Literal
+        Int "1"
+    IsKw "is"
+    VariantPat
+      TypePath
+        Ident "Some"
+      LParen "("
+      WildcardPat
+        Underscore "_"
+      RParen ")"
+  AmpAmp "&&"
+  NameRef
+    Ident "ok"
+"#
+    );
+    assert_eq!(
+        tree("x is A | B"),
+        r#"IsExpr
+  NameRef
+    Ident "x"
+  IsKw "is"
+  OrPat
+    PathPat
+      TypePath
+        Ident "A"
+    Pipe "|"
+    PathPat
+      TypePath
+        Ident "B"
+"#
+    );
+    // `is` never chains. When the middle operand is a pattern, repeating it can't make an
+    // expression, so there is no fix.
+    assert_eq!(errors("a is A == b"), ["E0020 7..9"]);
+    assert_eq!(errors("a == b is C"), ["E0020 7..9 => a == b && b is C"]);
+    assert_eq!(errors("a..b is R"), ["E0019 0..4 => (a..b) is R"]);
+    // `is` can't start a statement, so a line that starts with it continues the line above.
+    assert_eq!(errors("x\n    is A"), ["E0018 1..2 => x is A"]);
+    // `is` continues its line, so a pattern missing at its end is looked for on the next.
+    assert_eq!(errors("x is"), ["E0016 5..6"]);
+}
+
 /// A syntax error in an operand, such as a missing operand, is the one error, so nothing about
 /// the operators around it is reported.
 #[test]
