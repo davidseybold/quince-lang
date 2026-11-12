@@ -113,9 +113,9 @@ fn bound_arg(p: &mut Parser) {
     }
 }
 
-/// A `uses` list in type arguments, which only `>` may follow.
+/// A `uses` list in type arguments, which only `>` may follow, after a trailing `,` or not.
 fn effects_arg(p: &mut Parser) {
-    if effects(p) && p.kind() == Comma {
+    if effects(p) && p.kind() == Comma && p.nth_kind(1) != Gt {
         p.expected("`>`");
     }
 }
