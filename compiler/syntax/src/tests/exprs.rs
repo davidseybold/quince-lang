@@ -758,9 +758,9 @@ fn a_bare_block_is_one_error() {
     let errors: Vec<_> = checked(text)
         .errors()
         .iter()
-        .map(|e| e.range.clone())
+        .map(|e| (e.range.start, e.range.end))
         .collect();
-    assert_eq!(errors, [11..12]);
+    assert_eq!(errors, [(11, 12)]);
 }
 
 /// An attribute's arguments may be named too.
