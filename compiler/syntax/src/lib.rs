@@ -37,6 +37,7 @@ pub mod codes {
     pub const INVALID_UTF8: &str = "E0014";
     pub const CONTROL_CHARACTER: &str = "E0015";
     pub const UNEXPECTED_TOKEN: &str = "E0016";
+    pub const UNCLOSED_BRACKET: &str = "E0017";
     /// The codes the lexer and `decode_source` report. The lexer's mutation test requires
     /// every one of them from its mutants.
     pub const LEXER: &[&str] = &[
