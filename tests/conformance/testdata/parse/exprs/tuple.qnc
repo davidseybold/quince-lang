@@ -1,0 +1,16 @@
+// rule: grammar.tuple
+// rule: grammar.primary
+// mode: parse
+// `()` is the unit value, and a tuple has two or more expressions, with an optional trailing
+// comma. One expression in parentheses is that expression.
+fn f(a: Int, b: Int) {
+  let unit = ()
+  let pair = (a, b)
+  let triple = (a, b, a + b,)
+  let lines = (
+    a,
+    b,
+  )
+  let grouped = (a + b) * 2
+  let one = (a,) //~ E0016
+}

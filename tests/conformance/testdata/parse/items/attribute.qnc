@@ -2,10 +2,12 @@
 // rule: item.attr.own-line
 // mode: parse
 // An attribute is `@`, a name and optional arguments, on its own line above the declaration,
-// field or variant it applies to. Blank lines may come between them, and a trailing comma may
-// end the arguments.
+// field or variant it applies to. Blank lines may come between them, an argument may be named,
+// and a trailing comma may end the arguments.
 @deprecated("use g")
 fn f() {}
+@deprecated("use g", use: g)
+fn k() {}
 @deprecated(
   "use h",
 )

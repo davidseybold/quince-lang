@@ -1,0 +1,9 @@
+// rule: item.struct.update
+// mode: parse
+// `..base` comes first in a struct literal's arguments.
+fn f(user: User) -> User {
+  let renamed = User(..user, name: "New")
+  let trailing = User(..user, name: "New",)
+  let late = User(name: "New", ..user) //~ E0016
+  renamed
+}

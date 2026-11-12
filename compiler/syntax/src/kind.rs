@@ -134,6 +134,17 @@ syntax_kinds! {
         Prefix,
         /// An expression in parentheses.
         Paren,
+        /// `()`, or a tuple of two or more expressions.
+        Tuple,
+        MapLit, MapEntry,
+        /// An expression and an index in square brackets.
+        Index,
+        /// An expression and `?`.
+        Try,
+        /// An argument with a name: `email: e`, or `email:` alone.
+        NamedArg,
+        /// `..` and the base of a struct update, the first argument.
+        UpdateArg,
         /// A call of anything: a function, a method (`Field` as callee), a struct or a variant.
         Call,
         ArgList,

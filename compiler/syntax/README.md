@@ -132,8 +132,15 @@ A node holds its tokens and child nodes in source order. A part the code leaves 
 | `Binary` | An expression, an operator other than a range's, and an expression. `>>` and `>=` are one token each. |
 | `Prefix` | `-`, `!` or `~`, and an expression. |
 | `Paren` | `(`, an expression, and `)`. |
+| `Tuple` | `(`, two or more expressions and their commas, and `)`, or just `(` and `)` for the unit value. |
+| `MapLit` | `{`, `MapEntry` nodes and their commas, and `}`, or `{`, `:` and `}` for the empty map. |
+| `MapEntry` | An expression, `:` and an expression. |
+| `Index` | An expression, `[`, an expression, and `]`. |
+| `Try` | An expression and `?`. |
 | `Call` | The callee, any expression, and an `ArgList`. A method call is a `Call` whose callee is a `Field`, and a struct literal or a variant is a `Call` too, since only name resolution can tell them apart. |
-| `ArgList` | `(`, expressions and their commas, and `)`. |
+| `ArgList` | `(`, the arguments and their commas, and `)`. An argument is an expression or a `NamedArg`, and the first may be an `UpdateArg`. |
+| `NamedArg` | A `NameRef`, `:`, and an expression if there is one. |
+| `UpdateArg` | `..` and an expression: the base of a struct update. |
 | `Field` | An expression, `.`, and a `NameRef` or a tuple position's `Int`. |
 | `Skipped` | The tokens the parser skipped after an error, a bracket and what it holds included. |
 
@@ -173,3 +180,4 @@ The parser reads the significant tokens: every token but the trivia and the doc 
 | E0019 | An operand that needs parentheses: `&&` mixed with `||`, a bit operator or a shift as an operand of another operator or with an arithmetic operand, `&`, `|` or `^` mixed, a shift of a shift, or a range as an operand | Add the parentheses of the usual reading (`needs-review`) |
 | E0020 | A chained comparison or range, at its second operator | For comparisons, repeat each middle operand: `a < b && b < c` (`needs-review`), in parentheses when the chain is an operand of `\|\|`. None when a middle operand holds a comment or a line break or needs parentheses itself, and none for ranges |
 | E0024 | A struct with no fields written with braces, at the braces | Remove them (`safe`), unless a `requires` follows or a comment lies before or between them |
+| E0025 | `{}` where an expression is expected, over the braces | Insert `:` after the `{` (`needs-review`) |

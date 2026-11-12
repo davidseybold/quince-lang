@@ -515,7 +515,7 @@ Layer 3 is three PRs (decided by David, 2026-11-12), since together they would r
 - [x] Type arguments in expressions, `.name<T>(...)` included; negative literals, unit-tested only (decision 11). [`expr.op.type-args`]
 
 **Layer 3c: `m1/parser-postfix`**
-- [ ] Postfix forms, tuples, maps, `{}` and E0025, named arguments (attribute arguments too), `..base`. [`lex.lit.collections`, `lex.lit.empty-map`, `expr.block.brace-map`, `item.struct.update`, `intro.excl.macros`]
+- [x] Postfix forms, tuples, maps, `{}` and E0025, named arguments (attribute arguments too), `..base`. [`lex.lit.collections`, `lex.lit.empty-map`, `expr.block.brace-map`, `item.struct.update`, `intro.excl.macros`, `grammar.postfix`, `grammar.args`, `grammar.arg`, `grammar.tuple`, `grammar.primary`, `grammar.map_lit`, `grammar.entry`]
 
 **Layer 4: `m1/parser-stmts`**
 - [ ] Spec: questions 3, 12 and 13, and a bump.

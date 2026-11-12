@@ -1,0 +1,23 @@
+// rule: grammar.map_lit
+// rule: grammar.entry
+// rule: lex.lit.collections
+// rule: lex.lit.empty-map
+// rule: expr.block.brace-map
+// mode: parse
+// `{` where an expression is expected starts a map literal: entries `key: value`, with an
+// optional trailing comma. The empty map is `{:}`, and `{}` is an error.
+fn f() -> Map<String, Int> {
+  let list = [1, 2, 3]
+  let one = {"a": 1}
+  let two = {"a": 1, "b": 2,}
+  let lines = {
+    "a": 1,
+    "b": 2,
+  }
+  let nested = {1: {:}, 2: {"x": 0}}
+  let empty = {:}
+  let wrong = {} //~ E0025
+  let spaced = { } //~ E0025
+  let missing = {"a" 1} //~ E0016
+  {:}
+}

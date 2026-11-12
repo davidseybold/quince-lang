@@ -586,3 +586,175 @@ fn negative_literals() {
         "Literal\n  Minus \"-\"\n  Int \"1\"\nParen\n  LParen \"(\"\n  Literal\n    Int \"2\"\n  RParen \")\"\n"
     );
 }
+
+/// `grammar.postfix`: indexes and `?` group to the left with calls and fields, and bind
+/// tighter than prefix operators (`r[expr.op.levels]`: `-x?` is `-(x?)`).
+#[test]
+fn indexes_and_try() {
+    assert_eq!(
+        tree("-xs[i]?"),
+        r#"Prefix
+  Minus "-"
+  Try
+    Index
+      NameRef
+        Ident "xs"
+      LBracket "["
+      NameRef
+        Ident "i"
+      RBracket "]"
+    Question "?"
+"#
+    );
+    assert_eq!(
+        tree("load()?.rows"),
+        r#"Field
+  Try
+    Call
+      NameRef
+        Ident "load"
+      ArgList
+        LParen "("
+        RParen ")"
+    Question "?"
+  Dot "."
+  NameRef
+    Ident "rows"
+"#
+    );
+    // On the next line, `[` starts a statement and `?` can't.
+    assert_eq!(
+        stmts("  f\n  [x]"),
+        "NameRef\n  Ident \"f\"\nListLit\n  LBracket \"[\"\n  NameRef\n    Ident \"x\"\n  RBracket \"]\"\n"
+    );
+    assert_eq!(errors("xs[]"), ["E0016 3..4"]);
+}
+
+/// `grammar.tuple`: `()` and two or more expressions are tuples, and one is in parentheses.
+#[test]
+fn tuples() {
+    assert_eq!(tree("()"), "Tuple\n  LParen \"(\"\n  RParen \")\"\n");
+    assert_eq!(
+        tree("(a, b,)"),
+        r#"Tuple
+  LParen "("
+  NameRef
+    Ident "a"
+  Comma ","
+  NameRef
+    Ident "b"
+  Comma ","
+  RParen ")"
+"#
+    );
+    assert_eq!(errors("(a,)"), ["E0016 3..4"]);
+    assert_eq!(
+        messages("(a,)"),
+        ["expected a second expression, found `)`"]
+    );
+}
+
+/// `grammar.map_lit`: entries in braces, and `{:}`.
+#[test]
+fn maps() {
+    assert_eq!(
+        tree("{\"a\": 1,}"),
+        r#"MapLit
+  LBrace "{"
+  MapEntry
+    Literal
+      StringStart "\""
+      StringText "a"
+      StringEnd "\""
+    Colon ":"
+    Literal
+      Int "1"
+  Comma ","
+  RBrace "}"
+"#
+    );
+    assert_eq!(
+        tree("{:}"),
+        "MapLit\n  LBrace \"{\"\n  Colon \":\"\n  RBrace \"}\"\n"
+    );
+    // `{` that starts a statement is a map too (`r[expr.block.brace-map]`).
+    assert_eq!(
+        stmts("  {:}"),
+        "MapLit\n  LBrace \"{\"\n  Colon \":\"\n  RBrace \"}\"\n"
+    );
+    assert_eq!(errors("{\"a\" 1}"), ["E0016 5..6"]);
+    // With no expression there is no entry node, which would be empty (found by the lexer's
+    // mutation test).
+    assert_eq!(errors("{= 1}"), ["E0016 1..2"]);
+}
+
+/// E0025: `{}` where an expression is expected, whose fix writes `{:}`.
+#[test]
+fn empty_braces() {
+    assert_eq!(errors("{}"), ["E0025 0..2 => {:}"]);
+    assert_eq!(errors("{ }"), ["E0025 0..3 => {: }"]);
+    assert_eq!(errors("f({})"), ["E0025 2..4 => f({:})"]);
+    assert_eq!(
+        messages("{}"),
+        ["`{}` isn't a value: the empty map is `{:}`"]
+    );
+}
+
+/// `grammar.arg`: a named argument, `name:` alone, and `..base` first
+/// (`r[item.struct.update]`).
+#[test]
+fn arguments() {
+    assert_eq!(
+        tree("User(..u, id: 1, email:)"),
+        r#"Call
+  NameRef
+    Ident "User"
+  ArgList
+    LParen "("
+    UpdateArg
+      DotDot ".."
+      NameRef
+        Ident "u"
+    Comma ","
+    NamedArg
+      NameRef
+        Ident "id"
+      Colon ":"
+      Literal
+        Int "1"
+    Comma ","
+    NamedArg
+      NameRef
+        Ident "email"
+      Colon ":"
+    RParen ")"
+"#
+    );
+    assert_eq!(errors("f(email:\n  )"), Vec::<String>::new());
+    assert_eq!(errors("User(id: 1, ..u)"), ["E0016 12..14"]);
+    assert_eq!(
+        messages("User(id: 1, ..u)"),
+        ["expected an expression or `name:`, found `..`"]
+    );
+    // A value on the line after `name:` is the next argument, missing its `,`.
+    assert_eq!(
+        errors("f(email:\n  e)"),
+        ["E0016 11..12 => f(email:,\n  e)"]
+    );
+}
+
+/// An attribute's arguments may be named too.
+#[test]
+fn named_attribute_arguments() {
+    let parse = checked("@deprecated(\"why\", use: g)\nfn f() {}\n");
+    assert_eq!(parse.errors(), []);
+    assert!(
+        parse
+            .syntax()
+            .descendants()
+            .any(|node| node.kind() == SyntaxKind::NamedArg)
+    );
+    let errors = checked("@deprecated(..g)\nfn f() {}\n").errors().to_vec();
+    assert_eq!(errors.len(), 1);
+    assert_eq!(errors[0].code, "E0016");
+}

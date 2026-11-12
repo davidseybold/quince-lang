@@ -1,0 +1,7 @@
+// rule: intro.excl.macros
+// mode: parse
+// Quince has no macros, so `!` after a name doesn't call it.
+fn f() {
+  println!("hi") //~ E0016
+  let xs = vec![1, 2] //~ E0016
+}
