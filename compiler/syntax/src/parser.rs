@@ -484,29 +484,44 @@ impl<'t> Parser<'t> {
         self.frames.iter().rposition(|frame| holds(frame.holds))
     }
 
-    /// How many tokens the attributes at the current token hold: each is `@`, a name, and its
-    /// arguments in parentheses if it has any. A direct scan: it takes nothing, and isn't a
-    /// loop that could stick.
+    /// How many tokens the attributes at the current token hold: each is `@`, a name on its
+    /// line, and its arguments in parentheses if it has any. Zero when one is malformed, so a
+    /// slip in an attribute closes nothing. The scan stops at a line that starts a member,
+    /// which no attribute's arguments hold, so it reads no further than the attribute's own
+    /// lines. A direct scan: it takes nothing, and isn't a loop that could stick.
     fn attributes_len(&self) -> usize {
         let tokens = &self.input.tokens[self.pos..];
-        let kind = |n: usize| tokens.get(n).map(|t| t.kind);
+        let on_line = |n: usize, kind: SyntaxKind| {
+            tokens
+                .get(n)
+                .is_some_and(|t| t.kind == kind && t.brk == Break::None)
+        };
         let mut n = 0;
-        while kind(n) == Some(At) {
-            n += 1;
-            if kind(n) == Some(Ident) {
-                n += 1;
+        while tokens.get(n).is_some_and(|t| t.kind == At) {
+            if !on_line(n + 1, Ident) {
+                return 0;
             }
-            if kind(n) == Some(LParen) {
-                let mut depth = 0usize;
-                while let Some(k) = kind(n) {
-                    n += 1;
-                    if closer_of(k).is_some() {
-                        depth += 1;
-                    } else if is_closer(k) {
-                        depth = depth.saturating_sub(1);
-                        if depth == 0 {
-                            break;
-                        }
+            n += 2;
+            if !on_line(n, LParen) {
+                continue;
+            }
+            let mut open = Vec::new();
+            loop {
+                let Some(token) = tokens.get(n) else {
+                    return 0;
+                };
+                if !open.is_empty() && token.brk != Break::None && starts_member(token.kind) {
+                    return 0;
+                }
+                n += 1;
+                if let Some(closer) = closer_of(token.kind) {
+                    open.push(closer);
+                } else if is_closer(token.kind) {
+                    if open.pop() != Some(token.kind) {
+                        return 0;
+                    }
+                    if open.is_empty() {
+                        break;
                     }
                 }
             }
@@ -668,7 +683,7 @@ impl<'t> Parser<'t> {
             }
             if let Some(closer) = closer_of(kind) {
                 groups.push((closer, start));
-            } else if kind == Lt && self.top().holds == Holds::Items {
+            } else if kind == Lt && self.top().holds.is_list() {
                 // In a list, `<` can only open type arguments or generics, so the skip stays
                 // out of their commas. In a line context it may be less-than.
                 groups.push((Gt, start));
@@ -818,6 +833,29 @@ fn closer_of(kind: SyntaxKind) -> Option<SyntaxKind> {
         LBrace => Some(RBrace),
         _ => None,
     }
+}
+
+/// Kinds that, at the start of a line, can only start a member or an attribute: never part of
+/// an attribute's arguments.
+fn starts_member(kind: SyntaxKind) -> bool {
+    matches!(
+        kind,
+        At | FnKw
+            | StructKw
+            | EnumKw
+            | TypeKw
+            | InterfaceKw
+            | ImplKw
+            | EffectKw
+            | ForeignKw
+            | ImportKw
+            | ConstKw
+            | TestKw
+            | PubKw
+            | LetKw
+            | VarKw
+            | WhileKw
+    )
 }
 
 fn is_closer(kind: SyntaxKind) -> bool {

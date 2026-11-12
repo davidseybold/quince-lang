@@ -46,8 +46,9 @@ pub(crate) enum Event {
 }
 
 /// Builds the tree for `text`, whose lexer tokens are `tokens`, from the parser's `events`.
-/// `significant` holds the indices of the tokens the parser read, in order. Every other token
-/// is trivia. Returns the tree and the errors in the order they were reported.
+/// `significant` holds the indices of the tokens the parser took, in order: its significant
+/// tokens, and the doc comments it took as part of what they document. Every other token is
+/// trivia. Returns the tree and the errors in the order they were reported.
 ///
 /// The first event starts the root and the last finishes it. Every significant token is taken,
 /// and every node but the root holds a token. Fuzz and debug builds check both.

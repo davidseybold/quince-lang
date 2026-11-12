@@ -145,6 +145,10 @@ impl SyntaxKind {
             .map(|&(_, kind)| kind)
     }
 
+    pub fn is_keyword(self) -> bool {
+        Self::KEYWORDS.iter().any(|&(_, kind)| kind == self)
+    }
+
     /// True for the token kinds the parser never sees: whitespace, line endings, comments,
     /// block comments, the byte order mark, `Error` and `Semicolon`. A `DocComment` is trivia
     /// only where it documents nothing, which the parser decides, so it isn't one of these.

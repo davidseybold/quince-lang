@@ -171,9 +171,21 @@ pub(super) fn literal(p: &mut Parser) -> Completed {
     p.complete(marker, Literal)
 }
 
+/// An attribute's arguments: `(` arg { `,` arg } `)` (`grammar.attribute`), at least one and
+/// no trailing `,`. Layer 3 of the parser adds named arguments here too.
+pub(super) fn attribute_args(p: &mut Parser) {
+    let marker = p.start();
+    p.bump();
+    if p.kind() == RParen {
+        p.expected("an expression");
+    }
+    p.list(RParen, "an expression", expr, starts_expr);
+    p.complete(marker, ArgList);
+}
+
 /// `(` [ arg { `,` arg } [ `,` ] ] `)` (`grammar.args`). Layer 3 of the parser adds named
 /// arguments.
-pub(super) fn arg_list(p: &mut Parser) {
+fn arg_list(p: &mut Parser) {
     let marker = p.start();
     p.bump();
     p.list(RParen, "an expression", expr, starts_expr);

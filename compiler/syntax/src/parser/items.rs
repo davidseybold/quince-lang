@@ -1,7 +1,7 @@
 //! Declarations: the file, imports, `fn`, `test`, `const`, `impl`, structs, newtypes, enums
 //! and type aliases, with their doc comments and attributes, and their parts.
 
-use super::{Break, Holds, Parser, Sync, exprs, types};
+use super::{Holds, Parser, Sync, exprs, types};
 use crate::SyntaxKind::{self, *};
 use crate::{SyntaxError, codes};
 use quince_diagnostics::Applicability;
@@ -16,24 +16,28 @@ pub(super) fn file(p: &mut Parser) {
 /// A declaration in the file with its doc comments and attributes, or a method in an `impl`
 /// body (`grammar.decl`, `grammar.impl_item`), with its `pub`. Anything else is skipped as an
 /// error. Layer 7 of the parser adds the other members, and their doc comments and attributes.
+/// The item is chosen at its keyword, once what comes before it is parsed.
 fn decl(p: &mut Parser, holds: Holds) {
     let file = holds == Holds::File;
     if file && p.kind() == ImportKw {
         return import(p);
     }
-    let past = if file { p.attributes_len() } else { 0 };
-    let public = p.nth_kind(past) == PubKw;
-    if public && p.nth(past + 1).is_some_and(|t| t.brk != Break::None) {
-        // `pub` doesn't continue the line, so a break after it ends the declaration.
-        let marker = p.start();
+    let marker = p.start();
+    if file {
+        p.imports_closed = true;
+        p.doc_comments();
         attributes(p);
-        p.bump();
-        p.expected(if file { "a declaration" } else { "`fn`" });
-        p.complete(marker, Skipped);
-        return;
     }
-    let parse: fn(&mut Parser) -> SyntaxKind = match (file, p.nth_kind(past + usize::from(public)))
-    {
+    if p.kind() == PubKw {
+        p.bump();
+        if p.at_break() {
+            // `pub` doesn't continue the line, so a break after it ends the declaration.
+            p.expected(if file { "a declaration" } else { "`fn`" });
+            p.complete(marker, Skipped);
+            return;
+        }
+    }
+    let parse: fn(&mut Parser) -> SyntaxKind = match (file, p.kind()) {
         (_, FnKw) => |p| {
             fn_decl(p);
             FnDecl
@@ -59,18 +63,18 @@ fn decl(p: &mut Parser, holds: Holds) {
             alias_decl(p);
             AliasDecl
         },
-        (true, _) => return skip("a declaration", p),
-        (false, _) => return skip("`fn` or `}`", p),
+        _ => {
+            let what = if file { "a declaration" } else { "`fn` or `}`" };
+            if p.steps.len() == marker.0 + 1 {
+                // Nothing before the item, so the skip's own node is enough.
+                p.abandon(marker);
+                return skip(what, p);
+            }
+            skip(what, p);
+            p.complete(marker, Skipped);
+            return;
+        }
     };
-    let marker = p.start();
-    if file {
-        p.imports_closed = true;
-        p.doc_comments();
-        attributes(p);
-    }
-    if p.kind() == PubKw {
-        p.bump();
-    }
     let kind = parse(p);
     p.complete(marker, kind);
 }
@@ -87,8 +91,13 @@ fn attributes(p: &mut Parser) {
         if p.at(Ident) {
             p.bump_node(NameRef);
             if p.at(LParen) {
-                exprs::arg_list(p);
+                exprs::attribute_args(p);
             }
+        } else if !p.at_break() && p.kind().is_keyword() {
+            // A keyword can't name an attribute (`r[lex.keyword-not-name]`). Taken without
+            // ending the error's recovery, so the declaration after it is still parsed.
+            p.expected("an attribute name");
+            p.take();
         } else {
             p.expected("an attribute name");
             p.recover(Sync::Line, false);
@@ -105,18 +114,24 @@ fn attributes(p: &mut Parser) {
 }
 
 /// The E0016 for an attribute that starts at token `at` and has the current token after it
-/// on its line. Its fix moves that token to the next line, at the attribute's indentation,
-/// unless a comment lies between them.
+/// on its line. When that token can start what an attribute applies to, the fix moves it to
+/// the next line, at the attribute's indentation, unless a comment lies between them.
 fn not_on_own_line(p: &mut Parser, at: usize) {
     let error = p.unexpected("a line break", false);
     let start = p.input.tokens[at].range.start;
-    let line_start = p.text[..start].rfind('\n').map_or(0, |i| i + 1);
+    let line_start = p.text[..start].rfind(['\n', '\r']).map_or(0, |i| i + 1);
+    let newline = if p.text[..line_start].ends_with("\r\n") {
+        "\r\n"
+    } else {
+        "\n"
+    };
     let indent = &p.text[line_start..start];
     let indent = if indent.trim().is_empty() { indent } else { "" };
     let end = p.input.tokens[p.pos - 1].range.end;
     let next = p.input.tokens[p.pos].range.start;
-    let error = if p.text[end..next].trim().is_empty() {
-        let edit = (end..next, format!("\n{indent}"));
+    let applies_to = p.kind() == Ident || p.kind().is_keyword();
+    let error = if applies_to && p.text[end..next].trim().is_empty() {
+        let edit = (end..next, format!("{newline}{indent}"));
         error.with_fix(
             "put the attribute on its own line",
             Applicability::Safe,
@@ -275,12 +290,14 @@ fn import(p: &mut Parser) {
     p.bump();
     if p.at(Ident) {
         p.bump();
+        let mut names = false;
         while p.at(Dot) {
             p.bump();
             match p.kind() {
                 Ident if !p.at_break() => p.bump(),
                 LBrace if !p.at_break() => {
                     import_names(p);
+                    names = true;
                     break;
                 }
                 _ => {
@@ -289,7 +306,8 @@ fn import(p: &mut Parser) {
                 }
             }
         }
-        if p.at(AsKw) {
+        // Only a package import takes `as`.
+        if !names && p.at(AsKw) {
             p.bump();
             name(p, "a package name");
         }
@@ -303,13 +321,10 @@ fn import(p: &mut Parser) {
 fn import_names(p: &mut Parser) {
     let marker = p.start();
     p.bump();
-    p.list(
-        RBrace,
-        "a name",
-        name_ref,
-        starts_name_ref,
-        Trailing::Allowed,
-    );
+    if p.kind() == RBrace {
+        p.expected("a name");
+    }
+    p.list(RBrace, "a name", name_ref, starts_name_ref);
     p.complete(marker, ImportNames);
 }
 
@@ -355,14 +370,17 @@ fn struct_decl(p: &mut Parser) -> SyntaxKind {
 
 /// `{}`: a struct with no fields is declared without braces (`r[item.struct.no-fields]`), so
 /// it is an E0024. Its fix removes them, unless a `requires` follows, which only a struct with
-/// fields may have.
+/// fields may have, or a comment lies before or between them, which removing would delete.
 fn empty_braces(p: &mut Parser) {
     let before = p.input.tokens[p.pos - 1].range.end;
     let (open, close) = (&p.input.tokens[p.pos], &p.input.tokens[p.pos + 1]);
     let range = open.range.start..close.range.end;
     let message = "a struct with no fields is declared without braces".to_string();
     let mut error = SyntaxError::new(range.clone(), codes::EMPTY_STRUCT_BRACES, message);
-    if p.nth_kind(2) != RequiresKw {
+    let comments = [before..open.range.start, open.range.end..close.range.start]
+        .into_iter()
+        .any(|gap| !p.text[gap].trim().is_empty());
+    if p.nth_kind(2) != RequiresKw && !comments {
         let edit = (before..range.end, String::new());
         error = error.with_fix("remove the braces", Applicability::Safe, vec![edit]);
     }
@@ -395,14 +413,7 @@ fn fields(
     starts_item: fn(SyntaxKind) -> bool,
 ) {
     p.push_frame(Holds::Fields, Some(closer));
-    p.list_items(
-        closer,
-        what_item,
-        item,
-        starts_item,
-        Trailing::Allowed,
-        false,
-    );
+    p.list_items(closer, what_item, item, starts_item, false);
 }
 
 fn starts_field(kind: SyntaxKind) -> bool {
@@ -471,6 +482,10 @@ fn variant(p: &mut Parser) {
     if name(p, "a variant name") && p.at(LParen) {
         let list = p.start();
         p.bump();
+        if p.kind() == RParen {
+            // A variant with no fields has no parentheses.
+            p.expected("a field");
+        }
         fields(p, RParen, "a field", |p| field_with(p, false), starts_field);
         p.complete(list, VariantFields);
     }

@@ -11,6 +11,10 @@ fn errors(text: &str) -> Vec<String> {
     parse.errors().iter().map(|e| describe(text, e)).collect()
 }
 
+fn codes(text: &str) -> Vec<&'static str> {
+    checked(text).errors().iter().map(|e| e.code).collect()
+}
+
 fn messages(text: &str) -> Vec<String> {
     let parse = checked(text);
     parse.errors().iter().map(|e| e.message.clone()).collect()
@@ -48,6 +52,68 @@ fn a_struct_with_doc_comments_and_attributes() {
       RBrace "}"
 "#
     );
+}
+
+/// Doc comments on a variant and on a variant's field.
+#[test]
+fn doc_comments_on_variants() {
+    let text = "enum E {\n  /// A.\n  A(\n    /// X.\n    x: Int,\n  ),\n}\n";
+    assert_eq!(
+        valid(text),
+        r#"File
+  EnumDecl
+    EnumKw "enum"
+    Name
+      Ident "E"
+    VariantList
+      LBrace "{"
+      Variant
+        DocComments
+          DocComment "/// A."
+        Name
+          Ident "A"
+        VariantFields
+          LParen "("
+          FieldDecl
+            DocComments
+              DocComment "/// X."
+            Name
+              Ident "x"
+            Colon ":"
+            TypePath
+              Ident "Int"
+          Comma ","
+          RParen ")"
+      Comma ","
+      RBrace "}"
+"#
+    );
+}
+
+/// A slip in an attribute is one error, and the declaration after it is still parsed.
+#[test]
+fn slips_in_attributes() {
+    for text in [
+        "@test fn f() {}",
+        "@test\nfn f() {}",
+        "@\nfoo\nfn f() {}",
+        "@pub\nfn f() {}",
+        "@ fn f() {}",
+        "@x\n@enum",
+        "@enum",
+        "@fn",
+        "@type X",
+    ] {
+        assert_eq!(checked(text).errors().len(), 1, "{text:?}");
+    }
+    let parse = checked("@test fn f() {}");
+    assert!(parse.syntax().descendants().any(|n| n.kind() == FnDecl));
+    // A missing `)` in an attribute's arguments.
+    let text = "struct S {\n  @wire(\"a\"\n  a: Int,\n}\nfn g() {}\n";
+    // A field line looks like the next argument: an E0016 with a fix that inserts `,`, then
+    // the struct's `}` closes the `(`.
+    assert_eq!(codes(text), ["E0017", "E0016"]);
+    assert_eq!(codes("@deprecated(\"use g\"\nfn f() {}\n"), ["E0017"]);
 }
 
 #[test]
@@ -217,6 +283,9 @@ fn empty_struct_braces() {
     );
     // A `requires` needs fields, so removing the braces alone wouldn't fix it.
     assert_eq!(errors("struct S {} requires x"), ["E0024 9..11"]);
+    // Removing them would delete a comment.
+    assert_eq!(errors("struct S { // TODO\n}\n"), ["E0024 9..20"]);
+    assert_eq!(errors("struct S {\n  /// doc\n}\n"), ["E0024 9..22"]);
 }
 
 #[test]
@@ -233,6 +302,13 @@ fn an_attribute_on_its_declarations_line() {
     assert_eq!(
         messages("@\nfn f() {}"),
         ["expected an attribute name, found a line break"]
+    );
+    // No fix when what follows can't be what the attribute applies to.
+    assert_eq!(errors("enum E {\n  @x,\n  A,\n}\n"), ["E0016 13..14"]);
+    // The fix keeps the file's line endings.
+    assert_eq!(
+        errors("fn a() {}\r\n@x fn f() {}"),
+        [r#"E0016 14..16 => "fn a() {}\r\n@x\r\nfn f() {}""#]
     );
 }
 
@@ -259,4 +335,21 @@ fn errors_in_declarations() {
         messages("struct S { a: Int b: Int }"),
         ["expected `,` or `}`, found the name `b`"]
     );
+    // Forms the grammar rejects.
+    assert_eq!(messages("enum E { A() }"), ["expected a field, found `)`"]);
+    assert_eq!(messages("import a.{}"), ["expected a name, found `}`"]);
+    assert_eq!(
+        messages("import a.{b} as c"),
+        ["expected a line break, found the keyword `as`"]
+    );
+    assert_eq!(
+        messages("@deprecated()\nfn f() {}"),
+        ["expected an expression, found `)`"]
+    );
+    assert_eq!(
+        messages("@x(1,)\nfn f() {}"),
+        ["expected an expression, found `)`"]
+    );
+    // A skip in struct braces stays out of type arguments.
+    assert_eq!(codes("struct S { a: Int b: Map<K, V> }"), ["E0016"]);
 }

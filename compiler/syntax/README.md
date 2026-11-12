@@ -92,7 +92,7 @@ A node holds its tokens and child nodes in source order. A part the code leaves 
 | Kind | Holds |
 | --- | --- |
 | `File` | The declarations. |
-| `FnDecl` | `pub` if present, `fn`, a `Name`, `Generics` if present, a `ParamList`, a `RetType` and `Effects` if present, and a `Block`. A `uses` after a bare function type in the `RetType` is the declaration's `Effects` (`r[effect.uses-return]`). |
+| `FnDecl` | `DocComments` and `Attribute`s if present, as for every declaration of the file, then `pub` if present, `fn`, a `Name`, `Generics` if present, a `ParamList`, a `RetType` and `Effects` if present, and a `Block`. A `uses` after a bare function type in the `RetType` is the declaration's `Effects` (`r[effect.uses-return]`). |
 | `ParamList` | `(`, `Param`s and their commas, and `)`. |
 | `Param` | `var` if present, then `self`, or a `Name` or `_` followed by `:`, a type, and `=` and an expression for a default. |
 | `RetType` | `->` and a type. |
@@ -141,7 +141,7 @@ Postfix forms nest to the left: `a.b(c)` is a `Call` of a `Field` of a `NameRef`
 The parser reads the significant tokens: every token but the trivia and the doc comments. Each records the break before it: none, a line break, or a hard break, when a `;` comes between it and the token before. Nothing comes before the first token, so it has no break.
 
 - **Doc comments** are taken by the declaration, field or variant whose first token they come before, into its `DocComments` node, and so become part of the tree's significant tokens. Any other doc comment stays trivia: one in a block, after an attribute, at the end of the file, or before an `impl` member, which takes its doc comments in layer 7.
-- **Attributes** come after the doc comments and before `pub`. Each goes on a line of its own, and the line after attributes continues what they apply to. Something after an attribute on its line is an E0016, with a fix that moves it to the next line.
+- **Attributes** come after the doc comments and before `pub`. Each goes on a line of its own, and the line after attributes continues what they apply to. Something after an attribute on its line is an E0016. When it can start what the attribute applies to, the fix moves it to the next line. A keyword after `@` is an E0016 at the keyword, and the declaration after it is still parsed.
 
 - **Where a break ends a construct.** In a line context (the file, a block, an `impl` body), a break ends the statement or declaration unless the token before it continues the line (`SyntaxKind::continues_line()`), the next token is `.`, or the parser is in a `fn` header and the next token is `->`, `uses`, `requires`, `ensures` or `{`. A hard break always ends it. Inside brackets, a break before a `,` or a closing bracket is spacing, but an expression in brackets still ends at a break, as a statement does.
 - **Errors.** Every syntax error is reported once, and then the parser skips to a sync point, reporting nothing more until it next takes a token as part of a construct. The skipped tokens go in a `Skipped` node, and a bracket the skip meets is skipped up to its closing bracket. In a list, a `<` counts as a bracket, closed by `>`, so a skip there stays out of type arguments.
@@ -161,4 +161,4 @@ The parser reads the significant tokens: every token but the trivia and the doc 
 | --- | --- | --- |
 | E0016 | A token that can't go here: "expected X, found Y", where Y can be a line break or the end of the file. A keyword where a name goes is one, which the message names | Insert the missing `,` between list items on separate lines (`needs-review`). Remove the parentheses around one type that isn't a function type (`safe`). Move what follows an attribute on its line to the next line (`safe`). Otherwise none |
 | E0017 | An opening bracket with no closing one, at the opener | None |
-| E0024 | A struct with no fields written with braces, at the braces | Remove them (`safe`), unless a `requires` follows |
+| E0024 | A struct with no fields written with braces, at the braces | Remove them (`safe`), unless a `requires` follows or a comment lies before or between them |
