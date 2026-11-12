@@ -409,3 +409,25 @@ fn nested_blocks_close_at_a_declaration() {
     let found: Vec<_> = parse.errors().iter().map(|e| describe(text, e)).collect();
     assert_eq!(found, ["E0017 7..8"]);
 }
+
+/// Each open block is a frame, and the member-start check at each line runs over the open
+/// frames. It peeks at the line's first tokens once, so the looks it takes between two tokens
+/// don't grow with the depth. More open frames than `LOOKAHEAD_LIMIT` allows looks would trip
+/// the loop guard if they did, so the depth is past it. The thread has room for the recursion
+/// in a debug build.
+#[test]
+fn deeply_nested_blocks() {
+    const DEPTH: usize = 300;
+    let text = format!(
+        "fn f() {{\n{}g()\n{}}}\n",
+        "if a {\n".repeat(DEPTH),
+        "}\n".repeat(DEPTH)
+    );
+    let errors = std::thread::Builder::new()
+        .stack_size(64 << 20)
+        .spawn(move || checked(&text).errors().len())
+        .expect("a thread")
+        .join()
+        .expect("no panic");
+    assert_eq!(errors, 0);
+}

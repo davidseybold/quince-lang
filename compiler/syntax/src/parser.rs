@@ -691,27 +691,38 @@ impl<'t> Parser<'t> {
         if !self.starts_line() {
             return None;
         }
-        let item_start = |n: usize| match self.nth_kind(n) {
-            FnKw => self.nth_kind(n + 1) == Ident,
-            StructKw | EnumKw | TypeKw | InterfaceKw | ImplKw | EffectKw | ForeignKw | ImportKw
-            | ConstKw | TestKw => true,
-            _ => false,
-        };
-        let member_start = |n: usize| match self.nth_kind(n) {
-            FnKw => self.nth_kind(n + 1) == Ident,
-            TypeKw | ConstKw => true,
-            _ => false,
-        };
+        // The line's first tokens, past its attributes and a `pub`, are read once, so the check
+        // takes as many looks however many frames are open.
         let past = self.attributes_len();
-        let public = past + usize::from(self.nth_kind(past) == PubKw);
-        let holds = |holds: Holds| match holds {
+        let first = self.nth_kind(past);
+        let public = first == PubKw;
+        let start = past + usize::from(public);
+        let (kind, next) = (self.nth_kind(start), self.nth_kind(start + 1));
+        let fn_start = kind == FnKw && next == Ident;
+        let item = fn_start
+            || matches!(
+                kind,
+                StructKw
+                    | EnumKw
+                    | TypeKw
+                    | InterfaceKw
+                    | ImplKw
+                    | EffectKw
+                    | ForeignKw
+                    | ImportKw
+                    | ConstKw
+                    | TestKw
+            );
+        let member = fn_start || matches!(kind, TypeKw | ConstKw);
+        let field = public && kind == Ident;
+        let statement = matches!(first, LetKw | VarKw | WhileKw);
+        self.frames.iter().rposition(|frame| match frame.holds {
             Holds::Items | Holds::Map => false,
-            Holds::File => item_start(public),
-            Holds::Body => member_start(public),
-            Holds::Fields => public > past && self.nth_kind(public) == Ident,
-            Holds::Block => matches!(self.nth_kind(past), LetKw | VarKw | WhileKw),
-        };
-        self.frames.iter().rposition(|frame| holds(frame.holds))
+            Holds::File => item,
+            Holds::Body => member,
+            Holds::Fields => field,
+            Holds::Block => statement,
+        })
     }
 
     /// How many tokens the attributes at the current token hold: each is `@`, a name on its
