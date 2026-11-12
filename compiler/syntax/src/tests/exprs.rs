@@ -701,6 +701,11 @@ fn empty_braces() {
         messages("{}"),
         ["`{}` isn't a value: the empty map is `{:}`"]
     );
+    // `{}` is whole, so the operators around it are still checked.
+    assert_eq!(
+        errors("{} & 1 | 2"),
+        ["E0025 0..2 => {:} & 1 | 2", "E0019 0..6 => ({} & 1) | 2"]
+    );
 }
 
 /// `grammar.arg`: a named argument, `name:` alone, and `..base` first
@@ -754,6 +759,14 @@ fn a_bare_block_is_one_error() {
         messages("{\n    let y = 1\n  }"),
         ["expected an expression, found a block"]
     );
+    // Whatever statement comes first, as long as no entry's `:` comes before the statement.
+    assert_eq!(errors("{\n    g()\n    let y = 1\n  }"), ["E0016 0..1"]);
+    assert_eq!(
+        errors("{\n    log(1)\n    var y = {\n      while ok {}\n    }\n  } + 1"),
+        ["E0016 0..1"]
+    );
+    // A map with an entry is a map missing its `}`.
+    assert_eq!(errors("{\"a\": 1\n  let y = 1"), ["E0017 0..1"]);
     let text = "fn f() {\n  {\n    var x = 1\n  }\n  g()\n}\n";
     let errors: Vec<_> = checked(text)
         .errors()

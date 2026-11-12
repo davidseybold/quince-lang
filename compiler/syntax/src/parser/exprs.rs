@@ -504,7 +504,7 @@ fn primary(p: &mut Parser) -> Option<Completed> {
         }
         LBrace => {
             p.abandon(marker);
-            return map_lit(p);
+            return Some(map_lit(p));
         }
         _ => {
             p.abandon(marker);
@@ -557,21 +557,10 @@ fn paren(p: &mut Parser) -> Completed {
 
 /// A map literal, where `{` starts an expression (`grammar.map_lit`,
 /// `r[expr.block.brace-map]`): `{:}`, or entries in braces. `{}` is an E0025, whose fix
-/// writes `{:}` (`r[lex.lit.empty-map]`). `None` for a block, which can't go here
-/// (`r[expr.block.no-bare]`), after reporting it.
-fn map_lit(p: &mut Parser) -> Option<Completed> {
-    if bare_block(p) {
-        let range = p.input.tokens[p.pos].range.clone();
-        let message = "expected an expression, found a block".to_string();
-        p.report(SyntaxError::new(range, codes::UNEXPECTED_TOKEN, message));
-        let sync = if p.top().holds.is_list() {
-            Sync::List
-        } else {
-            Sync::Line
-        };
-        p.recover(sync, true);
-        return None;
-    }
+/// writes `{:}` (`r[lex.lit.empty-map]`). When a block's statement closes the list before
+/// any entry, the braces were a block, which can't go here (`r[expr.block.no-bare]`): one
+/// E0016 at the `{`, and the rest of the block up to its `}` is skipped.
+fn map_lit(p: &mut Parser) -> Completed {
     let marker = p.start();
     let open = p.pos;
     p.bump();
@@ -584,26 +573,55 @@ fn map_lit(p: &mut Parser) -> Option<Completed> {
             Applicability::NeedsReview,
             vec![(brace.end..brace.end, ":".to_string())],
         );
-        p.report(error);
+        // `{}` is whole, so it isn't a slip that hides the operators around it.
+        let after_error = p.current().is_some_and(|t| t.after_error);
+        if !(p.recovering || p.closed_early || after_error) {
+            p.emit(error);
+        }
         p.bump();
     } else if p.kind() == Colon && p.nth_kind(1) == RBrace {
         p.bump();
         p.bump();
     } else {
-        p.list(RBrace, "a map entry", entry, starts_expr);
+        p.push_frame(Holds::Map, Some(RBrace));
+        p.list_items(RBrace, "a map entry", entry, starts_expr, false);
+        if p.block_at == Some(open) {
+            p.block_at = None;
+            skip_block(p);
+        }
     }
-    Some(p.complete(marker, MapLit))
+    p.complete(marker, MapLit)
 }
 
-/// The current `{` opens a block: the token after it starts a line with `let`, `var` or
-/// `while`, which start statements and never expressions (decision 9's member starts of a
-/// block). Its map list would close there, one E0017 and more errors to follow, so the braces
-/// are skipped as one slip.
-fn bare_block(p: &Parser) -> bool {
-    p.input
-        .tokens
-        .get(p.pos + 1)
-        .is_some_and(|next| next.brk != Break::None && matches!(next.kind, LetKw | VarKw | WhileKw))
+/// The rest of a block written where an expression goes, into a `Skipped` node, up to and
+/// including the `}` that closes it. A line that starts a member of the file or an `impl`
+/// body ends it, as it ends any skip.
+fn skip_block(p: &mut Parser) {
+    let marker = p.start();
+    let mut open = 1;
+    let mut skipped = false;
+    while let Some(token) = p.current() {
+        let kind = token.kind;
+        let member = p
+            .member_holder()
+            .is_some_and(|at| matches!(p.frames[at].holds, Holds::File | Holds::Body));
+        if member {
+            break;
+        }
+        p.take();
+        skipped = true;
+        match kind {
+            LBrace => open += 1,
+            RBrace if open == 1 => break,
+            RBrace => open -= 1,
+            _ => {}
+        }
+    }
+    if skipped {
+        p.complete(marker, Skipped);
+    } else {
+        p.abandon(marker);
+    }
 }
 
 /// expr `:` expr (`grammar.entry`). With no expression, there is no entry, only the error.

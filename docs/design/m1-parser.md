@@ -245,6 +245,8 @@ Doc comments and attributes aren't member starts: they belong to the declaration
 | `a; b` | E0002 |
 | `"press "b" now"` | E0016, expecting a line break |
 | `let x = {` then lines `let y = 1` and `}` | E0016 at `{`, which found a block (layer 3c) |
+| `let x = {` then lines `g()`, `let y = 1` and `}` | E0016 at `{` |
+| `let m = {"a": 1` then a line `let y = 1` | E0017 at `{` |
 | `g({` then lines `let y = 1` and `})` | E0016 at `{` |
 
 ### 10. Diagnostics

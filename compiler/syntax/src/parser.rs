@@ -174,12 +174,14 @@ enum Holds {
     /// and a name.
     Fields,
     Block,
+    /// A map literal's entries: a list, which a block's statements may close.
+    Map,
 }
 
 impl Holds {
     /// A list context, where a line break is spacing.
     fn is_list(self) -> bool {
-        matches!(self, Holds::Items | Holds::Fields)
+        matches!(self, Holds::Items | Holds::Fields | Holds::Map)
     }
 }
 
@@ -243,6 +245,10 @@ struct Parser<'t> {
     /// The file has had a declaration, so an import is out of place.
     imports_closed: bool,
     lookahead: Cell<u32>,
+    /// A block's statement closed the map literal whose `{` is at this index among the
+    /// significant tokens: no entry came before it, so the braces were a block, which can't go
+    /// where an expression goes (`r[expr.block.no-bare]`). The map skips to its `}`.
+    block_at: Option<usize>,
     /// The parser is parsing ahead to see whether a `<` in an expression starts type
     /// arguments (decision 6).
     speculating: bool,
@@ -289,6 +295,7 @@ impl<'t> Parser<'t> {
             slips: 0,
             imports_closed: false,
             lookahead: Cell::new(0),
+            block_at: None,
             speculating: false,
             speculation_failed: false,
             type_args_end: HashMap::new(),
@@ -491,10 +498,25 @@ impl<'t> Parser<'t> {
         self.slip();
         let frame = self.frames.pop().expect("a frame to close");
         self.lookahead.set(0);
-        self.closed_early = true;
+        let after_close = std::mem::replace(&mut self.closed_early, true);
         let Some((closer, opener)) = frame.bracket else {
             return;
         };
+        if frame.holds == Holds::Map && stop == Stop::Outer && !after_close {
+            let block_member = self
+                .member_holder()
+                .is_some_and(|at| self.frames[at].holds == Holds::Block);
+            if block_member && !self.holds_entry(opener) {
+                self.block_at = Some(opener);
+                if !self.recovering {
+                    let range = self.input.tokens[opener].range.clone();
+                    let message = "expected an expression, found a block".to_string();
+                    self.emit(SyntaxError::new(range, codes::UNEXPECTED_TOKEN, message));
+                }
+                self.recovering = true;
+                return;
+            }
+        }
         let silent = self.recovering
             || stop == Stop::LineEnd
             || (stop == Stop::Eof && self.input.eof_swallowed);
@@ -505,6 +527,22 @@ impl<'t> Parser<'t> {
             let message = format!("this `{open}` has no matching `{close}`");
             self.emit(SyntaxError::new(range, codes::UNCLOSED_BRACKET, message));
         }
+    }
+
+    /// A map's tokens from its `{` at `opener` up to the current token hold an entry's `:`,
+    /// outside any bracket inside it. A direct scan, done once when a map closes early.
+    fn holds_entry(&self, opener: usize) -> bool {
+        let mut open = 0usize;
+        for token in &self.input.tokens[opener + 1..self.pos] {
+            if closer_of(token.kind).is_some() {
+                open += 1;
+            } else if is_closer(token.kind) {
+                open = open.saturating_sub(1);
+            } else if open == 0 && token.kind == Colon {
+                return true;
+            }
+        }
+        false
     }
 
     /// Why the innermost frame must close here without its closing bracket, if it must
@@ -560,7 +598,7 @@ impl<'t> Parser<'t> {
         let past = self.attributes_len();
         let public = past + usize::from(self.nth_kind(past) == PubKw);
         let holds = |holds: Holds| match holds {
-            Holds::Items => false,
+            Holds::Items | Holds::Map => false,
             Holds::File => item_start(public),
             Holds::Body => member_start(public),
             Holds::Fields => public > past && self.nth_kind(public) == Ident,
