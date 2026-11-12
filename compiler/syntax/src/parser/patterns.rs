@@ -3,10 +3,7 @@
 
 use super::input::Break;
 use super::{Completed, Holds, Parser, exprs, types};
-use crate::SyntaxError;
 use crate::SyntaxKind::{self, *};
-use crate::codes;
-use quince_diagnostics::Applicability;
 
 /// A pattern: one or more alternatives joined by `|`. Inside a pattern `|` is always
 /// alternation (`r[lex.grammar-rules]`). `None` when there is no pattern, after reporting it.
@@ -88,9 +85,10 @@ fn starts_bound(kind: SyntaxKind) -> bool {
     )
 }
 
-/// A literal, as a `Literal` node. A `-` goes right before its number, as in an expression
-/// (`r[lex.lit.neg-adjacent]`): a pattern has no prefix minus, so a space between them is an
-/// E0016, whose fix deletes it. False when there is no literal, after reporting it.
+/// A literal, as a `Literal` node. A pattern has no prefix minus, so a `-` and the number after
+/// it are one literal whatever lies between them, as in Rust (decided by David, 2026-11-12):
+/// `- 5` is `-5`, which the formatter writes. False when there is no literal, after reporting
+/// it.
 fn bound(p: &mut Parser) -> bool {
     let marker = p.start();
     match p.kind() {
@@ -100,16 +98,11 @@ fn bound(p: &mut Parser) -> bool {
             return true;
         }
         Minus => {
-            let (minus, next) = (p.pos, p.pos + 1);
             p.bump();
             if !matches!(p.kind(), Int | Float) {
-                p.expected("a number right after `-`");
+                p.expected("a number after `-`");
                 p.complete(marker, Literal);
                 return false;
-            }
-            let gap = p.input.tokens[minus].range.end..p.input.tokens[next].range.start;
-            if !gap.is_empty() {
-                minus_gap(p, minus, next, gap);
             }
             p.bump();
         }
@@ -117,27 +110,6 @@ fn bound(p: &mut Parser) -> bool {
     }
     p.complete(marker, Literal);
     true
-}
-
-/// Reports the space, comment or line break between a pattern's `-` and its number.
-fn minus_gap(p: &mut Parser, minus: usize, next: usize, gap: std::ops::Range<usize>) {
-    let between = &p.lexed.tokens[p.input.tokens[minus].index + 1..p.input.tokens[next].index];
-    let spaces = between.iter().all(|t| t.kind == Whitespace);
-    let found = if spaces {
-        "a space"
-    } else {
-        "a comment or a line break"
-    };
-    let message = format!("expected a number right after `-`, found {found}");
-    let mut error = SyntaxError::new(gap.clone(), codes::UNEXPECTED_TOKEN, message);
-    if spaces {
-        error = error.with_fix(
-            "delete the space",
-            Applicability::Safe,
-            vec![(gap, String::new())],
-        );
-    }
-    p.report(error);
 }
 
 /// A name or a path. A name that stands alone, with no `.` or `(` after it, binds a new
@@ -220,17 +192,16 @@ fn field_pat(p: &mut Parser) {
     p.complete(marker, FieldPat);
 }
 
-/// A tuple of two or more patterns (`grammar.tuple_pat`). One pattern and no `,` is an
-/// error, since there are no parentheses around a single pattern.
+/// `()`, the unit value, or a tuple of two or more patterns (`grammar.tuple_pat`). One pattern
+/// and no `,` is an error, since there are no parentheses around a single pattern.
 fn tuple_pat(p: &mut Parser) -> Completed {
     let marker = p.start();
     p.bump();
-    p.push_frame(Holds::Items, Some(RParen));
     if p.kind() == RParen {
-        p.expected("a pattern");
-        p.list_items(RParen, "a pattern", item, starts_pattern, false);
+        p.bump();
         return p.complete(marker, TuplePat);
     }
+    p.push_frame(Holds::Items, Some(RParen));
     if let Some(stop) = p.stop() {
         p.close_frame(stop);
         return p.complete(marker, TuplePat);

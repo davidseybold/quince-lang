@@ -2,7 +2,7 @@
 // rule: expr.range.pattern
 // mode: parse
 // A literal is a pattern, and so is a range of two literals, with `..` or `..=`. A numeric
-// literal pattern or a range bound may start with `-`, which goes right before its number.
+// literal pattern or a range bound may start with `-`.
 fn f(n: Int, x: Float, c: Char, s: String, b: Bool) {
   let zero = n is 0
   let negative = n is -5
@@ -13,7 +13,7 @@ fn f(n: Int, x: Float, c: Char, s: String, b: Bool) {
   let letter = c is 'a'..='z'
   let get = s is "GET"
   let yes = b is true
-  let spaced = n is - 5 //~ E0016
+  let spaced = n is - 5
   let named = n is -m //~ E0016
   let text = s is -"a" //~ E0016
   let open = n is 1.. + 2 //~ E0016

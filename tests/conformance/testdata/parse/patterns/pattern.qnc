@@ -8,8 +8,8 @@
 // A pattern is one or more alternatives joined by `|`. An alternative is `_`, a literal or a
 // range of two literals, a name, a path, a tuple of two or more patterns, or a variant with
 // its fields in parentheses: patterns by position, or fields by name with an optional `..`
-// last. Each list in parentheses takes a trailing `,`. `let` takes a pattern, and so does
-// `is`.
+// last. `()` is the unit value. Each list in parentheses takes a trailing `,`. `let` takes a
+// pattern, and so does `is`, which no operator that binds tighter than a comparison follows.
 fn f(shape: Shape, pair: (Int, Int), opt: Option<Int>, res: Result<Option<Int>, String>) {
   let _ = load()
   let n = 1
@@ -31,6 +31,8 @@ fn f(shape: Shape, pair: (Int, Int), opt: Option<Int>, res: Result<Option<Int>, 
   )
   let pairs = res is Ok(Some(1),)
   let either = opt is Some(1) | Some(2) | None
+  let saved = save() is Ok(())
+  let () = log("done")
   let (one) = pair //~ E0016
   let (a,) = pair //~ E0016
   let Shape.Rect() = shape //~ E0016
@@ -41,4 +43,5 @@ fn f(shape: Shape, pair: (Int, Int), opt: Option<Int>, res: Result<Option<Int>, 
   let Shape. = shape //~ E0016
   let = 3 //~ E0016
   let bad = opt is + 1 //~ E0016
+  let sum = opt is Some(1) + 2 //~ E0016
 }

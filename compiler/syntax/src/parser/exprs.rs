@@ -264,7 +264,7 @@ fn binary(p: &mut Parser, min_power: u8) -> Option<Operand> {
         chain: None,
         broken: p.slips != slips,
     };
-    while let Some((op, power)) = binary_op(p)
+    while let Some((op, power)) = binary_op(p, lhs.op == Some(IsKw))
         && power > min_power
     {
         let marker = p.precede(lhs.done);
@@ -321,16 +321,21 @@ fn pattern_operand(p: &mut Parser) -> Option<Operand> {
     })
 }
 
+/// How tightly a comparison or `is` binds.
+const COMPARISON_POWER: u8 = 3;
+
 /// The binary operator at the current token, joined with the token after it when it is `>`,
 /// and how tightly it binds: higher binds tighter. The order is decision 6's usual reading. A
 /// line that starts with one continues the line above, an E0018, unless it is `-`, which can
-/// start an expression (`r[lex.line-end]`).
-fn binary_op(p: &mut Parser) -> Option<(SyntaxKind, u8)> {
+/// start an expression (`r[lex.line-end]`). After the pattern of an `is`, an operator that
+/// binds tighter than a comparison is an E0016, since a pattern is no operand
+/// (`compare = arith [ cmp_op arith | "is" pattern ]`). It stops every operator around it.
+fn binary_op(p: &mut Parser, after_pattern: bool) -> Option<(SyntaxKind, u8)> {
     let op = p.joined_gt().unwrap_or(p.kind());
     let power = match op {
         PipePipe => 1,
         AmpAmp => 2,
-        EqEq | BangEq | Lt | LtEq | Gt | GtEq | IsKw => 3,
+        EqEq | BangEq | Lt | LtEq | Gt | GtEq | IsKw => COMPARISON_POWER,
         DotDot | DotDotEq => 4,
         Pipe => 5,
         Caret => 6,
@@ -340,10 +345,15 @@ fn binary_op(p: &mut Parser) -> Option<(SyntaxKind, u8)> {
         Star | Slash | Percent => 10,
         _ => return None,
     };
+    if p.at_break() && (op == Minus || !p.can_join()) {
+        return None;
+    }
+    if after_pattern && power > COMPARISON_POWER {
+        let error = p.unexpected("`&&`, `||` or the end of the expression", false);
+        p.report(error);
+        return None;
+    }
     if p.at_break() {
-        if op == Minus || !p.can_join() {
-            return None;
-        }
         p.join_line();
     }
     Some((op, power))
@@ -451,6 +461,14 @@ fn text_range(p: &Parser, (first, last): (usize, usize)) -> Range<usize> {
     p.input.tokens[first].range.start..p.input.tokens[last].range.end
 }
 
+/// A binary operator's text, for messages.
+fn operator_text(op: SyntaxKind) -> &'static str {
+    match op {
+        IsKw => "is",
+        _ => super::punctuation(op),
+    }
+}
+
 /// Reports an E0019 when `operand`, the left one when `left`, needs parentheses as an operand
 /// of `op`, with the fix that adds them.
 fn needs_parens(p: &mut Parser, operand: &Operand, op: SyntaxKind, left: bool) {
@@ -474,7 +492,7 @@ fn needs_parens(p: &mut Parser, operand: &Operand, op: SyntaxKind, left: bool) {
     if !needed {
         return;
     }
-    let (inner, outer) = (super::punctuation(inner), super::punctuation(op));
+    let (inner, outer) = (operator_text(inner), operator_text(op));
     let message = format!("`{inner}` needs parentheses as an operand of `{outer}`");
     let range = text_range(p, operand.tokens);
     let edits = vec![

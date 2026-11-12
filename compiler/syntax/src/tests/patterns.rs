@@ -2,6 +2,11 @@
 
 use super::parser::{checked, stmts};
 
+/// How many errors a function whose body is `body` has.
+fn error_count(body: &str) -> usize {
+    checked(&format!("fn f() {{\n{body}\n}}\n")).errors().len()
+}
+
 /// The tree of `pattern`, a `let`'s pattern, after checking that it parses with no error.
 fn tree(pattern: &str) -> String {
     let dump = stmts(&format!("  let {pattern} = v"));
@@ -74,7 +79,8 @@ fn names_and_paths() {
 }
 
 /// Literals, negative numbers and ranges of literals (`r[pat.negative]`,
-/// `r[expr.range.pattern]`). A negative number is one `Literal`, as in an expression.
+/// `r[expr.range.pattern]`). A negative number is one `Literal`, as in an expression. A
+/// pattern has no prefix minus, so a space or a line break after the `-` changes nothing.
 #[test]
 fn literals_and_ranges() {
     assert_eq!(tree("0"), "LiteralPat\n  Literal\n    Int \"0\"\n");
@@ -82,6 +88,8 @@ fn literals_and_ranges() {
         tree("-5"),
         "LiteralPat\n  Literal\n    Minus \"-\"\n    Int \"5\"\n"
     );
+    assert_eq!(tree("- 5"), tree("-5"));
+    assert_eq!(tree("-\n    5"), tree("-5"));
     assert_eq!(
         tree("\"GET\""),
         r#"LiteralPat
@@ -113,6 +121,13 @@ fn literals_and_ranges() {
     Char "'z'"
 "#
     );
+}
+
+/// `()` is the unit value, as in an expression (`grammar.tuple_pat`).
+#[test]
+fn unit() {
+    assert_eq!(tree("()"), "TuplePat\n  LParen \"(\"\n  RParen \")\"\n");
+    assert_eq!(tree("Ok(())").matches("TuplePat").count(), 1);
 }
 
 /// Tuples, and variants with fields by position or by name (`grammar.tuple_pat`,
@@ -225,26 +240,27 @@ fn alternatives() {
     assert_eq!(errors("A\n    | B"), ["E0018 1..2 => A | B"]);
 }
 
-/// What the grammar doesn't allow: one pattern or none in parentheses, a variant with no
-/// fields in its parentheses, `..` anywhere but last, fields by position and by name mixed,
-/// and a `-` with a space after it, whose fix deletes the space.
+/// What the grammar doesn't allow: one pattern in parentheses, a variant with no fields in
+/// its parentheses, `..` anywhere but last, fields by position and by name mixed, and a `-`
+/// before anything but a number.
 #[test]
 fn slips() {
     assert_eq!(errors("(a)"), ["E0016 2..3"]);
     assert_eq!(errors("(a,)"), ["E0016 3..4"]);
-    assert_eq!(errors("()"), ["E0016 1..2"]);
     assert_eq!(errors("Shape.Rect()"), ["E0016 11..12"]);
     assert_eq!(errors("Shape.Rect(.., w:)"), ["E0016 15..16"]);
     assert_eq!(errors("Shape.Rect(w, h:)"), ["E0016 15..16"]);
     assert_eq!(errors("Shape.Rect(w:, h)"), ["E0016 15..16"]);
     assert_eq!(errors("Shape.(x)"), ["E0016 6..7"]);
-    assert_eq!(errors("- 5"), ["E0016 1..2 => -5"]);
-    assert_eq!(errors("-\n    5"), ["E0016 1..6"]);
     assert_eq!(errors("-x"), ["E0016 1..2"]);
     assert_eq!(errors("1..x"), ["E0016 3..4"]);
-    // A pattern missing from the line of its `let` is taken from the next line.
+    // A pattern missing from the line of its `let` is taken from the next line, and what is
+    // missing after it is part of that slip.
     assert_eq!(errors("\n    (a, b)"), ["E0016 0..1"]);
     assert_eq!(errors("\n    x"), ["E0016 0..1"]);
+    assert_eq!(error_count("  let\n    x"), 1);
+    // A slip in an alternative ends the pattern, so a `|` after it is part of that slip.
+    assert_eq!(errors("Shape. | +"), ["E0016 7..8"]);
     // A slip inside the parentheses is the one error, and the `let` goes on after them.
     assert_eq!(errors("(a b, c)"), ["E0016 3..4"]);
     assert_eq!(errors("Some(a b)"), ["E0016 7..8"]);

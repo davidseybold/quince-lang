@@ -416,6 +416,22 @@ fn is() {
     assert_eq!(errors("a is A == b"), ["E0020 7..9"]);
     assert_eq!(errors("a == b is C"), ["E0020 7..9 => a == b && b is C"]);
     assert_eq!(errors("a..b is R"), ["E0019 0..4 => (a..b) is R"]);
+    assert_eq!(
+        messages("b | c is D"),
+        ["`|` needs parentheses as an operand of `is`"]
+    );
+    // A pattern is no operand, so an operator that binds tighter than a comparison can't
+    // follow it. That is one error, which stops the operators around it.
+    assert_eq!(errors("x is 1 + 2"), ["E0016 7..8"]);
+    assert_eq!(errors("x is A..b"), ["E0016 6..8"]);
+    assert_eq!(errors("x is A | b + c"), ["E0016 11..12"]);
+    assert_eq!(errors("a && x is A + 1"), ["E0016 12..13"]);
+    assert_eq!(errors("x is A\n    + 1"), ["E0016 11..12"]);
+    assert_eq!(errors("if x is A + 1 { a } else { b }"), ["E0016 10..11"]);
+    assert_eq!(
+        messages("x is A * 2"),
+        ["expected `&&`, `||` or the end of the expression, found `*`"]
+    );
     // `is` can't start a statement, so a line that starts with it continues the line above.
     assert_eq!(errors("x\n    is A"), ["E0018 1..2 => x is A"]);
     // `is` continues its line, so a pattern missing at its end is looked for on the next.
