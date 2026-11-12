@@ -144,20 +144,31 @@ fn if_expr(p: &mut Parser) -> Completed {
 }
 
 /// The condition of an `if` or a `while`, and the block after it on its line. False when there
-/// is no block.
+/// is no block. After a slip, the rest of the condition is skipped up to the `{` on its line,
+/// so the block is still the block, and nothing after the condition is a second error. A
+/// condition missing from its line is taken from the next line, after the error, for the same
+/// reason.
 fn condition_and_block(p: &mut Parser) -> bool {
-    if p.at_break() {
+    let missing = p.at_break();
+    if missing {
         p.expected("an expression");
-        return false;
+        if p.kind() == LBrace {
+            block(p);
+            return true;
+        }
     }
     expr(p);
-    if p.at(LBrace) {
-        block(p);
-        true
-    } else {
+    if !p.at(LBrace) {
+        // A block missing after a condition taken from the next line is part of that slip.
+        p.recovering |= missing;
         p.expected("`{`");
-        false
+        p.recover(Sync::Block, false);
+        if !p.at(LBrace) {
+            return false;
+        }
     }
+    block(p);
+    true
 }
 
 fn let_rest(p: &mut Parser) {

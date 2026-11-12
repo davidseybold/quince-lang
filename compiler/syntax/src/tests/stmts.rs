@@ -269,8 +269,19 @@ fn assignment_is_a_statement() {
     assert_eq!(errors("  let c = (a = 2)"), ["E0016 13..14"]);
 }
 
+/// A slip in a condition is one error: the parser skips to the block on its line, or takes a
+/// condition missing from its line from the next one.
 #[test]
 fn a_missing_condition_block_or_else_branch() {
+    assert_eq!(errors("  if < 0 { x }"), ["E0016 5..6"]);
+    assert_eq!(
+        errors("  let s = if < 0 { 1 } else { 2 }"),
+        ["E0016 13..14"]
+    );
+    assert_eq!(errors("  if a = 1 { b = 2 }"), ["E0016 7..8"]);
+    assert_eq!(errors("  if\n  a {}"), ["E0016 4..5"]);
+    assert_eq!(errors("  while\n  n > 0 { n -= 1 }"), ["E0016 7..8"]);
+    assert_eq!(errors("  if\n  {}"), ["E0016 4..5"]);
     assert_eq!(errors("  if\n  g()"), ["E0016 4..5"]);
     assert_eq!(
         messages("  if\n  g()"),

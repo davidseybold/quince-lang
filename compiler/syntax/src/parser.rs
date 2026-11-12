@@ -211,6 +211,8 @@ enum Sync {
     Line,
     /// At the next `,`, in a list.
     List,
+    /// At the `{` on the line, or the next break: in a condition, before its block.
+    Block,
 }
 
 struct Parser<'t> {
@@ -839,6 +841,7 @@ impl<'t> Parser<'t> {
                 let at_sync = match sync {
                     Sync::Line => self.at_break(),
                     Sync::List => kind == Comma,
+                    Sync::Block => kind == LBrace || self.at_break(),
                 };
                 let closes = Some(kind) == self.own_closer() || self.stop().is_some();
                 if closes || (at_sync && !(force && !skipped)) {
