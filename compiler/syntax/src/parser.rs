@@ -440,12 +440,14 @@ impl<'t> Parser<'t> {
 
     /// Reports an E0016 at the current token: it isn't `what`, which may go here. A frame
     /// that must close here reports its own E0017 instead, or closes silently. At a break that
-    /// holds a `;`, the lexer's E0002 is the error, so the parser only recovers.
+    /// holds a `;`, the end of the file after a `;` included, the lexer's E0002 is the error,
+    /// so the parser only recovers.
     fn expected(&mut self, what: &str) {
         if self.frame_closes_here() {
             return;
         }
-        if self.at_break() && self.current().is_some_and(|t| t.brk == Break::Hard) {
+        let brk = self.current().map_or(self.input.eof_brk, |t| t.brk);
+        if self.at_break() && brk == Break::Hard {
             self.recovering = true;
             return;
         }
