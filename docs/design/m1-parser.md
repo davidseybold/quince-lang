@@ -181,7 +181,7 @@ A keyword where a name goes is an E0016 that names the keyword (`r[lex.keyword-n
 
 - **Declarations.** A declaration is its doc comments, its attributes, `pub`, and the item (`grammar.decl`). The doc comments are tokens in a `DocComments` node at its start, and the attributes are `Attribute` nodes. Fields, variants and variant fields take the same (`grammar.field`, `grammar.evariant`, `grammar.vfield`). So do impl items, interface methods, effect operations and foreign items (spec question 9).
 - **Stray doc comments.** A doc comment that comes before nothing it can document is E0023, with a fix that makes it an ordinary comment (`safe`, spec question 10). Until E0023 lands in layer 7, such a doc comment is read as an ordinary comment, with no error. `lex/control.qnc` has one in a function body. Layer 7 adds its expectation, or turns it into a `//` comment if the fixture is about something else.
-- **Attributes.** An attribute goes on its own line (`r[item.attr.placement]`). One on its declaration's line is an E0016 whose fix inserts a line break (`safe`). Whether the attribute's name is known (`r[item.attr.unknown]`) is checked by a later stage, since the set depends on the edition.
+- **Attributes.** An attribute goes on its own line (`r[item.attr.own-line]`). One on its declaration's line is an E0016 whose fix inserts a line break (`safe`). Whether the attribute's name is known (`r[item.attr.unknown]`) is checked by a later stage, since the set depends on the edition.
 - **Imports** come before declarations (`grammar.file`). An import after a declaration is an E0016.
 - **What the grammar rejects is an E0016:** `pub` on a variant field (`grammar.vfield`, `r[item.enum.field-visibility]`), a `const` in an interface (`grammar.interface_decl`, `r[item.const.assoc.no-interface]`), and a wildcard import (`r[intro.excl.wildcard-imports]`).
 - **What the grammar accepts goes to later stages,** each with a code and a fixture there: `pub` on an `impl` or a `test`, and `@test_only` on a method.
@@ -499,9 +499,9 @@ Layer 2 is two PRs, since types and declarations are separate pieces of work and
 
 **Layer 2b: `m1/parser-decls`**
 - [x] Spec: question 11, and a bump (v0.14). The `@test` attribute became `@test_only` (decided by David, 2026-11-12): `test` is a keyword, so `@test` couldn't parse.
-- [x] Struct, enum, newtype, alias and import declarations; attributes; doc comments; E0024. [`grammar.struct_decl`, `grammar.enum_decl`, `grammar.newtype_decl`, `grammar.alias_decl`, `grammar.import`, `grammar.attribute`, `item.attr.placement`, `item.enum.field-visibility`, `lex.comment.doc`, `intro.excl.wildcard-imports`, `item.struct.no-fields`]
+- [x] Struct, enum, newtype, alias and import declarations; attributes; doc comments; E0024. [`grammar.struct_decl`, `grammar.enum_decl`, `grammar.newtype_decl`, `grammar.alias_decl`, `grammar.import`, `grammar.attribute`, `item.attr.own-line`, `item.enum.field-visibility`, `lex.comment.doc`, `intro.excl.wildcard-imports`, `item.struct.no-fields`]
 - [x] Attribute look-past (decision 9): at the start of a line, the member-start check looks past attribute and doc-comment lines, so `g(1,` then a line `@attr` then `fn h() {}` closes the call with one E0017 and no E0016 at `@`.
-- [x] Decided by David, 2026-11-12: an attribute's arguments take a trailing `,` (layer 2a's trailing-comma decision), and blank lines may come between an attribute and its declaration. `r[item.attr.placement]` now reads "An attribute goes on its own line above the declaration it applies to. Blank lines may come between them."
+- [x] Decided by David, 2026-11-12: an attribute's arguments take a trailing `,` (layer 2a's trailing-comma decision), and blank lines may come between an attribute and its declaration. `r[item.attr.placement]` is retired for `r[item.attr.own-line]`, since its meaning widened, which reads "An attribute goes on its own line above the declaration it applies to. Blank lines may come between them."
 
 **Layer 3: `m1/parser-exprs`**
 - [ ] Spec: questions 5 and 6, and a bump.

@@ -31,7 +31,7 @@ grammar.type_path
 grammar.variant
 grammar.vfield
 intro.excl.wildcard-imports
-item.attr.placement
+item.attr.own-line
 item.enum.field-visibility
 item.struct.no-fields
 lex.braces

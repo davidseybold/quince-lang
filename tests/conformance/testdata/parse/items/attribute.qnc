@@ -1,5 +1,5 @@
 // rule: grammar.attribute
-// rule: item.attr.placement
+// rule: item.attr.own-line
 // mode: parse
 // An attribute is `@`, a name and optional arguments, on its own line above the declaration,
 // field or variant it applies to. Blank lines may come between them, and a trailing comma may

@@ -84,7 +84,7 @@ fn decl(p: &mut Parser, holds: Holds) {
     p.complete(marker, kind);
 }
 
-/// `@` name [ args ] (`grammar.attribute`), each on a line of its own (`r[item.attr.placement]`).
+/// `@` name [ args ] (`grammar.attribute`), each on a line of its own (`r[item.attr.own-line]`).
 /// One with something after it on its line is an E0016 whose fix inserts a line break. Whether
 /// its name is known is for a later stage (`r[item.attr.unknown]`).
 fn attributes(p: &mut Parser) {
