@@ -38,20 +38,13 @@ fn an_item_on_the_next_line_needs_a_comma() {
 }
 
 /// A break that ends a construct ends it even where a token after it could go on: a
-/// parameter after a `;`, which is also the lexer's E0002, and a declaration after a `pub`
-/// on its own line.
+/// parameter after a `;`, and a declaration after a `pub` on its own line. At a `;`, the
+/// lexer's E0002 is the only error.
 #[test]
 fn a_break_ends_a_parameter_or_a_pub() {
-    assert_eq!(errors("fn f(;a: Int) {}"), ["E0002 5..6", "E0016 5..6"]);
-    assert_eq!(
-        errors("fn f(a: Int,;b: Int) {}"),
-        ["E0002 12..13", "E0016 12..13"]
-    );
-    assert_eq!(errors("fn f(var;self) {}"), ["E0002 8..9", "E0016 8..9"]);
-    assert_eq!(
-        messages("fn f(;a: Int) {}")[1],
-        "expected a parameter, found a line break"
-    );
+    assert_eq!(errors("fn f(;a: Int) {}"), ["E0002 5..6"]);
+    assert_eq!(errors("fn f(a: Int,;b: Int) {}"), ["E0002 12..13"]);
+    assert_eq!(errors("fn f(var;self) {}"), ["E0002 8..9"]);
     let text = "pub\nfn f() {}\n";
     assert_eq!(errors(text), ["E0016 3..4"]);
     assert_eq!(
@@ -123,6 +116,11 @@ fn the_end_of_the_file() {
 fn a_semicolon_ends_a_statement() {
     assert_eq!(errors("fn f() {\n  a; b\n}\n"), ["E0002 12..13"]);
     assert_eq!(codes("fn f() {\n  a;\n  .b()\n}\n"), ["E0002", "E0016"]);
+    // Where the construct can't end, the E0002 is the only error, and nothing after it on the
+    // construct's line is reported either.
+    assert_eq!(errors("fn f() ->; Int {}"), ["E0002 9..10"]);
+    assert_eq!(errors("fn f() ->\n; Int {}"), ["E0002 10..11"]);
+    assert_eq!(errors("fn f() {\n  let a =; 1\n}\n"), ["E0002 18..19"]);
 }
 
 /// Two expressions on one line are an E0016 that expects a line break.

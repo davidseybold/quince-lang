@@ -353,8 +353,13 @@ impl<'t> Parser<'t> {
 
     // Errors.
 
-    /// Reports an E0016 at the current token: it isn't `what`, which may go here.
+    /// Reports an E0016 at the current token: it isn't `what`, which may go here. At a break
+    /// that holds a `;`, the lexer's E0002 is the error, so the parser only recovers.
     fn expected(&mut self, what: &str) {
+        if self.at_break() && self.current().is_some_and(|t| t.brk == Break::Hard) {
+            self.recovering = true;
+            return;
+        }
         let error = self.unexpected(what, true);
         self.report(error);
     }
