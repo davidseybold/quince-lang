@@ -525,7 +525,7 @@ Layer 3 is three PRs (decided by David, 2026-11-12), since together they would r
 **Layer 3c: `m1/parser-postfix`**
 - [x] Postfix forms, tuples, maps, `{}` and E0025, named arguments (attribute arguments too), `..base`. [`lex.lit.collections`, `lex.lit.empty-map`, `expr.block.brace-map`, `item.struct.update`, `intro.excl.macros`, `grammar.postfix`, `grammar.args`, `grammar.arg`, `grammar.tuple`, `grammar.primary`, `grammar.map_lit`, `grammar.entry`]
 
-Layer 4 is three PRs (decided by David, 2026-11-12), since together they would run past 1,000 lines: statements, then line breaks, then the `member_holder` fix. Each spec change lands with its own bump.
+Layer 4 is three PRs (decided by David, 2026-11-12), since together they would run past 1,000 lines: statements, then line breaks, then the `member_holder` fix. Each spec change lands with its own bump. A fourth, 4d, holds two spec wording changes David decided after review, on top so its bump follows 4b's.
 
 **Layer 4a: `m1/parser-stmts`**
 - [x] Spec: question 13, and a bump (v0.16).
@@ -538,6 +538,9 @@ Layer 4 is three PRs (decided by David, 2026-11-12), since together they would r
 
 **Layer 4c: `m1/parser-member-peek`**
 - [x] `member_holder` peeks the line's leading kinds once, so its cost doesn't grow with the number of open frames; a deep-nesting test of valid blocks stays under `LOOKAHEAD_LIMIT`. Blocks nest from layer 4a on, and each open block cost a look on every `stop()` (found in layer 1's review).
+
+**Layer 4d: `m1/spec-wording`**
+- [x] Spec (decided by David, 2026-11-12), and a bump (v0.18): `r[expr.block.cond-brace]` moves before `r[expr.block.brace-map]`, so "Anywhere else" follows the exception, and `r[item.struct.literal-visibility]` writes `Type(..x, field: v)`. No meaning or ID changes.
 
 **Layer 5: `m1/parser-patterns`**
 - [ ] Spec (decided by David, 2026-11-12): extend `r[expr.block.cond-brace]` to a `match` subject and a `for` loop's `in` expression, whose `{` has the same problem (found in layer 4a's review). Wording: "In the condition of an `if` or `while`, the subject of a `match`, and the iterable of a `for`, `{` always starts the block. A map literal there is written in parentheses." It lands in the same PR as the `match` and `for` parsing, with a spec bump. [`expr.block.cond-brace`]
