@@ -359,6 +359,12 @@ fn errors_in_types() {
         messages("fn f(a: (Int,)) {}"),
         ["expected a second type, found `)`"]
     );
+    // Before `->`, removing them wouldn't fix it.
+    assert_eq!(errors("fn f(a: fn((Int) -> Int)) {}"), ["E0016 15..16"]);
+    // A slip inside one pair of parentheses leaves a `ParenType`.
+    let parse = checked("fn f(a: (1)) {}");
+    assert_eq!(parse.errors().len(), 1);
+    assert!(parse.syntax().descendants().any(|n| n.kind() == ParenType));
     // A function type's parameters and type arguments take no trailing comma.
     assert_eq!(
         messages("fn f(a: fn(Int,)) {}"),
@@ -407,6 +413,13 @@ fn errors_in_angle_brackets_stay_inside() {
         1
     );
     assert_eq!(messages("fn f<T: Eq +, U>(a: T) {}").len(), 1);
+    // A skip after an error before them doesn't stop at a comma inside them.
+    assert_eq!(messages("fn f(a Map<String, Int>) {}").len(), 1);
+    assert_eq!(messages("fn f(a: Int b: Map<K, V>) {}").len(), 1);
+    assert_eq!(
+        messages("fn f<I Iterator<Item = fn() uses Io, Output = Int>>() {}").len(),
+        1
+    );
     // A closing bracket further out closes them, with an E0017 at the `<`.
     assert_eq!(errors("fn f(a: List<Int) {}"), ["E0017 12..13"]);
 }

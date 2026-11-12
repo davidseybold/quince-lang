@@ -1,7 +1,7 @@
 //! Types (`grammar.type`): type paths with type arguments, tuples, function types bare or in
 //! parentheses, generic parameters with their bounds, and `uses` lists.
 
-use super::{Holds, Marker, Parser, Trailing, items};
+use super::{Holds, Marker, Parser, Sync, Trailing, items};
 use crate::SyntaxKind::{self, *};
 use quince_diagnostics::Applicability;
 
@@ -178,16 +178,28 @@ fn paren_type(p: &mut Parser) -> bool {
     }
     let fn_type = p.kind() == FnKw;
     let ok = type_(p);
-    if ok && p.kind() == RParen {
+    if !ok && !matches!(p.kind(), Comma | RParen) {
+        // The slip ends at a `,` or the `)`, which say whether it was a tuple.
+        p.recover(Sync::List, false);
+    }
+    if p.kind() == RParen {
         p.pop_frame();
-        if !fn_type {
-            let error = p.unexpected("`,` and a second type", false);
-            let close = p.pos;
-            let edits = [open, close].map(|at| (p.input.tokens[at].range.clone(), String::new()));
-            let fix = error.with_fix("remove the parentheses", Applicability::Safe, edits.into());
-            p.report(fix);
+        if ok && !fn_type {
+            let mut error = p.unexpected("`,` and a second type", false);
+            // Before `->` the parentheses look like a function type missing its `fn`, which
+            // removing them wouldn't fix.
+            if p.nth_kind(1) != Arrow {
+                let close = p.pos;
+                let edits =
+                    [open, close].map(|at| (p.input.tokens[at].range.clone(), String::new()));
+                error = error.with_fix("remove the parentheses", Applicability::Safe, edits.into());
+            }
+            p.report(error);
+            // Taken without ending the error's recovery, so what follows is part of the slip.
+            p.take();
+        } else {
+            p.bump();
         }
-        p.bump();
         p.complete(marker, ParenType);
         return true;
     }

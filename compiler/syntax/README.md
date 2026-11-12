@@ -92,7 +92,7 @@ A node holds its tokens and child nodes in source order. A part the code leaves 
 | Kind | Holds |
 | --- | --- |
 | `File` | The declarations. |
-| `FnDecl` | `pub` if present, `fn`, a `Name`, `Generics`, a `ParamList`, a `RetType` and `Effects` if present, and a `Block`. A `uses` after a bare function type in the `RetType` is the declaration's `Effects` (`r[effect.uses-return]`). |
+| `FnDecl` | `pub` if present, `fn`, a `Name`, `Generics` if present, a `ParamList`, a `RetType` and `Effects` if present, and a `Block`. A `uses` after a bare function type in the `RetType` is the declaration's `Effects` (`r[effect.uses-return]`). |
 | `ParamList` | `(`, `Param`s and their commas, and `)`. |
 | `Param` | `var` if present, then `self`, or a `Name` or `_` followed by `:`, a type, and `=` and an expression for a default. |
 | `RetType` | `->` and a type. |
@@ -103,7 +103,7 @@ A node holds its tokens and child nodes in source order. A part the code leaves 
 | `TypeArgs` | `<`, types and their commas, and `>`. The last item may be `Effects`, and in a bound an item may be a `NamedTypeArg`. |
 | `NamedTypeArg` | A `NameRef`, `=` and a type: `Item = Int` in a bound. |
 | `TupleType` | `(`, two or more types and their commas, and `)`, or just `(` and `)` for the unit type. |
-| `ParenType` | `(`, one type and `)`. The type is a `FnType` unless it is an error. |
+| `ParenType` | `(`, one type and `)`. The type is a `FnType` unless the node holds an error. |
 | `FnType` | `fn`, `(`, the parameter types and their commas, `)`, then a `RetType` and `Effects` if present. |
 | `Effects` | `uses`, then `*` or `TypePath`s and their commas. |
 | `Generics` | `<`, `GenericParam`s and their commas, and `>`. |

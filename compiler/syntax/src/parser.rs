@@ -565,7 +565,7 @@ impl<'t> Parser<'t> {
     /// Skips tokens into a `Skipped` node up to the next sync point of the innermost frame:
     /// `sync`, its closing bracket, or a [`Stop`]. With `force`, the current token is skipped
     /// even where it is a sync point. A bracket the skip opens is skipped up to its closing
-    /// bracket, unless a frame's closing bracket or a member start of the file or an `impl`
+    /// bracket, and so is a `<` in a list, unless a frame's closing bracket or a member start of the file or an `impl`
     /// body comes first.
     fn recover(&mut self, sync: Sync, force: bool) {
         let marker = self.start();
@@ -597,6 +597,10 @@ impl<'t> Parser<'t> {
             }
             if let Some(closer) = closer_of(kind) {
                 groups.push((closer, start));
+            } else if kind == Lt && self.top().holds == Holds::Items {
+                // In a list, `<` can only open type arguments or generics, so the skip stays
+                // out of their commas. In a line context it may be less-than.
+                groups.push((Gt, start));
             }
             self.take();
             skipped = true;
