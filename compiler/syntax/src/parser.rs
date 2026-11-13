@@ -841,6 +841,15 @@ impl<'t> Parser<'t> {
         self.report(error);
     }
 
+    /// True when an unclosed one-line literal ends the line of the token before the current
+    /// one.
+    fn after_unclosed_line(&self) -> bool {
+        self.pos > 0
+            && self
+                .input
+                .on_unclosed_line(self.input.tokens[self.pos - 1].range.end)
+    }
+
     fn frame_closes_here(&self) -> bool {
         match self.stop() {
             Some(Stop::Outer | Stop::LineEnd) => true,
@@ -1067,6 +1076,19 @@ impl<'t> Parser<'t> {
                 _ if self.unmatched_closer() => {
                     self.close_in_place(&format!("`,` or {close}"));
                     return;
+                }
+                // After an item whose line an unclosed string or char ends, the missing `,`
+                // is part of that slip, and may be inside the literal, so it isn't reported
+                // and the next item is parsed as one. An item can stop at the line break
+                // before it, as a parameter does, so one that takes nothing is skipped.
+                kind if starts_item(kind) && self.after_unclosed_line() => {
+                    self.slip();
+                    let at = self.pos;
+                    item(self);
+                    if self.pos == at {
+                        self.recover(Sync::List, true);
+                    }
+                    after_item = true;
                 }
                 _ => {
                     self.expected_in_list(&format!("`,` or {close}"), starts_item);

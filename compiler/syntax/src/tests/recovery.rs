@@ -237,6 +237,60 @@ fn an_unclosed_literal_ends_its_line() {
     );
 }
 
+/// After an item whose line an unclosed one-line literal ends, a missing `,` is part of that
+/// slip, and may be inside the literal, so it isn't reported. The next item is parsed as one.
+#[test]
+fn a_lists_comma_after_an_unclosed_literal() {
+    assert_eq!(
+        codes("fn f() {\n  g(\n    \"abc\n    b,\n  )\n}\n"),
+        ["E0004"]
+    );
+    assert_eq!(
+        codes("fn f() {\n  g(\n    a,\n    \"abc\n    b,\n  )\n}\n"),
+        ["E0004"]
+    );
+    assert_eq!(
+        codes("fn f() {\n  let x = [\n    \"abc\n    b,\n  ]\n}\n"),
+        ["E0004"]
+    );
+    assert_eq!(codes("fn f() {\n  g(\n    'a\n    b,\n  )\n}\n"), ["E0009"]);
+    assert_eq!(
+        codes("fn f() {\n  g(\n    x: \"abc\n    y: 1,\n  )\n}\n"),
+        ["E0004"]
+    );
+    // An item that takes nothing at the line break is skipped, so the parser goes on: a
+    // parameter stops at a break, and a field argument needs its `name:`.
+    assert_eq!(
+        codes("fn f(\n  a: String = \"abc\n  b: Int,\n) {}\n"),
+        ["E0004"]
+    );
+    assert_eq!(
+        codes("fn f() {\n  g(\n    ..base,\n    x: \"abc\n    y,\n  )\n}\n"),
+        ["E0004"]
+    );
+    assert_eq!(
+        codes("fn f() {\n  let Shape.Rect(\n    width: \"abc\n    height,\n  ) = s\n}\n"),
+        ["E0004"]
+    );
+    let text = "fn f() {\n  g(\n    \"abc\n    b,\n  )\n}\n";
+    let args = checked(text)
+        .syntax()
+        .descendants()
+        .find(|node| node.kind() == SyntaxKind::ArgList)
+        .expect("an argument list");
+    assert_eq!(
+        args.children().count(),
+        2,
+        "{}",
+        dump_tree_without_trivia(&args)
+    );
+    // A closed string leaves the `,` to the list, with its fix.
+    assert_eq!(
+        errors("fn f() {\n  g(\n    \"abc\"\n    b,\n  )\n}\n"),
+        [r#"E0016 28..29 => "fn f() {\n  g(\n    \"abc\",\n    b,\n  )\n}\n""#]
+    );
+}
+
 /// An unclosed multi-line string or block comment swallows the end of the file, so the
 /// parser reports nothing there.
 #[test]

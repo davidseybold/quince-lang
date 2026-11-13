@@ -222,7 +222,7 @@ Doc comments and attributes aren't member starts: they belong to the declaration
 
 **Errors the lexer already reported** aren't reported again (lexer README). Beyond that contract:
 - An error the parser would report right after one of the lexer's `Error` tokens, with only trivia between, is dropped. So `let x = $` gives the lexer's E0001 alone, even though the `=` continues the line and the parser's error would fall on the next line. One slip, one error.
-- An unclosed one-line literal (a string with no `StringEnd`, E0004, or a char with no closing `'`, E0009) ends its line's lists. Parentheses, square brackets and list braces opened on that line close at its end with no E0017, and nothing else on the line is reported. A block's `{` stays open, so in `if ok { log("done)` followed by a line `}`, the `}` closes the `if`'s block. So `print("hello)` is the E0004 alone.
+- An unclosed one-line literal (a string with no `StringEnd`, E0004, or a char with no closing `'`, E0009) ends its line's lists. Parentheses, square brackets and list braces opened on that line close at its end with no E0017, and nothing else on the line is reported. A block's `{` stays open, so in `if ok { log("done)` followed by a line `}`, the `}` closes the `if`'s block. So `print("hello)` is the E0004 alone. A list item on the next line, after such a line, needs no `,`: the one missing may be inside the literal, where a fix that inserts it would change the literal and fix nothing. So the missing `,` is part of the slip, and the item is parsed as the next one. An item that takes nothing at the line break, as a parameter does, is skipped silently up to the list's next sync point, so the parser always moves on.
 - When a multi-line string or a block comment runs to the end of the file unclosed (E0005, E0003), the parser reports nothing at the end of the file. Everything it would report there, such as a missing `)` or `}`, is that slip.
 
 **Loop safety.** Every parser loop takes a token or exits. A counter under `debug_assertions`, which fuzz builds turn on, panics when the parser looks ahead 256 times without taking a token, so the fuzz target and the unit tests see a loop as a panic.
@@ -242,6 +242,7 @@ Doc comments and attributes aren't member starts: they belong to the declaration
 | `f(a, b]` | E0016 at `]` |
 | `f(` then lines `a` and `b`, then `)` | E0016 at `b`, with a fix that inserts `,` |
 | `print("hello)` | E0004 |
+| `g(` then lines `"abc`, `b,` and `)` | E0004 |
 | `let x = $` | E0001 |
 | `let x` followed by a line `= 1` | E0018 |
 | `}` followed by a line `else {` | E0018 |
@@ -554,6 +555,9 @@ Layer 4 is three PRs (decided by David, 2026-11-12), since together they would r
 
 **Layer 4d: `m1/spec-wording`**
 - [x] Spec (decided by David, 2026-11-12), and a bump (v0.18): `r[expr.block.cond-brace]` moves before `r[expr.block.brace-map]`, so "Anywhere else" follows the exception, and `r[item.struct.literal-visibility]` writes `Type(..x, field: v)`. No meaning or ID changes.
+
+**Layer 4e: `m1/list-comma-unclosed`**
+- [x] After a list item whose line an unclosed string or char ends, a missing `,` is part of that slip, and the next item is parsed as one (decided by David, 2026-11-12). The list's E0016 had a fix that inserted the `,` inside the literal. A `match`'s arms get the same rule in layer 5b.
 
 Layer 5 is two PRs (decided by David, 2026-11-12), since patterns with `match` and `for` would run past 1,000 lines. `let` and `is` give patterns a place to appear before `match` exists.
 
