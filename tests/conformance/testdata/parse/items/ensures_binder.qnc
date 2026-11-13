@@ -1,0 +1,24 @@
+// rule: contract.ensures-binder
+// mode: parse
+// `ensures` followed by a name in parentheses always names the return value, so the condition
+// comes after it. A condition that starts with a parenthesized name is written without the
+// parentheses.
+fn next(x: Int) -> Int
+  ensures (r) r > x
+  ensures x - 1 < x
+  ensures (x, r) != (0, 0)
+{
+  x + 1
+}
+
+fn only_binder(ok: Bool) -> Bool
+  ensures (ok) //~ E0016
+{
+  ok
+}
+
+fn abs(x: Int) -> Int
+  ensures (x).abs() >= 0 //~ E0016
+{
+  x
+}

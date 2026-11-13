@@ -397,11 +397,11 @@ fn errors_in_types() {
     );
     assert_eq!(
         messages("fn f() -> Int Int {}"),
-        ["expected `uses` or `{`, found the name `Int`"]
+        ["expected `uses`, `requires`, `ensures` or `{`, found the name `Int`"]
     );
     assert_eq!(
         messages("fn f() Int {}"),
-        ["expected `->`, `uses` or `{`, found the name `Int`"]
+        ["expected `->`, `uses`, `requires`, `ensures` or `{`, found the name `Int`"]
     );
     assert_eq!(
         messages("fn f(a: fn -> Int) {}"),

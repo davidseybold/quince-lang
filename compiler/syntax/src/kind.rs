@@ -184,6 +184,14 @@ syntax_kinds! {
         MatchGuard,
         /// `for`, a pattern, `in`, an expression and a block.
         ForStmt,
+        /// `fn`, its parameters, its return type and effects if present, and a block.
+        Closure,
+        /// `return` and an expression if present.
+        ReturnExpr,
+        BreakExpr, ContinueExpr,
+        /// `requires` and an expression, or `ensures`, a name in parentheses if present, and
+        /// an expression.
+        Contract,
     ],
 }
 

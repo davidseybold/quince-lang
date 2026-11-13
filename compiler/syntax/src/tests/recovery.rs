@@ -519,3 +519,48 @@ fn no_fixes_in_a_lossy_text() {
     let text = std::str::from_utf8(&bytes[..bytes.len() - 2]).unwrap();
     assert_eq!(checked(text).errors()[0].fixes.len(), 1);
 }
+
+/// A contract's expression starts on its line, so a line that starts with `{` or another
+/// contract after `requires` is the expression missing, at the line break. After a slip in a
+/// contract the header is skipped up to the body's `{`, so the body is still the body.
+#[test]
+fn a_slip_in_a_contract() {
+    let has_body = |text: &str| {
+        checked(text)
+            .syntax()
+            .descendants()
+            .any(|node| node.kind() == SyntaxKind::Block)
+    };
+    for text in [
+        "fn f()\n  requires\n{\n  x\n}\n",
+        "fn f()\n  requires\n  ensures r > 0\n{\n  x\n}\n",
+    ] {
+        assert_eq!(errors(text), ["E0016 17..18"], "{text:?}");
+        assert_eq!(
+            messages(text),
+            ["expected an expression, found a line break"]
+        );
+        assert!(has_body(text), "{text:?}");
+    }
+    let text = "fn f()\n  requires x >\n  ensures r > 0\n{\n  x\n}\n";
+    assert_eq!(errors(text), ["E0016 24..31"]);
+    assert!(has_body(text));
+    // Braces right after `requires` are an expression, a block that can't go there. The body
+    // missing after it is part of that slip.
+    assert_eq!(errors("fn f(n: Int) requires { n }\n"), ["E0016 22..23"]);
+}
+
+/// `fn` and `(` is a closure, never a member start (decision 9): a closure on a line of its
+/// own closes nothing, and the attribute look-past reads past one in an attribute's
+/// arguments.
+#[test]
+fn a_closure_line_closes_nothing() {
+    assert_eq!(
+        errors("fn f() {\n  g(a,\n  fn(x) { x }\n}\n"),
+        ["E0017 12..13"]
+    );
+    assert_eq!(
+        errors("fn f() {\n  g(1,\n  @attr(\n    fn(x: Int) { x },\n  )\nfn h() {}\n"),
+        ["E0017 7..8", "E0017 12..13"]
+    );
+}

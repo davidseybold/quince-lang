@@ -33,6 +33,9 @@ r[contract.ensures]
 r[contract.ensures-name]
 - `ensures(r)` names the return value `r` (any name works) for use in the condition.
 
+r[contract.ensures-binder]
+- `ensures` followed by a name in parentheses always names the return value. A condition that starts with a parenthesized name is written without the parentheses.
+
 r[contract.pure]
 - Contract expressions must be pure: no effects and no mutation. Reading a reference type needs `uses State`, so a contract can't read shared state such as `stats.get()`; it constrains only arguments and the return value.
 

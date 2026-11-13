@@ -1,0 +1,27 @@
+// rule: grammar.closure
+// rule: grammar.cparam
+// rule: expr.closure.syntax
+// rule: expr.closure.underscore
+// mode: parse
+// A closure is `fn`, its parameters in parentheses, an optional `->` and return type, an
+// optional `uses` and effects, and a block. A parameter is a name or `_`, with an optional
+// type. A closure has no `var` or `self` parameter, and no default.
+fn f(xs: List<Int>) {
+  let next = fn(n) { n + 1 }
+  let add = fn(a: Int, b: Int) -> Int { a + b }
+  let log = fn(line: String) uses Io { print(line) }
+  let full = fn(x: Int,) -> Int uses Io, Fs { x }
+  let none = fn() { 1 }
+  let ignore = fn(_) { 0 }
+  let typed = fn(_: Int) { 0 }
+  xs.map(fn(x) { x * 2 })
+  run(fn() {
+    log("done")
+  })
+  fn(x) { x }(1)
+  let mutable = fn(var x) { x } //~ E0016
+  let receiver = fn(self) { 1 } //~ E0016
+  let defaulted = fn(x: Int = 1) { x } //~ E0016
+  let no_body = fn(x) //~ E0016
+  let no_params = fn { 1 } //~ E0016
+}

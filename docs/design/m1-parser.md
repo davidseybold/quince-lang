@@ -262,6 +262,11 @@ Doc comments and attributes aren't member starts: they belong to the declaration
 | `match s {` then lines `A(x => 1,` and `_ => 2,` | E0017 at `(` (layer 5b) |
 | `let a = match s {` then lines `0 => 1,` and `log(a)`, with the `match`'s `}` missing | E0016 at the line break after `log(a)`, E0017 at the function's `{` (layer 5b) |
 | `match s {` then lines `0 => {`, `a` and `1 => 2,`, with the block's `}` missing | E0016 at the second `=>`, E0016 at the function's `}`, E0017 at the function's `{` (layer 5b) |
+| `fn f()` then lines `requires` and `{`, with the body after it | E0016 at the line break after `requires`, and the body is parsed (layer 6a) |
+| `fn f()` then lines `requires x >`, `ensures r > 0` and `{` | E0016 at `ensures`, and the body is parsed (layer 6a) |
+| `fn f(n: Int) requires { n }` | E0016 at `{`, which found a block (layer 6a) |
+| `g(a,` then lines `fn(x) { x }` and `}` | E0017 at `(` (layer 6a) |
+| `g(1,` then lines `@attr(`, `fn(x: Int) { x },` and `)`, then `fn h() {}` | E0017 at the function's `{` and at `(`, none at `@` (layer 6a) |
 
 ### 10. Diagnostics
 
@@ -357,7 +362,7 @@ The layers:
 3. `m1/parser-exprs`: every operator and level, E0019 and E0020; the joined `>>` and `>=`; type arguments in expressions; negative literals; tuples, maps and E0025; `..base`.
 4. `m1/parser-stmts`: statements, assignment and E0026; list contexts; E0018; `if` and `else`.
 5. `m1/parser-patterns` (5a): patterns, `let` patterns and `is`. `m1/parser-match` (5b): `match`, guards and `for`.
-6. `m1/parser-keyword-forms`: closures, `concurrent`, `background`, `select`, `with`, `spawn` and contracts.
+6. `m1/parser-closures` (6a): closures, `return`, `break`, `continue` and contracts. `m1/parser-concurrency` (6b): `concurrent`, `background`, `select`, `with` and `spawn`.
 7. `m1/parser-items`: the rest of `impl`, `interface`, `effect` and `foreign`; members' doc comments and attributes; E0023.
 8. `m1/parser-names`: `validate`, the case check and E0021.
 9. `m1/parser-fuzz`: the fuzz crate, the nesting limit and E0022, and the deep-nesting tests.
@@ -574,12 +579,18 @@ Layer 5 is two PRs (decided by David, 2026-11-12), since patterns with `match` a
 - [x] `match`, guards, `for`. Every arm ends with a `,`, so a `}` right after an arm is an E0016 whose fix inserts it (`safe`). The `{` after a `match` subject or a `for` iterable uses the condition's machinery, `condition_frames` and `map_close`, so all four places share one test. A pattern missing from the line of its `for` is taken from the next line, as for `let` (layer 5a). After an arm whose line an unclosed string or char ends, a missing `,` is part of that slip (found in review). [`grammar.match_expr`, `grammar.arm`, `expr.match.arm-syntax`, `expr.match.arm-block`, `expr.match.arm-comma`, `expr.match.guard`, `stmt.loop.stmt`]
 - [x] An arm's `=>` closes the brackets opened in the arm, outside a block, so a bracket left open in a pattern or guard is an E0017 and the next arms parse. A missing `}` in a block arm cascades, as accepted (decision 9, decided by David, 2026-11-12).
 
-**Layer 6: `m1/parser-keyword-forms`**
-- [ ] Spec: question 7, and a bump. `concurrent`'s arguments take an optional trailing `,` (layer 2a's trailing-comma decision).
-- [ ] Extend `parse/lexical/fn_header.qnc` with closure headers and `requires`/`ensures` lines, which `r[lex.continue.fn-header]` covers (layer 4b).
-- [ ] Extend `parse/stmts/for.qnc` with `break 1 //~ E0016`: it cites `r[stmt.loop.stmt]`, which also says `break` takes no value (layer 5b).
-- [ ] `select` arms (`pattern = expr => ...`) push `Holds::Arms`, as a `match`'s do. Otherwise in `match s { 0 => select { x = c.recv() => 1, }, }` the `select` arm's `=>` would find the outer `match`'s frame and close the `select`'s braces (found in layer 5b's review).
-- [ ] Closures, `concurrent`, `background`, `select`, `with`, `spawn`, `return`, contracts. [`grammar.closure`, `grammar.concurrent`, `grammar.background`, `grammar.select`, `grammar.with_expr`, `grammar.jump`, `grammar.contract`, `expr.op.keyword-forms`]
+Layer 6 is two PRs (decided by David, 2026-11-12), since its eight constructs would run past 1,000 lines: closures, jumps and contracts, then the concurrency forms.
+
+**Layer 6a: `m1/parser-closures`**
+- [x] Spec: question 7, and a bump (v0.21): `r[contract.ensures-binder]`. [`contract.ensures-binder`]
+- [x] Extend `parse/lexical/fn_header.qnc` with closure headers and `requires`/`ensures` lines, which `r[lex.continue.fn-header]` covers (layer 4b).
+- [x] Extend `parse/stmts/for.qnc` with `break 1 //~ E0016`: it cites `r[stmt.loop.stmt]`, which also says `break` takes no value (layer 5b).
+- [x] Closures, `return`, `break`, `continue`, and contracts after a declaration's signature. `return`, `break` and `continue` are never operands. A block clears the `fn` header flag, so a block in a contract or a closure is a line context of its own. The scans that stop at a member start take `fn` as one only before a name, as the member-start check does (decision 9), so a closure in an attribute's arguments doesn't stop the look-past. Layer 7 parses an interface's contracts with the same function. [`grammar.closure`, `grammar.cparam`, `grammar.jump`, `grammar.contract`, `expr.closure.syntax`, `expr.closure.underscore`, `expr.ret.value`, `expr.ret.bare`, `expr.jump.expr`, `expr.op.keyword-forms`, `contract.requires`, `contract.ensures`, `contract.ensures-name`]
+
+**Layer 6b: `m1/parser-concurrency`**
+- [ ] Spec, and a bump (v0.22): `concurrent`'s arguments take an optional trailing `,` (layer 2a's trailing-comma decision).
+- [ ] `select` arms (`pattern = expr => ...`) push `Holds::Arms`, as a `match`'s do. Otherwise in `match s { 0 => select { x = c.recv() => 1, }, }` the `select` arm's `=>` would find the outer `match`'s frame and close the `select`'s braces (found in layer 5b's review). The arms reuse `arms.rs` where the shapes match, unclosed-literal handling included.
+- [ ] `concurrent`, `background`, `select`, `with` and `spawn`, `spawn in` included. [`grammar.concurrent`, `grammar.spawn`, `grammar.background`, `grammar.select`, `grammar.with_expr`, `grammar.handler`, `grammar.jump`, `expr.op.keyword-forms`]
 
 **Layer 7: `m1/parser-items`**
 - [ ] Spec: questions 4, 9 and 10, and a bump.

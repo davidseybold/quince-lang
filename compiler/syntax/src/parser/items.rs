@@ -1,6 +1,7 @@
 //! Declarations: the file, imports, `fn`, `test`, `const`, `impl`, structs, newtypes, enums
 //! and type aliases, with their doc comments and attributes, and their parts.
 
+use super::input::Break;
 use super::{Holds, Parser, Sync, exprs, types};
 use crate::SyntaxKind::{self, *};
 use crate::{SyntaxError, codes};
@@ -153,36 +154,105 @@ fn skip(what: &str, p: &mut Parser) {
     p.recover(Sync::Line, true);
 }
 
-/// `fn` name [ generics ] `(` params `)` [ `->` type ] [ `uses` effects ] block
-/// (`grammar.fn_decl`, `grammar.fn_sig`). A line that starts with `->`, `uses` or `{`
-/// continues the header (`r[lex.continue.fn-header]`).
+/// `fn` name [ generics ] `(` params `)` [ `->` type ] [ `uses` effects ] { contract } block
+/// (`grammar.fn_decl`, `grammar.fn_sig`). A line that starts with `->`, `uses`, `requires`,
+/// `ensures` or `{` continues the header (`r[lex.continue.fn-header]`).
 fn fn_decl(p: &mut Parser) {
     p.bump();
     let outer_header = std::mem::replace(&mut p.in_fn_header, true);
-    let mut ok = name(p, "a function name") && (!p.at(Lt) || types::generics(p)) && param_list(p);
-    let mut what = "`->`, `uses` or `{`";
-    if ok && p.at(Arrow) {
-        let marker = p.start();
-        p.bump();
-        ok = types::return_type(p);
-        p.complete(marker, RetType);
-        what = "`uses` or `{`";
-    }
-    if ok && p.at(UsesKw) {
-        ok = types::effects(p);
-        what = "`{`";
-    }
-    if ok && p.at(LBrace) {
-        p.in_fn_header = false;
-        exprs::block(p);
-    } else if ok {
-        p.expected(what);
+    if name(p, "a function name")
+        && (!p.at(Lt) || types::generics(p))
+        && param_list(p, param, starts_param)
+    {
+        fn_rest(p, true);
     }
     p.in_fn_header = outer_header;
 }
 
-/// `(` [ param { `,` param } [ `,` ] ] `)` (`grammar.params`). False when there is no `(`.
-fn param_list(p: &mut Parser) -> bool {
+/// What follows a function's parameters, in a declaration or a closure: [ `->` type ]
+/// [ `uses` effects ], its contracts when `contracts`, and its block. The caller has set
+/// `in_fn_header`.
+pub(super) fn fn_rest(p: &mut Parser, contracts: bool) {
+    const NEXT: [&str; 4] = ["`->`", "`uses`", "`requires`", "`ensures`"];
+    let mut from = 0;
+    if p.at(Arrow) {
+        let marker = p.start();
+        p.bump();
+        let ok = types::return_type(p);
+        p.complete(marker, RetType);
+        if !ok {
+            return;
+        }
+        from = 1;
+    }
+    if p.at(UsesKw) {
+        if !types::effects(p) {
+            return;
+        }
+        from = 2;
+    }
+    let to = if contracts { NEXT.len() } else { 2 };
+    // A body missing after a contract that held a slip is part of that slip.
+    let slipped = contracts && self::contracts(p);
+    if p.at(LBrace) {
+        exprs::block(p);
+    } else {
+        p.recovering |= slipped;
+        p.expected(&one_of(&NEXT[from.min(to)..to], "`{`"));
+    }
+}
+
+/// `items`, then `last`, as a message lists them: "a, b or c".
+fn one_of(items: &[&str], last: &str) -> String {
+    match items {
+        [] => last.to_string(),
+        _ => format!("{} or {last}", items.join(", ")),
+    }
+}
+
+/// The contracts after a function's signature, each `requires` expr, or `ensures`, an optional
+/// name in parentheses and expr (`grammar.contract`). `ensures` followed by a name in
+/// parentheses always names the return value (`r[contract.ensures-binder]`), so in
+/// `ensures (x) - 1 > 0` the condition is `-1 > 0`. The expression starts on its contract's
+/// line: a line that starts with `{` or another contract continues the header, not the
+/// contract. After a slip in a contract, the rest of the header is skipped up to the body's
+/// `{`, so the body is still parsed as the body. True when a contract held a slip.
+fn contracts(p: &mut Parser) -> bool {
+    let slips = p.slips;
+    while p.at(RequiresKw) || p.at(EnsuresKw) {
+        let marker = p.start();
+        let ensures = p.kind() == EnsuresKw;
+        p.bump();
+        if ensures && p.at(LParen) && p.nth_kind(1) == Ident && p.nth_kind(2) == RParen {
+            p.bump();
+            p.bump_node(Name);
+            p.bump();
+        }
+        if p.current().is_some_and(|t| t.brk == Break::Line) && p.header_continues(p.kind()) {
+            let message = "expected an expression, found a line break".to_string();
+            let error = SyntaxError::new(p.break_range(), codes::UNEXPECTED_TOKEN, message);
+            p.report(error);
+        } else if p.at_break() || !exprs::starts_expr(p.kind()) {
+            p.expected("an expression");
+        } else {
+            exprs::expr(p);
+        }
+        p.complete(marker, Contract);
+        if p.recovering {
+            p.recover(Sync::Block, false);
+            break;
+        }
+    }
+    p.slips != slips
+}
+
+/// `(` [ item { `,` item } [ `,` ] ] `)`: a declaration's parameters (`grammar.params`) or a
+/// closure's. False when there is no `(`.
+pub(super) fn param_list(
+    p: &mut Parser,
+    param: fn(&mut Parser),
+    starts_param: fn(SyntaxKind) -> bool,
+) -> bool {
     if !p.at(LParen) {
         p.expected("`(`");
         return false;

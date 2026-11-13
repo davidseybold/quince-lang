@@ -3,6 +3,7 @@
 //! grammar area has its own module.
 
 mod arms;
+mod closures;
 mod exprs;
 mod input;
 mod items;
@@ -377,11 +378,17 @@ impl<'t> Parser<'t> {
             Break::Line if self.closed_early => true,
             Break::Line => {
                 let previous = self.input.tokens[self.pos - 1].kind;
-                let header_continues = self.in_fn_header
-                    && matches!(token.kind, Arrow | UsesKw | RequiresKw | EnsuresKw | LBrace);
-                !(previous.continues_line() || token.kind == Dot || header_continues)
+                !(previous.continues_line()
+                    || token.kind == Dot
+                    || self.header_continues(token.kind))
             }
         }
+    }
+
+    /// The parser is in a `fn` header, and a line that starts with `kind` continues it
+    /// (`r[lex.continue.fn-header]`).
+    fn header_continues(&self, kind: SyntaxKind) -> bool {
+        self.in_fn_header && matches!(kind, Arrow | UsesKw | RequiresKw | EnsuresKw | LBrace)
     }
 
     /// The current token comes after a line break that ends the construct the parser is in,
@@ -643,8 +650,8 @@ impl<'t> Parser<'t> {
     /// no map holds. A direct scan, done once, when an entry has no `:`.
     fn braces_hold_entry(&self, opener: usize) -> bool {
         let mut open = 0usize;
-        for token in &self.input.tokens[opener + 1..] {
-            if token.brk != Break::None && starts_member(token.kind) {
+        for (i, token) in self.input.tokens.iter().enumerate().skip(opener + 1) {
+            if token.brk != Break::None && starts_member(&self.input.tokens, i) {
                 return false;
             }
             if closer_of(token.kind).is_some() {
@@ -775,7 +782,7 @@ impl<'t> Parser<'t> {
                 let Some(token) = tokens.get(n) else {
                     return 0;
                 };
-                if !open.is_empty() && token.brk != Break::None && starts_member(token.kind) {
+                if !open.is_empty() && token.brk != Break::None && starts_member(tokens, n) {
                     return 0;
                 }
                 n += 1;
@@ -1174,13 +1181,21 @@ fn closer_of(kind: SyntaxKind) -> Option<SyntaxKind> {
     }
 }
 
-/// Kinds that, at the start of a line, can only start a member or an attribute: never part of
-/// an attribute's arguments.
-fn starts_member(kind: SyntaxKind) -> bool {
+/// The token at `at`, at the start of a line, can only start a member or an attribute: it is
+/// never part of an attribute's arguments. `fn` starts one only when a name follows it, since
+/// `fn` and `(` is a closure.
+fn starts_member(tokens: &[Sig], at: usize) -> bool {
+    let kind = |n: usize| tokens.get(n).map(|t| t.kind);
+    kind(at) == Some(FnKw) && kind(at + 1) == Some(Ident)
+        || kind(at).is_some_and(starts_other_member)
+}
+
+/// The kinds other than `fn` that, at the start of a line, can only start a member or an
+/// attribute.
+fn starts_other_member(kind: SyntaxKind) -> bool {
     matches!(
         kind,
-        At | FnKw
-            | StructKw
+        At | StructKw
             | EnumKw
             | TypeKw
             | InterfaceKw
