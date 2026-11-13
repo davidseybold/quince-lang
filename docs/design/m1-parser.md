@@ -623,8 +623,8 @@ Layer 7 is three PRs (split by size, 2026-11-12), since its four declarations an
 - [x] The rest of `impl` (generics, `for`, `type` and `const` members) and `interface`, whose contracts reuse `contracts` through `fn_rest`. A method signature in an interface ends its line, so a body is an E0016 (`r[item.iface.no-default]`). `pub` on an interface's member or an impl's associated type is an E0016, and the member is parsed on. [`grammar.impl_decl`, `grammar.interface_decl`, `item.const.assoc.no-interface`, `item.iface.no-default`]
 
 **Layer 7c: `m1/parser-effect-foreign`**
-- [ ] Spec: question 4, question 9 for `effect_decl` and `foreign_decl`, and a bump.
-- [ ] `effect` and `foreign`, with their members' doc comments and attributes. [`grammar.effect_decl`, `grammar.foreign_decl`, `grammar.c_fn`, `ffi.cbind.keyword-name`]
+- [x] Spec: question 4, question 9 for `effect_decl` and `foreign_decl`, and a bump (v0.25).
+- [x] `effect` and `foreign`, with their members' doc comments and attributes. An effect's operations take no contracts or body, and a C function only named parameters and a return type. A keyword as a C name is an E0016, as anywhere a name goes. [`grammar.effect_decl`, `grammar.foreign_decl`, `grammar.c_fn`, `ffi.cbind.keyword-name`]
 
 **Layer 8: `m1/parser-names`**
 - [ ] Spec: question 1, and a bump.

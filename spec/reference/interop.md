@@ -6,7 +6,7 @@ Quince interoperates with other languages only through the C ABI. Any library th
 ## Generated bindings
 
 ```ebnf
-foreign_decl = "foreign" string [ "uses" effects ] "{" { ( { attribute NEWLINE } ( c_fn | "type" c_name ) ) NEWLINE } "}"
+foreign_decl = "foreign" string [ "uses" effects ] "{" { { doc_comment } { attribute NEWLINE } ( c_fn | "type" c_name ) NEWLINE } "}"
 c_fn         = "fn" c_name "(" [ c_name ":" type { "," c_name ":" type } [ "," ] ] ")" [ "->" type ]
 ```
 
@@ -198,6 +198,9 @@ Parameter names come from the header, since every argument after the first is na
 
 r[ffi.cbind.keyword-param]
 A C parameter whose name is a keyword gets `_` appended (`fn` becomes `fn_`).
+
+r[ffi.cbind.keyword-name]
+A C function or type whose name is a Quince keyword can't be declared in v1. Wrap it in a C function with another name, built from `[native] sources`.
 
 r[ffi.cbind.callback-name]
 The one `Callback` parameter made from a function pointer and its context takes the function pointer's name.

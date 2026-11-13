@@ -1,0 +1,26 @@
+// rule: grammar.effect_decl
+// mode: parse
+// An effect names the effects it is built on and lists its operations, each a function
+// signature on its own line with its doc comments and attributes, or it names another
+// effect after `=`. An operation has no body, no contracts and no `pub`.
+pub effect Db uses Net, State {
+  /// Runs a query.
+  fn query(sql: String) -> Result<Rows, DbError>
+  @deprecated("use query")
+  fn execute(sql: String) -> Result<Int, DbError>
+}
+
+effect Clock2 {
+  fn now() -> Instant
+}
+
+effect Ticks = Clock2
+
+effect Empty {}
+
+effect Store {
+  fn get(key: String) -> String { "" } //~ E0016
+  fn put(key: String) requires key != "" //~ E0016
+  pub fn len() -> Int //~ E0016
+  type Key = String //~ E0016
+}

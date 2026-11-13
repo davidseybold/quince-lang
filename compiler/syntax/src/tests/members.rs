@@ -1,5 +1,5 @@
-//! The parser's trees for `impl` and `interface` declarations and their members, and their
-//! errors. Each expected dump is written by hand.
+//! The parser's trees for `impl`, `interface`, `effect` and `foreign` declarations and their
+//! members, and their errors. Each expected dump is written by hand.
 
 use super::parser::{checked, valid};
 
@@ -221,4 +221,172 @@ fn a_brace_closes_generics() {
         ["E0017", "E0017"]
     );
     assert_eq!(codes("fn f() -> List<Int {\n  x\n}\n"), ["E0017"]);
+/// An `effect` with the effects it is built on and an operation, and one that names another
+/// (`grammar.effect_decl`).
+#[test]
+fn an_effect() {
+    assert_eq!(
+        valid(
+            "effect Db uses Net {\n  fn query(sql: String) -> Rows\n}\neffect Ticks = time.Clock\n"
+        ),
+        r#"File
+  EffectDecl
+    EffectKw "effect"
+    Name
+      Ident "Db"
+    Effects
+      UsesKw "uses"
+      TypePath
+        Ident "Net"
+    LBrace "{"
+    FnDecl
+      FnKw "fn"
+      Name
+        Ident "query"
+      ParamList
+        LParen "("
+        Param
+          Name
+            Ident "sql"
+          Colon ":"
+          TypePath
+            Ident "String"
+        RParen ")"
+      RetType
+        Arrow "->"
+        TypePath
+          Ident "Rows"
+    RBrace "}"
+  EffectDecl
+    EffectKw "effect"
+    Name
+      Ident "Ticks"
+    Eq "="
+    TypePath
+      Ident "time"
+      Dot "."
+      Ident "Clock"
+"#
+    );
+}
+
+/// A `foreign` block with its effects, a C type and a C function (`grammar.foreign_decl`,
+/// `grammar.c_fn`).
+#[test]
+fn a_foreign_block() {
+    assert_eq!(
+        valid("foreign \"m\" uses Fs {\n  type FILE\n  fn fclose(f: Ptr<FILE>) -> CInt\n}\n"),
+        r#"File
+  ForeignDecl
+    ForeignKw "foreign"
+    Literal
+      StringStart "\""
+      StringText "m"
+      StringEnd "\""
+    Effects
+      UsesKw "uses"
+      TypePath
+        Ident "Fs"
+    LBrace "{"
+    ForeignType
+      TypeKw "type"
+      Name
+        Ident "FILE"
+    FnDecl
+      FnKw "fn"
+      Name
+        Ident "fclose"
+      ParamList
+        LParen "("
+        Param
+          Name
+            Ident "f"
+          Colon ":"
+          TypePath
+            Ident "Ptr"
+            TypeArgs
+              Lt "<"
+              TypePath
+                Ident "FILE"
+              Gt ">"
+        RParen ")"
+      RetType
+        Arrow "->"
+        TypePath
+          Ident "CInt"
+    RBrace "}"
+"#
+    );
+    valid("foreign \"c\" { fn abort() }\n");
+}
+
+/// What the grammar rejects in an `effect` is an E0016: a body, a contract, `pub`, and any
+/// member but an operation.
+#[test]
+fn effect_errors() {
+    assert_eq!(
+        errors("effect E {\n  fn f() -> Int { 1 }\n}\n"),
+        ["E0016 27..28: expected `uses` or a line break, found `{`"]
+    );
+    assert_eq!(
+        errors("effect E {\n  fn f() requires ok\n}\n"),
+        ["E0016 20..28: expected `->`, `uses` or a line break, found the keyword `requires`"]
+    );
+    assert_eq!(
+        errors("effect E {\n  pub fn f()\n}\n"),
+        ["E0016 13..16: expected `fn`, found the keyword `pub`"]
+    );
+    assert_eq!(
+        errors("effect E {\n  type T\n}\n"),
+        ["E0016 13..17: expected `fn` or `}`, found the keyword `type`"]
+    );
+    assert_eq!(
+        errors("effect E X {}\n"),
+        ["E0016 9..10: expected `uses`, `{` or `=`, found the name `X`"]
+    );
+    assert_eq!(
+        errors("effect E = {}\n"),
+        ["E0016 11..12: expected an effect, found `{`"]
+    );
+    assert_eq!(codes("effect E uses Net\n{\n}\n"), ["E0018"]);
+}
+
+/// What the grammar rejects in a `foreign` block is an E0016: a keyword as a C name
+/// (`r[ffi.cbind.keyword-name]`), effects, a body, `pub`, and a constant.
+#[test]
+fn foreign_errors() {
+    assert_eq!(
+        errors("foreign \"c\" {\n  fn select()\n}\n"),
+        ["E0016 19..25: expected a function name, found the keyword `select`"]
+    );
+    assert_eq!(
+        errors("foreign \"c\" {\n  type match\n}\n"),
+        ["E0016 21..26: expected a type name, found the keyword `match`"]
+    );
+    assert_eq!(
+        errors("foreign \"c\" {\n  fn f(fn: CInt)\n}\n"),
+        ["E0016 21..23: expected a parameter, found the keyword `fn`"]
+    );
+    assert_eq!(
+        errors("foreign \"c\" {\n  fn f() -> CInt uses Fs\n}\n"),
+        ["E0016 31..35: expected a line break, found the keyword `uses`"]
+    );
+    assert_eq!(
+        errors("foreign \"c\" {\n  fn f() {}\n}\n"),
+        ["E0016 23..24: expected `->` or a line break, found `{`"]
+    );
+    assert_eq!(
+        errors("foreign \"c\" {\n  pub fn f()\n}\n"),
+        ["E0016 16..19: expected `fn` or `type`, found the keyword `pub`"]
+    );
+    assert_eq!(
+        errors("foreign \"c\" {\n  const N: CInt = 1\n}\n"),
+        ["E0016 16..21: expected `fn`, `type` or `}`, found the keyword `const`"]
+    );
+    // A slip in the header keeps the body.
+    assert_eq!(
+        errors("foreign c {\n  fn f()\n}\n"),
+        ["E0016 8..9: expected the library's name, a string, found the name `c`"]
+    );
+    assert_eq!(codes("foreign \"c\"\n{\n}\n"), ["E0018"]);
 }
