@@ -1,6 +1,8 @@
 // rule: lex.comment.doc
+// rule: grammar.impl_item
 // mode: parse
-// A doc comment attaches to the declaration, field, variant or variant field after it.
+// A doc comment attaches to the declaration, field, variant, variant field or member after it.
+// An impl's members take doc comments and attributes, as declarations do.
 /// A point on the plane.
 pub struct Point {
   /// Across.
@@ -17,4 +19,21 @@ enum Shape {
     /// Its radius.
     radius: Float,
   ),
+}
+
+impl Point {
+  /// The point at zero.
+  @deprecated("use origin", use: Point.origin)
+  pub fn zero() -> Point { Point(x: 0, y: 0) }
+
+  /// Its distance from zero.
+  /// Never negative.
+  @unchecked
+
+  @verify
+  fn len(self) -> Int
+    ensures(r) r >= 0
+  {
+    self.x
+  }
 }

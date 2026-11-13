@@ -152,7 +152,7 @@ The inner value follows `pub` like a field: `pub struct UserId(pub Int)` lets ot
 
 ```ebnf
 impl_decl    = "impl" [ generics ] [ type_path [ type_args ] "for" ] type "{" { impl_item NEWLINE } "}"
-impl_item    = [ "pub" ] fn_decl | "type" Name "=" type | [ "pub" ] const_decl
+impl_item    = { doc_comment } { attribute NEWLINE } ( [ "pub" ] fn_decl | "type" Name "=" type | [ "pub" ] const_decl )
 ```
 
 r[item.method.impl]

@@ -1,0 +1,46 @@
+// rule: lex.comment.doc-placement
+// rule: lex.comment.doc
+// rule: lex.comment.doc-exact
+// mode: parse
+// A doc comment must come before a declaration, a field, a variant or a member. Anywhere
+// else it is a compile error, whose fix makes it an ordinary comment. A doc comment after
+// code on its line documents nothing. `////` starts an ordinary comment, so it can go
+// anywhere.
+/// Before an import.
+//~^ E0023
+import std.json
+
+const LIMIT: Int = 8 /// After code on its line.
+//~^ E0023
+/// The scale.
+const SCALE: Int = 2
+
+fn f(n: Int) -> Int {
+  /// In a block.
+  //~^ E0023
+  //// An ordinary comment.
+  let x = n /// After code.
+  //~^ E0023
+  match x {
+    /// Before an arm.
+    //~^ E0023
+    0 => 1,
+    _ => x,
+  }
+}
+
+struct Pair {
+  a: Int,
+  b: Int,
+  /// Before the closing brace.
+  //~^ E0023
+}
+
+@test_only
+/// After an attribute: the grammar puts doc comments before attributes.
+//~^ E0023
+fn helper() {}
+
+/// Two lines of one comment,
+/// at the end of the file.
+//~^^ E0023

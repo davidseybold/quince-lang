@@ -61,6 +61,7 @@ grammar.generic
 grammar.generics
 grammar.handler
 grammar.if_expr
+grammar.impl_item
 grammar.import
 grammar.jump
 grammar.list_lit
@@ -103,6 +104,8 @@ item.struct.no-fields
 item.struct.update
 lex.braces
 lex.comment.doc
+lex.comment.doc-exact
+lex.comment.doc-placement
 lex.comment.line
 lex.continue.fn-header
 lex.continue.lists

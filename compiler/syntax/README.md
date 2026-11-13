@@ -99,7 +99,7 @@ A node holds its tokens and child nodes in source order. A part the code leaves 
 | `RetType` | `->` and a type. |
 | `TestDecl` | `test`, its name as a `Literal`, and a `Block`. |
 | `ConstDecl` | `pub` if present, `const`, a `Name`, `:`, a type, `=` and an expression. |
-| `ImplDecl` | `impl`, a type, `{`, a `FnDecl` per method, and `}`. |
+| `ImplDecl` | `impl`, a type, `{`, a `FnDecl` per method, and `}`. A method's `DocComments` and `Attribute`s are in its `FnDecl`, as a declaration's are. |
 | `Import` | `import`, the package path's names and the `.` tokens between them, then `.` and `ImportNames`, or `as` and a `Name`, if present. |
 | `ImportNames` | `{`, a `NameRef` per name and their commas, and `}`. |
 | `StructDecl` | `DocComments` and `Attribute`s if present, `pub` if present, `struct`, a `Name`, `Generics`, then a `FieldList` and `requires` and an expression if present. |
@@ -112,7 +112,7 @@ A node holds its tokens and child nodes in source order. A part the code leaves 
 | `VariantFields` | `(`, `FieldDecl`s and their commas, and `)`. |
 | `AliasDecl` | Its declaration's start, as for `StructDecl`, with `type`, then `=` and a type. |
 | `Attribute` | `@`, a `NameRef`, and an `ArgList` if present. |
-| `DocComments` | The `DocComment` tokens before a declaration, a field or a variant, and the trivia between them. |
+| `DocComments` | The `DocComment` tokens before a declaration, a field, a variant or a member, and the trivia between them. |
 | `TypePath` | Its names and the `.` tokens between them, whatever their case, then its `TypeArgs` if present. An effect in a `uses` list and a bound are `TypePath`s too. |
 | `TypeArgs` | `<`, types and their commas, and `>`. The last item may be `Effects`, and in a bound an item may be a `NamedTypeArg`. |
 | `NamedTypeArg` | A `NameRef`, `=` and a type: `Item = Int` in a bound. |
@@ -183,7 +183,7 @@ Postfix forms nest to the left: `a.b(c)` is a `Call` of a `Field` of a `NameRef`
 
 The parser reads the significant tokens: every token but the trivia and the doc comments. Each records the break before it: none, a line break, or a hard break, when a `;` comes between it and the token before. Nothing comes before the first token, so it has no break.
 
-- **Doc comments** are taken by the declaration, field or variant whose first token they come before, into its `DocComments` node, and so become part of the tree's significant tokens. Any other doc comment stays trivia: one in a block, after an attribute, before an `import`, at the end of the file, or before an `impl` member, which takes its doc comments in layer 7.
+- **Doc comments** are taken by the declaration, field, variant or `impl` member whose first token they come before, into its `DocComments` node, and so become part of the tree's significant tokens. Any other doc comment stays trivia and is an E0023: one in a block, after an attribute, before an `import` or a closing bracket, at the end of the file, and one after code on its line, even when a declaration follows. The doc comments before one token that document nothing are one E0023, whose fix makes each an ordinary comment. Doc comments in tokens skipped after an error are part of that slip, so they get none.
 - **Attributes** come after the doc comments and before `pub`. Each goes on a line of its own, and the next line that isn't blank continues what they apply to. Something after an attribute on its line is an E0016. When it can start what the attribute applies to, the fix moves it to the next line. A keyword after `@` is an E0016 at the keyword, and the declaration after it is still parsed.
 
 - **Where a break ends a construct.** In a line context (the file, a block, an `impl` body), a break ends the statement or declaration unless the token before it continues the line (`SyntaxKind::continues_line()`), the next token is `.`, or the parser is in a `fn` header, a declaration's, a closure's or a function type's, and the next token is `->`, `uses`, `requires`, `ensures` or `{`. A block is a line context of its own, so a header around it, as around a block in a contract, doesn't reach its lines. A hard break always ends it. In a list (parentheses, square brackets, angle brackets, and braces of fields, variants or map entries) a break before a `,` or the closing bracket is spacing, since the list reads them by kind. Elsewhere in a list the same rules apply, so a line that starts with `-` or `(` is a new item, and a missing `,` before it is an E0016 with its fix. A block inside a list is a line context again.
@@ -229,6 +229,7 @@ The parser reads the significant tokens: every token but the trivia and the doc 
 | E0018 | A line break that ends a construct before a token that continues it, at the break | Replace everything between the two tokens with a space (`safe`), unless a comment lies between them, or the token before the break is the `>` of type arguments that joining would make less-than |
 | E0019 | An operand that needs parentheses: `&&` mixed with `||`, a bit operator or a shift as an operand of another operator or with an arithmetic operand, `&`, `|` or `^` mixed, a shift of a shift, or a range as an operand | Add the parentheses of the usual reading (`needs-review`) |
 | E0020 | A chained comparison or range, at its second operator | For comparisons, repeat each middle operand: `a < b && b < c` (`needs-review`), in parentheses when the chain is an operand of `\|\|`. None when a middle operand holds a comment or a line break or needs parentheses itself, and none for ranges |
+| E0023 | A doc comment that documents nothing, over the doc comments before one token | Make each an ordinary comment (`safe`) |
 | E0024 | A struct with no fields written with braces, at the braces | Remove them (`safe`), unless a `requires` follows or a comment lies before or between them |
 | E0025 | `{}` where an expression is expected, over the braces | Insert `:` after the `{` (`needs-review`) |
 | E0026 | An assignment whose left side isn't a place, over the left side. Not reported when the left side holds a syntax error | None |

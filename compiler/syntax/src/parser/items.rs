@@ -11,13 +11,15 @@ use quince_diagnostics::Applicability;
 pub(super) fn file(p: &mut Parser) {
     let marker = p.start();
     p.lines(Holds::File, None, |p| decl(p, Holds::File));
+    // Doc comments at the end of the file document nothing.
+    p.stray_docs();
     p.complete(marker, File);
 }
 
-/// A declaration in the file with its doc comments and attributes, or a method in an `impl`
-/// body (`grammar.decl`, `grammar.impl_item`), with its `pub`. Anything else is skipped as an
-/// error. Layer 7 of the parser adds the other members, and their doc comments and attributes.
-/// The item is chosen at its keyword, once what comes before it is parsed.
+/// A declaration in the file, or a method in an `impl` body, with its doc comments, its
+/// attributes and its `pub` (`grammar.decl`, `grammar.impl_item`). Anything else is skipped as
+/// an error. Layer 7b of the parser adds the other members. The item is chosen at its keyword,
+/// once what comes before it is parsed.
 fn decl(p: &mut Parser, holds: Holds) {
     let file = holds == Holds::File;
     if file && p.kind() == ImportKw {
@@ -27,10 +29,8 @@ fn decl(p: &mut Parser, holds: Holds) {
     // still part of the slip before it.
     let quiet = p.recovering;
     let marker = p.start();
-    if file {
-        p.doc_comments();
-        attributes(p);
-    }
+    p.doc_comments();
+    attributes(p);
     if p.kind() == PubKw {
         p.bump();
         if p.at_break() {

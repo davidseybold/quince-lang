@@ -116,6 +116,11 @@ pub const REGISTRY: &[CodeInfo] = &[
         include_str!("../explain/E0020.md"),
     ),
     error(
+        "E0023",
+        "a doc comment that documents nothing",
+        include_str!("../explain/E0023.md"),
+    ),
+    error(
         "E0024",
         "a struct with no fields written with braces",
         include_str!("../explain/E0024.md"),
