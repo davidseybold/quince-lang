@@ -107,6 +107,9 @@ syntax_kinds! {
         AliasDecl, Attribute, InterfaceDecl,
         /// `type` and a name, then `=` and a type in an `impl`.
         AssocType,
+        EffectDecl, ForeignDecl,
+        /// `type` and a C name, in a `foreign` block.
+        ForeignType,
         /// The doc comments of a declaration, a field, a variant or a member.
         DocComments,
         /// A type path with its type arguments.
@@ -257,6 +260,9 @@ impl SyntaxKind {
                 | AliasDecl
                 | InterfaceDecl
                 | AssocType
+                | EffectDecl
+                | ForeignDecl
+                | ForeignType
                 | FieldDecl
                 | Variant
                 | MatchArm

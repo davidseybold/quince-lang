@@ -1,5 +1,6 @@
-//! Declarations: the file, imports, `fn`, `test`, `const`, `impl`, `interface`, structs,
-//! newtypes, enums and type aliases, with their doc comments and attributes, and their parts.
+//! Declarations: the file, imports, `fn`, `test`, `const`, `impl`, `interface`, `effect`,
+//! `foreign`, structs, newtypes, enums and type aliases, with their doc comments and
+//! attributes, and their parts.
 
 use super::input::Break;
 use super::{Holds, Parser, Sync, exprs, types};
@@ -16,19 +17,45 @@ pub(super) fn file(p: &mut Parser) {
     p.complete(marker, File);
 }
 
-/// What holds a declaration: the file, or the body of an `impl` or an `interface`.
+/// What holds a declaration: the file, or the body of an `impl`, an `interface`, an `effect`
+/// or a `foreign` block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Owner {
     File,
     Impl,
     Interface,
+    Effect,
+    Foreign,
 }
 
-/// A declaration in the file, or a member of an `impl` or an `interface`, with its doc
-/// comments, its attributes and its `pub` (`grammar.decl`, `grammar.impl_item`,
-/// `grammar.interface_decl`). Anything else is skipped as an error, so a `const` in an
-/// interface is one (`r[item.const.assoc.no-interface]`). The item is chosen at its keyword,
-/// once what comes before it is parsed.
+impl Owner {
+    /// What its members can start with, after their doc comments and attributes, for the
+    /// message after a `pub` none of them takes.
+    fn unpublished(self) -> &'static str {
+        match self {
+            Owner::Impl => "`type`",
+            Owner::Effect => "`fn`",
+            _ => "`fn` or `type`",
+        }
+    }
+
+    /// What may start a line in it, for the message when nothing does.
+    fn expected_member(self) -> &'static str {
+        match self {
+            Owner::File => "a declaration",
+            Owner::Impl => "`fn`, `const`, `type` or `}`",
+            Owner::Effect => "`fn` or `}`",
+            Owner::Interface | Owner::Foreign => "`fn`, `type` or `}`",
+        }
+    }
+}
+
+/// A declaration in the file, or a member of an `impl`, an `interface`, an `effect` or a
+/// `foreign` block, with its doc comments, its attributes and its `pub` (`grammar.decl`,
+/// `grammar.impl_item`, `grammar.interface_decl`, `grammar.effect_decl`,
+/// `grammar.foreign_decl`). Anything else is skipped as an error, so a `const` in an interface
+/// is one (`r[item.const.assoc.no-interface]`). The item is chosen at its keyword, once what
+/// comes before it is parsed.
 fn decl(p: &mut Parser, owner: Owner) {
     let file = owner == Owner::File;
     if file && p.kind() == ImportKw {
@@ -41,21 +68,16 @@ fn decl(p: &mut Parser, owner: Owner) {
     p.doc_comments();
     attributes(p);
     if p.kind() == PubKw {
-        // An interface's members take no `pub`, and neither does an impl's associated type:
-        // an E0016, and the member is parsed on. Taking the `pub` ends recovery, as a member
-        // start does, so the error is the member's own, unless the line is no member.
-        let interface = owner == Owner::Interface;
-        let wrong = interface || (owner == Owner::Impl && p.nth_kind(1) == TypeKw);
-        let error = wrong.then(|| {
-            p.unexpected(
-                if interface {
-                    "`fn` or `type`"
-                } else {
-                    "`type`"
-                },
-                false,
-            )
-        });
+        // Only the declarations of the file and an impl's methods and constants take `pub`.
+        // Anywhere else it is an E0016, and the member is parsed on. Taking the `pub` ends
+        // recovery, as a member start does, so the error is the member's own, unless the line
+        // is no member.
+        let wrong = match owner {
+            Owner::File => false,
+            Owner::Impl => p.nth_kind(1) == TypeKw,
+            _ => true,
+        };
+        let error = wrong.then(|| p.unexpected(owner.unpublished(), false));
         p.bump();
         if let Some(error) = error
             && (!quiet || matches!(p.kind(), FnKw | TypeKw))
@@ -77,11 +99,19 @@ fn decl(p: &mut Parser, owner: Owner) {
     }
     let parse: fn(&mut Parser) -> SyntaxKind = match (owner, p.kind()) {
         (Owner::Interface, FnKw) => |p| {
-            fn_decl(p, false);
+            fn_decl(p, Owner::Interface);
+            FnDecl
+        },
+        (Owner::Effect, FnKw) => |p| {
+            fn_decl(p, Owner::Effect);
+            FnDecl
+        },
+        (Owner::Foreign, FnKw) => |p| {
+            c_fn(p);
             FnDecl
         },
         (_, FnKw) => |p| {
-            fn_decl(p, true);
+            fn_decl(p, Owner::File);
             FnDecl
         },
         (Owner::File | Owner::Impl, ConstKw) => |p| {
@@ -96,6 +126,11 @@ fn decl(p: &mut Parser, owner: Owner) {
             assoc_type(p, false);
             AssocType
         },
+        (Owner::Foreign, TypeKw) => |p| {
+            p.bump();
+            name(p, "a type name");
+            ForeignType
+        },
         (Owner::File, TestKw) => |p| {
             test_decl(p);
             TestDecl
@@ -108,6 +143,14 @@ fn decl(p: &mut Parser, owner: Owner) {
             interface_decl(p);
             InterfaceDecl
         },
+        (Owner::File, EffectKw) => |p| {
+            effect_decl(p);
+            EffectDecl
+        },
+        (Owner::File, ForeignKw) => |p| {
+            foreign_decl(p);
+            ForeignDecl
+        },
         (Owner::File, StructKw) => struct_decl,
         (Owner::File, EnumKw) => |p| {
             enum_decl(p);
@@ -119,11 +162,7 @@ fn decl(p: &mut Parser, owner: Owner) {
         },
         _ => {
             p.recovering |= quiet;
-            let what = match owner {
-                Owner::File => "a declaration",
-                Owner::Impl => "`fn`, `const`, `type` or `}`",
-                Owner::Interface => "`fn`, `type` or `}`",
-            };
+            let what = owner.expected_member();
             if p.steps.len() == marker.0 + 1 {
                 // Nothing before the item, so the skip's own node is enough.
                 p.abandon(marker);
@@ -209,20 +248,71 @@ fn skip(what: &str, p: &mut Parser) {
     p.recover(Sync::Line, true);
 }
 
-/// `fn` name [ generics ] `(` params `)` [ `->` type ] [ `uses` effects ] { contract }, then
-/// a block when `body` (`grammar.fn_decl`, `grammar.fn_sig`). An interface's methods have none
-/// (`r[item.iface.no-default]`). A line that starts with `->`, `uses`, `requires`, `ensures` or
-/// `{` continues the header (`r[lex.continue.fn-header]`).
-fn fn_decl(p: &mut Parser, body: bool) {
+/// `fn` name [ generics ] `(` params `)` [ `->` type ] [ `uses` effects ], its contracts, and a
+/// block (`grammar.fn_decl`, `grammar.fn_sig`). An interface's methods have no block
+/// (`r[item.iface.no-default]`), and an effect's operations neither a block nor contracts
+/// (`grammar.effect_decl`). A line that starts with `->`, `uses`, `requires`, `ensures` or `{`
+/// continues the header (`r[lex.continue.fn-header]`).
+fn fn_decl(p: &mut Parser, owner: Owner) {
+    let body = matches!(owner, Owner::File | Owner::Impl);
+    let contracts = owner != Owner::Effect;
     p.bump();
     let outer_header = std::mem::replace(&mut p.in_fn_header, true);
     if name(p, "a function name")
         && (!p.at(Lt) || types::generics(p))
         && param_list(p, param, starts_param)
     {
-        fn_rest(p, true, body);
+        fn_rest(p, contracts, body);
     }
     p.in_fn_header = outer_header;
+}
+
+/// `fn` c_name `(` [ c_name `:` type { `,` c_name `:` type } [ `,` ] ] `)` [ `->` type ]
+/// (`grammar.c_fn`): a C function in a `foreign` block, its names in their C spelling. A
+/// keyword can't be one (`r[ffi.cbind.keyword-name]`). It has no generics, effects, contracts
+/// or body: its effects are the block's. A line that starts with `->` continues the header
+/// (`r[lex.continue.fn-header]`).
+fn c_fn(p: &mut Parser) {
+    p.bump();
+    let outer_header = std::mem::replace(&mut p.in_fn_header, true);
+    if name(p, "a function name") && param_list(p, c_param, starts_c_param) {
+        // A `}` on the line closes the block the function is in.
+        let ends = |p: &Parser| p.at_break() || p.kind() == RBrace;
+        if p.at(Arrow) {
+            let marker = p.start();
+            p.bump();
+            // A `uses` after a bare function type belongs to the C function, which takes
+            // none (`r[effect.uses-return]`).
+            let returns = types::return_type(p);
+            p.complete(marker, RetType);
+            if returns && !ends(p) {
+                p.expected("a line break");
+            }
+        } else if !ends(p) {
+            p.expected("`->` or a line break");
+        }
+    }
+    p.in_fn_header = outer_header;
+}
+
+/// A C function's parameter: a name, `:` and a type.
+fn c_param(p: &mut Parser) {
+    if !starts_c_param(p.kind()) || p.at_break() {
+        return p.expected("a parameter");
+    }
+    let marker = p.start();
+    p.bump_node(Name);
+    if p.at(Colon) {
+        p.bump();
+        types::type_(p);
+    } else {
+        p.expected("`:`");
+    }
+    p.complete(marker, Param);
+}
+
+fn starts_c_param(kind: SyntaxKind) -> bool {
+    kind == Ident
 }
 
 /// What follows a function's parameters, in a declaration or a closure: [ `->` type ]
@@ -439,7 +529,47 @@ fn interface_decl(p: &mut Parser) {
     body(p, Owner::Interface);
 }
 
-/// The members of an `impl` or an `interface` in braces, one per line. After a slip in the
+/// `effect` Name, then [ `uses` effects ] and its operations in braces, or `=` and the path of
+/// another effect (`grammar.effect_decl`).
+fn effect_decl(p: &mut Parser) {
+    p.bump();
+    if !name(p, "an effect name") {
+        return;
+    }
+    if p.at_or_join(Eq) {
+        p.bump();
+        if p.at(Ident) {
+            types::bare_path(p);
+        } else {
+            p.expected("an effect");
+        }
+        return;
+    }
+    let uses = p.at(UsesKw);
+    if (!uses || types::effects(p)) && !p.at_or_join(LBrace) {
+        p.expected(if uses { "`{`" } else { "`uses`, `{` or `=`" });
+    }
+    body(p, Owner::Effect);
+}
+
+/// `foreign` string [ `uses` effects ] `{` members `}` (`grammar.foreign_decl`): the library
+/// and its C functions and types.
+fn foreign_decl(p: &mut Parser) {
+    p.bump();
+    if !p.at(StringStart) {
+        p.expected("the library's name, a string");
+    } else {
+        exprs::literal(p);
+        let uses = p.at(UsesKw);
+        if (!uses || types::effects(p)) && !p.at_or_join(LBrace) {
+            p.expected(if uses { "`{`" } else { "`uses` or `{`" });
+        }
+    }
+    body(p, Owner::Foreign);
+}
+
+/// The members of an `impl`, an `interface`, an `effect` or a `foreign` block in braces, one
+/// per line. After a slip in the
 /// header, the rest of its line is skipped up to its `{`, so the body is still parsed.
 fn body(p: &mut Parser, owner: Owner) {
     skip_to_brace(p);
@@ -449,6 +579,8 @@ fn body(p: &mut Parser, owner: Owner) {
     p.bump();
     let member: fn(&mut Parser) = match owner {
         Owner::Interface => |p| decl(p, Owner::Interface),
+        Owner::Effect => |p| decl(p, Owner::Effect),
+        Owner::Foreign => |p| decl(p, Owner::Foreign),
         _ => |p| decl(p, Owner::Impl),
     };
     p.lines(Holds::Body, Some(RBrace), member);

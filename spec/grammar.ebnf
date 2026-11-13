@@ -109,7 +109,7 @@ variant_pat  = type_path [ "(" ( pattern { "," pattern } | pfields ) [ "," ] ")"
 pfields      = ".." | pfield { "," pfield } [ "," ".." ]
 pfield       = name ":" [ pattern ]
 
-effect_decl  = "effect" Name ( [ "uses" effects ] "{" { fn_sig NEWLINE } "}" | "=" type_path )
+effect_decl  = "effect" Name ( [ "uses" effects ] "{" { { doc_comment } { attribute NEWLINE } fn_sig NEWLINE } "}" | "=" type_path )
 effects      = "*" | effect_ref { "," effect_ref }      // "*" only on main
 effect_ref   = type_path | Name                          // an effect or an effect variable
 
@@ -128,5 +128,5 @@ contract     = "requires" expr | "ensures" [ "(" name ")" ] expr
 
 test_decl    = "test" string [ "forall" "(" params ")" ] [ "uses" effects ] block
 
-foreign_decl = "foreign" string [ "uses" effects ] "{" { ( { attribute NEWLINE } ( c_fn | "type" c_name ) ) NEWLINE } "}"
+foreign_decl = "foreign" string [ "uses" effects ] "{" { { doc_comment } { attribute NEWLINE } ( c_fn | "type" c_name ) NEWLINE } "}"
 c_fn         = "fn" c_name "(" [ c_name ":" type { "," c_name ":" type } [ "," ] ] ")" [ "->" type ]

@@ -1,0 +1,34 @@
+// rule: grammar.foreign_decl
+// rule: grammar.c_fn
+// rule: ffi.cbind.keyword-name
+// mode: parse
+// A foreign block names the library and its effects, and declares C functions and types
+// in their C spelling, each with its doc comments and attributes. A C function takes named
+// parameters and an optional return type, and has no body. A C function or type whose name
+// is a Quince keyword can't be declared.
+foreign "sqlite3" uses Fs {
+  @cleanup(sqlite3_close, limit: dur"5s")
+  type sqlite3
+
+  fn sqlite3_open(path: CString, db: Ptr<Ptr<sqlite3>>) -> CInt
+  fn sqlite3_close(db: Ptr<sqlite3>) -> CInt
+  /// The last error's message.
+  @borrowed
+  fn sqlite3_errmsg(db: Ptr<sqlite3>) -> CString
+  fn sqlite3_initialize()
+}
+
+foreign "m" {
+  fn cos(x: CDouble) -> CDouble
+}
+
+foreign "z" {}
+
+foreign "c" {
+  fn select(n: CInt) -> CInt //~ E0016
+  type match //~ E0016
+  fn abs(x: CInt) -> CInt uses Fs //~ E0016
+  fn exit(code: CInt) { } //~ E0016
+  pub fn puts(s: CString) -> CInt //~ E0016
+  const MAX: CInt = 1 //~ E0016
+}

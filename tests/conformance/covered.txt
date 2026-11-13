@@ -26,6 +26,7 @@ expr.op.range.no-chain
 expr.op.range.parens
 expr.op.type-args
 expr.range.pattern
+ffi.cbind.keyword-name
 grammar.alias_decl
 grammar.alt
 grammar.arg
@@ -39,12 +40,14 @@ grammar.block
 grammar.bound
 grammar.bound_arg
 grammar.bounds
+grammar.c_fn
 grammar.closure
 grammar.cmp_op
 grammar.compare
 grammar.concurrent
 grammar.contract
 grammar.cparam
+grammar.effect_decl
 grammar.effect_ref
 grammar.effects
 grammar.entry
@@ -57,6 +60,7 @@ grammar.file
 grammar.fn_decl
 grammar.fn_sig
 grammar.fn_type
+grammar.foreign_decl
 grammar.generic
 grammar.generics
 grammar.handler

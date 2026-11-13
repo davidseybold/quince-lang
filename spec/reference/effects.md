@@ -41,7 +41,7 @@ r[effect.log-not-builtin]
 Logging is not built in. The standard library declares it as a package effect, `pub effect Log uses Console, Clock { ... }`, so a function that logs says `uses Log`, and a test can capture its logs with `with Log = ...` without touching standard output.
 
 ```ebnf
-effect_decl  = "effect" Name ( [ "uses" effects ] "{" { fn_sig NEWLINE } "}" | "=" type_path )
+effect_decl  = "effect" Name ( [ "uses" effects ] "{" { { doc_comment } { attribute NEWLINE } fn_sig NEWLINE } "}" | "=" type_path )
 effects      = "*" | effect_ref { "," effect_ref }      // "*" only on main
 effect_ref   = type_path | Name                          // an effect or an effect variable
 ```
