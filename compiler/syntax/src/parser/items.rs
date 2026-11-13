@@ -499,17 +499,49 @@ fn starts_param(kind: SyntaxKind) -> bool {
     matches!(kind, Ident | SelfKw | VarKw | Underscore)
 }
 
-/// `test` string block (`grammar.test_decl`).
+/// `test` string [ `forall` `(` params `)` ] [ `uses` effects ] block (`grammar.test_decl`).
+/// `forall` takes one parameter or more. A test's header isn't a `fn` header, so a line that
+/// starts with `forall` or `uses` continues it as an E0018 (decision 4), as `{` does.
 fn test_decl(p: &mut Parser) {
     p.bump();
     if !p.at(StringStart) {
         return p.expected("the test's name, a string");
     }
     exprs::literal(p);
+    let mut what = "`forall`, `uses` or `{`";
+    if p.at_or_join(ForallKw) {
+        p.bump();
+        if !forall_params(p) {
+            return;
+        }
+        what = "`uses` or `{`";
+    }
+    if p.at_or_join(UsesKw) {
+        if !types::effects(p) {
+            return;
+        }
+        what = "`{`";
+    }
     if !p.at_or_join(LBrace) {
-        return p.expected("`{`");
+        return p.expected(what);
     }
     exprs::block(p);
+}
+
+/// A test's `forall` parameters: a `ParamList` that holds one parameter or more.
+fn forall_params(p: &mut Parser) -> bool {
+    if !p.at(LParen) {
+        p.expected("`(`");
+        return false;
+    }
+    let marker = p.start();
+    p.bump();
+    if p.kind() == RParen {
+        p.expected("a parameter");
+    }
+    p.list(RParen, "a parameter", param, starts_param);
+    p.complete(marker, ParamList);
+    true
 }
 
 /// `const` NAME `:` type `=` expr (`grammar.const_decl`).

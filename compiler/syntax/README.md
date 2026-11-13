@@ -97,7 +97,7 @@ A node holds its tokens and child nodes in source order. A part the code leaves 
 | `Param` | `var` if present, then `self`, or a `Name` or `_` followed by `:`, a type, and `=` and an expression for a default. A closure's is a `Name` or `_`, then `:` and a type if present. |
 | `Contract` | `requires` and an expression, or `ensures`, then `(`, a `Name` and `)` if the return value is named, and an expression. |
 | `RetType` | `->` and a type. |
-| `TestDecl` | `test`, its name as a `Literal`, and a `Block`. |
+| `TestDecl` | `test`, its name as a `Literal`, then `forall` and a `ParamList` if present, `Effects` if present, and a `Block`. |
 | `ConstDecl` | `pub` if present, `const`, a `Name`, `:`, a type, `=` and an expression. |
 | `ImplDecl` | `impl`, `Generics` if present, a `TypePath` and `for` if it implements an interface or an effect, a type, `{`, its members, and `}`. A member is a `FnDecl`, an `AssocType` or a `ConstDecl`, with its `DocComments` and `Attribute`s if present, as a declaration's are. |
 | `InterfaceDecl` | Its declaration's start, as for `FnDecl`, then `interface`, a `Name`, `Generics` if present, `{`, its members, `AssocType`s and `FnDecl`s with no `Block`, and `}`. |

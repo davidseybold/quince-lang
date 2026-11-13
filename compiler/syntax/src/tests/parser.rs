@@ -194,6 +194,40 @@ fn constants_impls_and_tests() {
     );
 }
 
+/// A test's `forall` parameters are a `ParamList` after `forall`, and its `uses` effects are
+/// `Effects`, as a function's are (`grammar.test_decl`).
+#[test]
+fn a_test_with_parameters_and_effects() {
+    assert_eq!(
+        valid("test \"t\" forall (n: Int) uses Net {}\n"),
+        r#"File
+  TestDecl
+    TestKw "test"
+    Literal
+      StringStart "\""
+      StringText "t"
+      StringEnd "\""
+    ForallKw "forall"
+    ParamList
+      LParen "("
+      Param
+        Name
+          Ident "n"
+        Colon ":"
+        TypePath
+          Ident "Int"
+      RParen ")"
+    Effects
+      UsesKw "uses"
+      TypePath
+        Ident "Net"
+    Block
+      LBrace "{"
+      RBrace "}"
+"#
+    );
+}
+
 /// `true` and `false` are literals, like numbers and chars (`r[lex.lit.bool]`).
 #[test]
 fn literals_and_list_literals() {

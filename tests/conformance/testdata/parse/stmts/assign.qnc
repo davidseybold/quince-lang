@@ -1,10 +1,12 @@
 // rule: grammar.place
+// rule: grammar.assign_op
 // rule: stmt.assign.stmt
 // rule: stmt.assign.place
 // mode: parse
 // Assignment is a statement: a place, `=` or a compound assignment, and an expression. A
 // place is a name or `self`, followed by fields, tuple positions and indexes. Anything else
-// on the left is an error.
+// on the left is an error, and so is an operator other than `=`, `+=`, `-=`, `*=`, `/=` and
+// `%=`.
 impl Counter {
   fn bump(var self, by: Int) {
     self.count += by
@@ -36,4 +38,8 @@ fn f(var xs: List<Int>, var grid: List<List<Int>>, i: Int) {
   (total) = 3 //~ E0026
   1 = total //~ E0026
   user.save()? = 1 //~ E0026
+  total &= 1 //~ E0016
+  total |= 1 //~ E0016
+  total <<= 1 //~ E0016
+  total **= 2 //~ E0016
 }

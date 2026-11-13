@@ -33,6 +33,7 @@ grammar.arg
 grammar.args
 grammar.arith
 grammar.arm
+grammar.assign_op
 grammar.attribute
 grammar.background
 grammar.bits
@@ -45,8 +46,10 @@ grammar.closure
 grammar.cmp_op
 grammar.compare
 grammar.concurrent
+grammar.const_decl
 grammar.contract
 grammar.cparam
+grammar.decl
 grammar.effect_decl
 grammar.effect_ref
 grammar.effects
@@ -69,6 +72,7 @@ grammar.impl_decl
 grammar.impl_item
 grammar.import
 grammar.interface_decl
+grammar.item
 grammar.jump
 grammar.list_lit
 grammar.logic
@@ -77,6 +81,7 @@ grammar.match_expr
 grammar.name_ref
 grammar.names
 grammar.newtype_decl
+grammar.param
 grammar.params
 grammar.pattern
 grammar.pfield
@@ -92,6 +97,7 @@ grammar.stmt
 grammar.struct_decl
 grammar.struct_lit
 grammar.term
+grammar.test_decl
 grammar.tuple
 grammar.tuple_pat
 grammar.type
