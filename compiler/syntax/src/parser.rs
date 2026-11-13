@@ -101,8 +101,8 @@ const EOF: SyntaxKind = File;
 const LOOKAHEAD_LIMIT: u32 = 256;
 
 /// How deep a node may start, in levels of the tree with the file at level 1, at the parser's
-/// recursive entries: an expression, a prefix operator's operand, an `else if`, a block, a
-/// type and a pattern. Each step of a left-associative chain counts the levels of the node it
+/// recursive entries: an expression, a prefix operator's operand, a block, a type and a
+/// pattern. Each step of a left-associative chain counts the levels of the node it
 /// wraps too. Past it is an E0022 (decision 10), so the parser's recursion and the tree's depth
 /// are both bounded. The few nodes a construct opens before its next entry, such as a
 /// parameter's name, may go a little deeper. The README has the measurements behind it.
@@ -171,12 +171,21 @@ fn into_events(mut steps: Vec<Step>) -> Vec<Event> {
 #[must_use]
 struct Marker(usize);
 
-/// A completed node, which [`Parser::precede`] can wrap in another, and its height: the
-/// levels of the tree it spans, 1 for a node that holds only tokens.
+/// A completed node, which [`Parser::precede`] can wrap in another, and its height.
 #[derive(Clone, Copy)]
 struct Completed {
     at: usize,
+    below: Below,
+}
+
+/// What lies below a node: its height, the levels of the tree it spans, 1 for a node that
+/// holds only tokens, and whether it holds an E0022's levels.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct Below {
     height: u32,
+    /// An E0022 was reported in it, so a node opened around it that is past the limit too is
+    /// part of that slip.
+    too_deep: bool,
 }
 
 /// What the members of a line context can be (decision 9's member starts).
@@ -296,15 +305,19 @@ struct Parser<'t> {
     /// significant tokens: no entry came before it, so the braces were a block, which can't go
     /// where an expression goes (`r[expr.block.no-bare]`). The map skips to its `}`.
     block_at: Option<usize>,
-    /// For each open node, outermost first, the height of the tallest node completed in it, or
-    /// that it wraps. Its length is the depth of the next node to open, less one.
-    open: Vec<u32>,
+    /// For each open node, outermost first, what lies below it so far: the height of the
+    /// tallest node completed in it or that it wraps, and whether any holds an E0022. Its
+    /// length is the depth of the next node to open, less one.
+    open: Vec<Below>,
     /// The parser is parsing ahead to see whether a `<` in an expression starts type
     /// arguments (decision 6).
     speculating: bool,
     /// While speculating, a slip happened. From then on the parser sees no more tokens, so
     /// every construct it has open closes at once.
     speculation_failed: bool,
+    /// While speculating, the nesting limit was reached. Whether the type arguments around it
+    /// parse then depends on how deep the parser was, so none of them is recorded.
+    speculation_too_deep: bool,
     /// Each `<` the parser has parsed ahead from, nested ones included, by its index among
     /// the significant tokens: the index after the `>` that closes its type arguments, or
     /// `None` when what follows isn't type arguments. So each `<` is examined once.
@@ -321,8 +334,8 @@ struct Checkpoint {
     steps: usize,
     taken: usize,
     frames: usize,
-    /// How many nodes are open, and the height of the tallest node completed in the innermost.
-    open: (usize, Option<u32>),
+    /// How many nodes are open, and what lies below the innermost.
+    open: (usize, Option<Below>),
     slips: u32,
     recovering: bool,
     closed_early: bool,
@@ -356,6 +369,7 @@ impl<'t> Parser<'t> {
             open: Vec::new(),
             speculating: false,
             speculation_failed: false,
+            speculation_too_deep: false,
             type_args_end: HashMap::new(),
             #[cfg(test)]
             speculated: 0,
@@ -656,7 +670,7 @@ impl<'t> Parser<'t> {
 
     fn start(&mut self) -> Marker {
         self.steps.push(TOMBSTONE);
-        self.open.push(0);
+        self.open.push(Below::default());
         Marker(self.steps.len() - 1)
     }
 
@@ -667,13 +681,18 @@ impl<'t> Parser<'t> {
         *slot = Some(kind);
         self.steps.push(Step::Finish);
         self.lookahead.set(0);
-        let height = self.open.pop().expect("an open node") + 1;
+        let inside = self.open.pop().expect("an open node");
+        let below = Below {
+            height: inside.height + 1,
+            too_deep: inside.too_deep,
+        };
         if let Some(top) = self.open.last_mut() {
-            *top = (*top).max(height);
+            top.height = top.height.max(below.height);
+            top.too_deep |= below.too_deep;
         }
         Completed {
             at: marker.0,
-            height,
+            below,
         }
     }
 
@@ -691,7 +710,7 @@ impl<'t> Parser<'t> {
     /// Opens a node around `completed`.
     fn precede(&mut self, completed: Completed) -> Marker {
         let marker = self.start();
-        *self.open.last_mut().expect("the node just opened") = completed.height;
+        *self.open.last_mut().expect("the node just opened") = completed.below;
         let Step::Start { forward_parent, .. } = &mut self.steps[completed.at] else {
             unreachable!("a completed marker is a Start");
         };
@@ -700,23 +719,38 @@ impl<'t> Parser<'t> {
     }
 
     /// True when a node opened now, around `wrapped` if there is one, would reach past
-    /// [`NESTING_LIMIT`]. Then this also reports an E0022 at the current token and skips to the end
-    /// of the innermost construct: its closing bracket in a list, or the line's end. While
-    /// parsing ahead it is a slip, as every error is there.
+    /// [`NESTING_LIMIT`]. Then this also reports an E0022 at the current token and skips to the
+    /// end of the innermost construct: its closing bracket in a list, or the line's end, the
+    /// current token at least, so a loop over members always moves on. When the innermost open
+    /// node or `wrapped` already holds an E0022, as `x` does in `((x).a).a`, the levels past
+    /// the limit are part of that slip, and nothing more is reported. While parsing ahead it is
+    /// a slip, as every error is there, and no type arguments around it are recorded.
     fn nests_too_deep(&mut self, wrapped: Option<Completed>) -> bool {
-        let below = wrapped.map_or(0, |c| c.height);
-        if self.open.len() as u32 + 1 + below <= NESTING_LIMIT {
+        let below = wrapped.map_or(Below::default(), |c| c.below);
+        if self.open.len() as u32 + 1 + below.height <= NESTING_LIMIT {
             return false;
         }
-        let range = self
-            .current()
-            .map_or(self.text.len()..self.text.len(), |t| t.range.clone());
-        let message = format!(
-            "this nests deeper than the limit of {NESTING_LIMIT} levels: move the inner part \
-             into a binding or a function"
-        );
-        self.report(SyntaxError::new(range, codes::TOO_DEEP, message));
-        self.recover(Sync::Construct, false);
+        let top = self.open.last().copied().unwrap_or_default();
+        if below.too_deep || top.too_deep {
+            self.slip();
+            self.recovering = true;
+        } else {
+            let range = self
+                .current()
+                .map_or(self.text.len()..self.text.len(), |t| t.range.clone());
+            let message = format!(
+                "this nests deeper than the limit of {NESTING_LIMIT} levels: move the inner \
+                 part into a binding or a function"
+            );
+            self.report(SyntaxError::new(range, codes::TOO_DEEP, message));
+        }
+        if self.speculating {
+            self.speculation_too_deep = true;
+        }
+        if let Some(top) = self.open.last_mut() {
+            top.too_deep = true;
+        }
+        self.recover(Sync::Construct, true);
         true
     }
 
@@ -1149,8 +1183,8 @@ impl<'t> Parser<'t> {
             checkpoint.open.0,
             "parsing ahead left a node open"
         );
-        if let (Some(top), Some(height)) = (self.open.last_mut(), checkpoint.open.1) {
-            *top = height;
+        if let (Some(top), Some(below)) = (self.open.last_mut(), checkpoint.open.1) {
+            *top = below;
         }
         self.pos = checkpoint.pos;
         self.steps.truncate(checkpoint.steps);

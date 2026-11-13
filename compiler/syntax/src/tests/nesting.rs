@@ -189,12 +189,76 @@ fn the_error_and_what_is_skipped() {
 
 /// Parsing ahead from a `<` nests type arguments as deep as the `<`s it meets, far deeper
 /// than the tree that results, so the limit covers it, where it is a slip: `g(a < b, a < b,
-/// ...)` is comparisons, with no error, and each `<` is parsed ahead from once.
+/// ...)` is comparisons, with no error. Whether type arguments parse past the limit depends
+/// on how deep the parser was, so none around it is recorded, and each `<` is parsed ahead
+/// from again: at most a limit's levels each, so still linear. Here each `a < b, ` is 4 tokens
+/// and 2 levels.
 #[test]
 fn parsing_ahead_is_within_the_limit() {
     let text = body(&format!("g({}a)", "a < b, ".repeat(DEEP_LEVELS)));
     let (codes, _) = parse_on_test_stack(text.clone());
     assert_eq!(codes, Vec::<&str>::new());
     let speculated = on_test_stack(move || speculated_tokens(&text));
-    assert!(speculated <= 4 * DEEP_LEVELS + 10, "{speculated}");
+    let per_lt = 4 * NESTING_LIMIT as usize / 2;
+    assert!(speculated <= DEEP_LEVELS * per_lt, "{speculated}");
+}
+
+/// A `<` that was parsed ahead from inside a deeper speculation, which reached the limit,
+/// still starts type arguments where the parser reaches it, less deep (found in review).
+#[test]
+fn parsing_ahead_past_the_limit_records_nothing() {
+    let generic = format!("f<{}>(x)", wrap(8, "List<", "Int", ">"));
+    for comparisons in [116, 120, 125, 126] {
+        let line = format!("g({}{generic})", "a < b, ".repeat(comparisons));
+        let (codes, _) = parse_on_test_stack(body(&line));
+        assert_eq!(codes, Vec::<&str>::new(), "{comparisons}");
+    }
+    let list = body(&format!("[{}make<List<Int>>()]", "a < b, ".repeat(120)));
+    assert_eq!(parse_on_test_stack(list).0, Vec::<&str>::new());
+}
+
+/// An E0022 whose skip starts a block's line still takes a token, so the block's loop over its
+/// lines moves on (found in review: a release build looped forever).
+#[test]
+fn a_block_line_at_the_limit_moves_on() {
+    let text = format!(
+        "fn f() {{\n  ({}x\ny\n{})\n}}\n",
+        "if a {\n".repeat(126),
+        "}\n".repeat(126)
+    );
+    let (codes, _) = parse_on_test_stack(text);
+    assert_eq!(codes.first(), Some(&codes::TOO_DEEP));
+}
+
+/// A chain step around a node that holds an E0022, or a sibling at the limit beside one, is
+/// part of that slip, not another error per level (found in review).
+#[test]
+fn levels_past_an_error_are_one_slip() {
+    let deep = 300;
+    for (shape, text) in [
+        ("fields", wrap(deep, "(", "x", ").a")),
+        ("sums", wrap(deep, "(", "a", ") + b")),
+        ("indexes", wrap(deep, "[", "x", "][0]")),
+        ("comparisons", wrap(deep, "(", "x", ") == 1")),
+        ("is", wrap(deep, "(", "x", ") is A")),
+        ("ranges", wrap(deep, "(", "x", ")..1")),
+        ("method calls", wrap(deep, "g(", "x", ").len()")),
+        ("tries", wrap(deep, "g(", "x", ")?")),
+        ("grouping", wrap(deep, "(a * ", "b", " + c)")),
+        ("closure calls", wrap(deep, "fn() { ", "x", " }()")),
+        ("if bodies", wrap(deep, "if a { ", "x", " }.len()")),
+    ] {
+        let (codes, _) = parse_on_test_stack(body(&text));
+        assert_eq!(codes, [codes::TOO_DEEP], "{shape}");
+    }
+    // Two parts that each go past the limit on their own are two places to split, so two
+    // errors.
+    let types = format!(
+        "fn f(q: {0}) -> {0} {{}}\n",
+        wrap(deep, "List<", "Int", ">")
+    );
+    assert_eq!(
+        parse_on_test_stack(types).0,
+        [codes::TOO_DEEP, codes::TOO_DEEP]
+    );
 }

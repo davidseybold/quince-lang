@@ -91,7 +91,7 @@ fn type_args(p: &mut Parser, in_bound: bool) -> bool {
     let (marker, at) = (p.start(), p.pos);
     angle_list(p, "a type", if in_bound { bound_arg } else { type_arg });
     p.complete(marker, TypeArgs);
-    if p.speculating {
+    if p.speculating && !p.speculation_too_deep {
         let end = (!p.speculation_failed).then_some(p.pos);
         p.type_args_end.insert(at, end);
     }

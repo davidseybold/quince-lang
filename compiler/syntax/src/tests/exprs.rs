@@ -585,11 +585,12 @@ fn less_than_after_parsing_ahead() {
     assert_eq!(errors("x < Y >= z"), ["E0020 6..8 => x < Y && Y >= z"]);
     assert_eq!(errors("a < b >> c"), ["E0019 4..10 => a < (b >> c)"]);
     // A long chain is one error, and is parsed ahead from each `<` once: the first `<` parses
-    // ahead through the rest, and records every `<` it meets.
-    let chain = vec!["a"; 200].join(" < ");
+    // ahead through the rest, and records every `<` it meets. Each `<` nests type arguments two
+    // levels deeper, so 100 stay within the nesting limit (`tests::nesting` has deeper ones).
+    let chain = vec!["a"; 100].join(" < ");
     assert_eq!(errors(&chain).len(), 1);
     let text = format!("{PREFIX}{chain}\n}}\n");
-    let tokens = 400 + 10;
+    let tokens = 200 + 10;
     assert!(crate::parser::speculated_tokens(&text) <= tokens);
     // Parsing ahead leaves no slip behind, so the operands around it are still checked.
     assert_eq!(

@@ -186,9 +186,7 @@ fn if_expr(p: &mut Parser) -> Completed {
         p.bump();
         match p.kind() {
             IfKw if !p.at_break() => {
-                if !p.nests_too_deep(None) {
-                    if_expr(p);
-                }
+                if_expr(p);
             }
             LBrace if p.at_or_join(LBrace) => block(p),
             _ => p.expected("`if` or `{`"),
@@ -690,7 +688,8 @@ fn type_args(p: &mut Parser) {
     types::expr_type_args(p);
     p.speculating = false;
     p.speculation_failed = false;
-    let end = p.type_args_end[&at];
+    p.speculation_too_deep = false;
+    let end = p.type_args_end.get(&at).copied().flatten();
     if !end.is_some_and(|end| follows_type_args(p, end)) {
         p.rewind(checkpoint);
     }
