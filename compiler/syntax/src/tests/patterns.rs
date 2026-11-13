@@ -265,6 +265,15 @@ fn slips() {
     // first interpolation is the error, and the string is whole, so the pattern goes on.
     assert_eq!(errors("\"a{b}c{d}\""), ["E0016 2..5"]);
     assert_eq!(errors("\"a{b}\" | 1..x"), ["E0016 2..5", "E0016 12..13"]);
+    // It counts as a slip for the operator checks around the pattern, so a chained `is`
+    // reports nothing more.
+    let codes =
+        |text: &str| -> Vec<&str> { checked(text).errors().iter().map(|e| e.code).collect() };
+    assert_eq!(
+        codes("fn f() {\n  let a = x == y is \"{z}\"\n}\n"),
+        ["E0016"]
+    );
+    assert_eq!(codes("fn f() {\n  let a = x == y is \"z\"\n}\n"), ["E0020"]);
     // A slip inside the parentheses is the one error, and the `let` goes on after them.
     assert_eq!(errors("(a b, c)"), ["E0016 3..4"]);
     assert_eq!(errors("Some(a b)"), ["E0016 7..8"]);

@@ -13,4 +13,7 @@ fn f(s: String, data: Bytes, id: Int) {
   let route = s == "user/{id}"
   let built = s is "user/{id}" //~ E0016
   let twice = s is "{id}/{id}" //~ E0016
+  let lines = s is """
+    user/{id}
+    """ //~^ E0016
 }

@@ -116,13 +116,15 @@ fn bound(p: &mut Parser) -> bool {
 }
 
 /// Reports the first interpolation in the string pattern whose tokens start at `first`: a
-/// pattern is a constant (`r[pat.no-interp]`). The string is whole, so this isn't a slip that
-/// hides what follows it.
+/// pattern is a constant (`r[pat.no-interp]`). The string is whole, so the pattern goes on and
+/// no recovery starts. It still counts as a slip, so the operator checks around the pattern,
+/// such as a chained `is`, report nothing more.
 fn no_interpolation(p: &mut Parser, first: usize) {
     let tokens = &p.input.tokens[first..p.pos];
     let Some(open) = tokens.iter().position(|t| t.kind == InterpStart) else {
         return;
     };
+    // The lexer closes every interpolation it opens, so the fallback never runs.
     let close = tokens[open..]
         .iter()
         .position(|t| t.kind == InterpEnd)
