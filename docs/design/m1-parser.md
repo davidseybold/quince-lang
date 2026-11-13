@@ -212,7 +212,7 @@ Doc comments and attributes aren't member starts: they belong to the declaration
 - A closing bracket that matches no open bracket closes the innermost one in its place, with one E0016 that names the bracket expected. `f(a, b]` is one E0016.
 - A closing bracket with nothing open is skipped, as an E0016.
 
-**An arm's `=>`** (layer 5b, decided by David, 2026-11-12) closes the brackets opened in its arm, in the pattern, the guard or the body, with an E0017 at each opener. So `A(x => 1,` is one E0017 at the `(`, and the arms after it parse, where the `(` would otherwise hold the rest of the `match`. A bracket left open in the body, as in `0 => f(a,`, first meets the next arm's pattern, which is the E0016, and that arm's `=>` closes the bracket silently, since the parser is skipping. A `=>` inside a nested `match`'s arms closes only that arm's brackets. A block in the arm stops the rule: its lines are statement lines again, and a `=>` in them is an ordinary E0016. The cost is a missing `}` in a block arm. The block runs on over the next arms, so the next arm's `=>` is an E0016, the `match`'s `}` closes the block, the function's `}` is an E0016 that expects `,` and closes the `match`, and the end of the file gives an E0017 at the function's `{`. Three errors for one slip is accepted, with no heuristic for it.
+**An arm's `=>`** (layer 5b, decided by David, 2026-11-12) closes the brackets opened in its arm, in the pattern, the guard or the body, with an E0017 at each opener. So `A(x => 1,` is one E0017 at the `(`, and the arms after it parse, where the `(` would otherwise hold the rest of the `match`. A bracket left open in the body, as in `0 => f(a,`, meets the next arm's pattern. When that pattern can be an item in the bracket, such as `B`, it parses as one, and the `=>` closes the bracket with an E0017. When it can't, such as `_`, it is the E0016, and the `=>` closes the bracket silently, since the parser is skipping. Either way it is one error. While the parser skips after any slip in an arm, the arm's `=>` stops the skip too, so the next arm is parsed and its own slip reported. A `=>` inside a nested `match`'s arms closes only that arm's brackets. A block in the arm stops the rule: its lines are statement lines again, and a `=>` in them is an ordinary E0016. The cost is a missing `}` in a block arm. The block runs on over the next arms, so the next arm is an E0016 (at its `=>` when its pattern is an expression, as `1` is, and at the pattern otherwise, as at `_`), the `match`'s `}` closes the block, the function's `}` is an E0016 that expects `,` and closes the `match`, and the end of the file gives an E0017 at the function's `{`. Three errors for one slip is accepted, with no heuristic for it.
 
 **E0016** is the general syntax error: "expected X, found Y", where X lists what may go there in Quince terms ("an expression", "`,` or `)`", "a line break").
 - When a list item is followed, on the next line, by something that starts another item, its fix inserts the missing `,` (`needs-review`).
@@ -257,7 +257,7 @@ Doc comments and attributes aren't member starts: they belong to the declaration
 | `match x {` then a line `0 => "abc` and a line `}` | E0004 (layer 5b) |
 | `for x xs { a }` | E0016 at `xs` (layer 5b) |
 | `match s {` then lines `A(x => 1,` and `_ => 2,` | E0017 at `(` (layer 5b) |
-| `match s {` then lines `0 => {`, `a` and `_ => 3,`, with the block's `}` missing | E0016 at the second `=>`, E0016 at the function's `}`, E0017 at the function's `{` (layer 5b) |
+| `match s {` then lines `0 => {`, `a` and `1 => 2,`, with the block's `}` missing | E0016 at the second `=>`, E0016 at the function's `}`, E0017 at the function's `{` (layer 5b) |
 
 ### 10. Diagnostics
 
@@ -571,6 +571,7 @@ Layer 5 is two PRs (decided by David, 2026-11-12), since patterns with `match` a
 - [ ] Spec: question 7, and a bump. `concurrent`'s arguments take an optional trailing `,` (layer 2a's trailing-comma decision).
 - [ ] Extend `parse/lexical/fn_header.qnc` with closure headers and `requires`/`ensures` lines, which `r[lex.continue.fn-header]` covers (layer 4b).
 - [ ] Extend `parse/stmts/for.qnc` with `break 1 //~ E0016`: it cites `r[stmt.loop.stmt]`, which also says `break` takes no value (layer 5b).
+- [ ] `select` arms (`pattern = expr => ...`) push `Holds::Arms`, as a `match`'s do. Otherwise in `match s { 0 => select { x = c.recv() => 1, }, }` the `select` arm's `=>` would find the outer `match`'s frame and close the `select`'s braces (found in layer 5b's review).
 - [ ] Closures, `concurrent`, `background`, `select`, `with`, `spawn`, `return`, contracts. [`grammar.closure`, `grammar.concurrent`, `grammar.background`, `grammar.select`, `grammar.with_expr`, `grammar.jump`, `grammar.contract`, `expr.op.keyword-forms`]
 
 **Layer 7: `m1/parser-items`**

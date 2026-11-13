@@ -591,10 +591,15 @@ fn an_arms_fat_arrow_closes_its_brackets() {
         errors("  match s {\n    A(f(x => 1,\n    _ => 4,\n  }"),
         ["E0017 17..18", "E0017 19..20"]
     );
-    // In the body the next arm is the slip, and its `=>` closes the `(` silently.
+    // In the body the next arm's pattern is the slip when it can't be an argument, and its
+    // `=>` closes the `(` silently. When it can, the `=>` closes the `(` with an E0017.
     assert_eq!(
         errors("  match s {\n    0 => f(a,\n    _ => 4,\n  }"),
         ["E0016 30..31"]
+    );
+    assert_eq!(
+        errors("  match s {\n    0 => f(a,\n    B => 4,\n  }"),
+        ["E0017 22..23"]
     );
     // The innermost match's arm closes its own brackets, and the outer arms go on.
     assert_eq!(
@@ -605,14 +610,19 @@ fn an_arms_fat_arrow_closes_its_brackets() {
         errors("  match s {\n    0 => f(match t { 1 => 2, }),\n    _ => 3,\n  }"),
         Vec::<String>::new()
     );
-    // A `=>` after the arm's body has closed is an ordinary missing `,`.
+    // While the parser skips after a slip in an arm, the arm's `=>` stops the skip too, so
+    // the next arm is parsed, and its own slip reported.
     assert_eq!(
-        errors("  match s {\n    0 => a b(c => 1,\n    _ => 3,\n  }"),
-        ["E0016 23..24"]
+        errors("  match s {\n    0 => a b(c => 1,\n    _ => x y,\n  }"),
+        ["E0016 23..24", "E0016 44..45"]
     );
     assert_eq!(
-        errors("  match s {\n    [a => 1,\n    _ => 3,\n  }"),
-        ["E0016 16..17"]
+        errors("  match s {\n    [a => 1,\n    _ => x y,\n  }"),
+        ["E0016 16..17", "E0016 36..37"]
+    );
+    assert_eq!(
+        errors("  match s {\n    A(x y(z => 1,\n    _ => x y,\n  }"),
+        ["E0016 20..21", "E0016 41..42"]
     );
     assert_eq!(
         errors("  match s {\n    0 => {\n      x => 1\n    },\n    _ => 3,\n  }"),
