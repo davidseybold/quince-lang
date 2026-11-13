@@ -1,6 +1,6 @@
 # M1: Formatter
 
-Status: draft. The first design review pass returned "Ready with changes". This revision addresses its findings, and tests each decision against what other formatters do (Precedent, below). This is the third and last design doc of M1 (Syntax), after [the lexer](m1-lexer.md) and [the parser](m1-parser.md).
+Status: draft, in design review. Pass 1 and pass 2 returned "Ready with changes", and this revision addresses both. On 2026-11-13 David approved decisions A, B and C and spec questions 1 to 11 as proposed. Question 9 was revised after that approval (pass 2 found its precedent only half right), and awaits his confirmation. Each decision is tested against what other formatters do (Precedent, below). This is the third and last design doc of M1 (Syntax), after [the lexer](m1-lexer.md) and [the parser](m1-parser.md).
 
 ## Why
 
@@ -15,11 +15,11 @@ The formatter matters more to Quince than to most languages, for three reasons:
 
 - **Code:** `quince_syntax` gets a `fmt` module, and its README gets a Formatting section, the format's contract. The conformance runner gets a `fmt` mode and `Backend::format`. `quince_cli` gets `quince fmt` (decision 12). `fuzz` gets `check_format` and a second fuzz target. Two small parser changes come with spec questions 3, 4 and 8.
 - **Dependencies:** none. The layout engine is our own (decision 3).
-- **Decisions for David:**
+- **Decisions (approved by David, 2026-11-13):**
   - **A. Files with errors.** `fmt` refuses a file with any syntax error (decision 2), as every formatter checked does. Only 13 of the 111 fixtures have no expected diagnostic, so M1's exit criterion "`fmt` is idempotent on every fixture" becomes: on every fixture `fmt` accepts, `fmt(fmt(x)) == fmt(x)`, and on every other fixture `fmt` refuses and writes nothing. The `fmt` fixtures this doc adds are what make the criterion bite. Layer 1 rewords the criterion in `docs/milestones.md` to say so.
-  - **B. The spec's examples follow the format.** Many spec examples don't match any one layout: some put `uses` on its own line in a header that fits on one line (`concurrency.md:18`, `:70`, `effects.md:116`), others keep it on the header line (`effects.md:69`); structs and enums are written on one line; `fn display(self) -> String { self.0 }` has a one-line body; trailing comments are aligned. The rules below are chosen on their merits and by precedent, not to reproduce every example. So the examples are illustrations, not the reference layout. After layer 6 lands, one spec PR runs `quince fmt` over the spec's code blocks, with your approval, as a one-off edit: no test formats the spec ("Fixtures, not spec"). Each layer's PR lists the spec examples its rules would change.
+  - **B. The spec's examples follow the format.** Many spec examples don't match any one layout: some put `uses` on its own line in a header that fits on one line (`concurrency.md:18`, `:70`, `effects.md:116`), others keep it on the header line (`effects.md:69`); structs and enums are written on one line; `fn display(self) -> String { self.0 }` has a one-line body; trailing comments are aligned. The rules below are chosen on their merits and by precedent, not to reproduce every example. So the examples are illustrations, not the reference layout. After layer 6 lands, one spec PR runs `quince fmt` over the spec's code blocks, with David's approval, as a one-off edit: no test formats the spec ("Fixtures, not spec"). Many blocks won't parse, such as fragments, `{ ... }` placeholders and examples of errors, so `fmt` refuses them: that PR edits those by hand to match the format where the rules apply, and leaves the rest as they are. Each layer's PR lists the spec examples its rules would change.
   - **C. `quince fmt` in M1.** The CLI gets `quince fmt <file>...`, `quince fmt -` for standard input, and `--check`, with no project walk, since that needs M2's project model (decision 12).
-- **Spec:** Spec questions, below, has eleven questions, each with proposed wording. Four only clarify (2, 5, 10 and 11). Two reverse earlier choices on precedent: question 3 reopens the parser doc's question 5, and question 7 moves three rewrites out of `fmt`. Each lands in the layer that enforces it, with a minor version bump.
+- **Spec (approved by David, 2026-11-13, question 9 to be reconfirmed):** Spec questions, below, has eleven questions, each with its wording. Four only clarify (2, 5, 10 and 11). Two reverse earlier choices on precedent: question 3 reopens the parser doc's question 5, and question 7 moves three rewrites out of `fmt`. Each lands in the layer that enforces it, with a minor version bump.
 - **Diagnostic codes:** none. Refusal reports the parser's diagnostics. The diagnostic `quince check` gives an unformatted file is M2's, when `check` is wired (decision 13).
 - **Delivery:** a stack of eight PRs (decision 15).
 
@@ -43,13 +43,13 @@ The guiding rule for this doc: where other formatters agree, Quince does the sam
 | File with a syntax error | rustfmt refuses, exit 1 (checked); gofmt, Prettier, Black, zig fmt, dart refuse (reported) | Refuse (decision 2) |
 | Who decides line breaks | rustfmt, Prettier, dart: the formatter, by width; gofmt: the author | The formatter (`r[tool.fmt.width]`) |
 | Existing trailing comma forces a break ("magic trailing comma") | Black, Ruff yes (reported); dart's 3.7 style dropped it (reported) and made keeping it opt-in (checked); rustfmt, Prettier no | No: the formatter decides every break |
-| Blank lines between declarations | gofmt keeps 0 or 1 between one-line declarations of one kind, adds one between kinds (checked); Black enforces them around `def` and `class`; rustfmt keeps 0 or 1 (checked) | One around any multi-line or documented declaration, else 0 or 1 as written (decision 4) |
+| Blank lines between declarations | gofmt keeps 0 or 1 between one-line declarations of one kind, adds one between kinds (checked) and before a multi-line function (reported); Black enforces them before and after `def` and `class`; rustfmt keeps 0 or 1 (checked) | One around any multi-line or documented declaration, else 0 or 1 as written (decision 4) |
 | Blank lines in blocks | Everyone keeps 0 or 1 | Same |
 | Declaration bodies on one line | rustfmt never (checked); gofmt keeps the author's | Never |
 | `if` on one line | rustfmt only as a value with an `else` (checked); gofmt never | rustfmt's rule |
 | `while`/`for` body on one line | Never (rustfmt, gofmt checked) | Never |
 | Struct and enum field lists | rustfmt always breaks them in a declaration (checked) | Always break |
-| Single-expression closure and arm blocks | rustfmt removes the braces (checked) | Arms: same (question 9). Closures need braces, so they stay on one line |
+| Single-expression closure and arm blocks | rustfmt removes the braces when the body starts on the arm's line, and adds them when it can't (checked) | Arms: same (question 9). Closures need braces, so they stay on one line |
 | Last-argument closure | rustfmt and Prettier keep it on the call's line (rustfmt checked) | Same (decision 7) |
 | Method chains | rustfmt: one per line past a width; Prettier: a call-count heuristic | rustfmt's, by the full width |
 | Long right-hand side | rustfmt: next line when it then fits on one line, else same line (reported) | Same |
@@ -58,7 +58,7 @@ The guiding rule for this doc: where other formatters agree, Quince does the sam
 | Width unit | Prettier, rustfmt, Black: display width, East Asian wide = 2 (reported) | Characters (question 5 says why) |
 | Indentation | rustfmt, Black, zig: 4 spaces; Prettier, dart, swift-format: 2; gofmt: tabs | 2 spaces, as every spec example |
 | Output check | Black checks the AST and a second pass by default (checked, AST part); Prettier only with `--debug-check` (reported) | Black's (decision 10) |
-| Hex digits | Black: uppercase in numbers, lowercase in escapes (checked); rustfmt, gofmt keep them (checked) | Uppercase everywhere (question 2) |
+| Hex digits | Black: uppercase in numbers, lowercase in escapes since 24.1.0 (checked, from its changelog); rustfmt, gofmt keep them (checked) | Uppercase everywhere (question 2) |
 | Field init shorthand | rustfmt has it, off by default (checked) | On, as the spec says (question 1) |
 | `-> ()` removal | Not rustfmt (checked); Clippy's `unused_unit`, swift-format and ktlint lint rules (reported) | A `check` finding with a fix (question 7) |
 | `- 1` with a space | Rust and OCaml treat it as `-1` (Rust checked); Swift makes it an error (checked) | Rust's (question 3) |
@@ -129,7 +129,8 @@ The formatter builds a document for the file, and the engine lays it out at 100 
 The rules:
 - Groups are laid out from the outside in: a group is flat only when everything in it fits on the rest of the line, so outer constructs break first.
 - A `hard_line` breaks every group that holds it, up to the nearest `choice`. It doesn't pass through a `choice`.
-- `choice` takes `first` when the text from the current position to `first`'s first line break fits, laying `first` out normally, including any `hard_line` in it. Otherwise it takes `second`. So a hugged closure with three statements still hugs, as long as the call's line up to `{` fits.
+- `choice` takes `first` when the text from the current position to `first`'s first line break fits, laying `first` out normally, including any `hard_line` in it. When `first` holds no line break, the measure runs on into the text after the `choice`, up to the next place a line may break. Otherwise it takes `second`. So a hugged closure with three statements still hugs, as long as the call's line up to `{` fits.
+- The option a `choice` takes is laid out with its own groups measured afresh, whatever the mode of the groups around it. A group around a hugging call may be flat, since it was measured only up to the `{`, as in `let t = a + orders.fold(0, fn(s, o) {`. The closure's statements are still measured and broken at 100 columns. After a `hard_line` printed inside a flat group, the rest of that group is measured again too. This is Prettier's `shouldRemeasure`. An engine unit test covers that case.
 - The check that something fits stops at the first line break, so each check is bounded by the width.
 - Documents are shared (`Rc`), so the two options of a `choice` share their parts. Nested choices, as in `f([g([h(...)])])`, never copy a subtree, and layout stays linear.
 - The engine is iterative, with an explicit stack, as Prettier's printer is, so a deep document can't overflow the stack.
@@ -144,7 +145,7 @@ Indentation is two spaces per level, as in every spec example. Width is counted 
 
 The output depends on the tree's tokens, its comments, and where the input had blank lines. Nothing else in the input's layout counts, so `f(\n  a,\n  b\n)` and `f(a, b)` format the same, and an existing trailing comma doesn't force a break, as in rustfmt and Prettier.
 
-Blank lines follow gofmt and Black (spec question 6):
+Blank lines follow Black, and gofmt where it agrees (spec question 6). gofmt adds a blank line before a multi-line function and between declarations of different kinds, and keeps the author's choice otherwise. Black puts them both before and after a function or class. Where two rules below apply, a removal wins: no blank line comes after an opening bracket or before a closing one, even next to a multi-line member.
 - **Around a declaration or member** that spans more than one line once formatted, or has doc comments or attributes: exactly one blank line before and after it. Between two one-line declarations or members, such as `const` lines, an effect's operations or a `foreign` block's functions, one blank line where the input had one or more, and none where it had none. So an `effect` block stays a list of operations, and related constants stay grouped.
 - **Imports:** none within a group, one between groups, and one after the last import.
 - **Statements, fields, variants, arms and list items:** one blank line where the input had one or more. A blank line kept between list items doesn't break the list: it survives only when the list breaks for another reason.
@@ -192,8 +193,8 @@ These are the rules review checks the printers against. The README's Formatting 
 1. Each contract starts its own line, indented one level, as in Contracts' examples.
 2. Otherwise the header is one line when it fits: `fn f(a: Int) -> Int uses Io {`.
 3. When it doesn't, `uses E` starts its own line, indented one level (`effects.md:116`).
-4. When the line before it still doesn't fit, `-> T` starts its own line too (`effects.md:158`).
-5. When `fn name(params)` alone doesn't fit, the parameters break one per line, and `) -> T uses E {` follows them when it fits, with steps 3 and 4 applied to it otherwise.
+4. When the line before it still doesn't fit, `-> T` starts its own line too. `effects.md:158` breaks before `->` in a header that fits, so the format changes that example (decision B).
+5. When `fn name<generics>(params)` alone doesn't fit, the parameters break one per line, and `) -> T uses E {` follows them when it fits, with steps 3 and 4 applied to it otherwise. When the generics alone don't fit on the first line, they break as a list first, and the parameters after them.
 6. Whenever `uses`, `->` or a contract starts a line, `{` starts its own line, at the declaration's indentation.
 
 A closure's header follows the same steps. A `test` header follows them for `forall` and `uses` once question 4 is decided, and until then only its `forall` parameters break.
@@ -201,7 +202,8 @@ A closure's header follows the same steps. A `test` header follows them for `for
 **Expressions** (`r[lex.line-end]`: "a long expression breaks after its operator, never before").
 - A binary expression that doesn't fit breaks after its operators, all those at one level at once, with the lines after the first indented one level. Nested levels are groups of their own.
 - A chain of two or more calls or fields that doesn't fit breaks before each `.`, indented (`r[lex.continue.more]`), keeping a leading run of plain names and fields on the first line: `self.items` stays together. That's rustfmt's rule, applied at the full width rather than rustfmt's separate 60-column chain width, since one width is one rule.
-- **A right-hand side**, after `=` in `let`, `var`, an assignment, a `const` or a default value, and after `=>` in an arm, follows rustfmt: the whole on one line when it fits; else the right side alone on the next line, indented, when it fits there on one line; else the right side on the `=` line, breaking inside itself. So `let s = """` stays on its line, a long call breaks its arguments, and a long sum moves to the next line when it fits there.
+- **A right-hand side**, after `=` in `let`, `var`, an assignment, a `const` or a default value, follows rustfmt: the whole on one line when it fits; else the right side alone on the next line, indented, when it fits there on one line; else the right side on the `=` line, breaking inside itself. So `let s = """` stays on its line, a long call breaks its arguments, and a long sum moves to the next line when it fits there.
+- **An arm's body** follows the Rust style guide (question 9): on the arm's line when it fits there, or when its first line does and it breaks inside itself, as a call or a closure does; otherwise in a block, `=> {` with the body on the lines after it and `},`. So a body never starts on the line after `=>`.
 - A prefix operator has nothing between it and its operand, and a range nothing around `..` or `..=`, as in `0..3`. Other binary operators have one space on each side.
 
 **Spacing**, following the spec's examples: no spaces inside `(`, `[`, `<`, a map's braces (`{"a": 1}`) or import braces (`{self, Log}`); one space inside a one-line block, closure or spawn list (`{ n + 1 }`); one space after `:` and `,`, none before; none inside an interpolation's braces.
@@ -210,7 +212,7 @@ A closure's header follows the same steps. A `test` header follows them for `for
 
 ### 7. Hugging
 
-A call whose last argument is a closure or a multi-line string, named or not, keeps that argument on the call's line and breaks only inside it, when the arguments before it fit on that line and none of the arguments holds a comment. A call whose only argument is a list or map literal hugs it the same way. Otherwise the call breaks its arguments one per line. rustfmt and Prettier both hug the last argument (rustfmt checked):
+A call whose last argument is a closure, a multi-line string, or a call that itself hugs, named or not, keeps that argument on the call's line and breaks only inside it, when the arguments before it fit on that line and none of the arguments holds a comment. A call whose only argument is a list or map literal hugs it the same way. Otherwise the call breaks its arguments one per line. rustfmt and Prettier both hug the last argument (rustfmt checked):
 
 ```
 let total = orders.fold(Money.ZERO, fn(sum, order) {
@@ -219,7 +221,7 @@ let total = orders.fold(Money.ZERO, fn(sum, order) {
 })
 ```
 
-This is a `choice` (decision 3): the hugged layout when its line fits up to the opening of the hugged argument, the broken list otherwise. An outer call around a hugging one, as in `foo(bar, items.map(fn(i) { ... }))`, hugs its own last argument, the inner call, by the same rule.
+This is a `choice` (decision 3): the hugged layout when its line fits up to the opening of the hugged argument, the broken list otherwise. So an outer call around a hugging one, as in `foo(bar, items.map(fn(i) { ... }))`, hugs the inner call, to any depth: each level is a `choice` measured on its own line, and documents are shared, so nesting costs nothing extra.
 
 *Alternative:* no hugging. Rejected: every call that takes a closure would put the closure on a line of its own, and `r[item.arg.named]` moves the function-typed parameter last so that the closure reads like a block.
 
@@ -232,7 +234,7 @@ Each rewrite gives one construct one written form, and none changes meaning. Eac
 | `r[lex.source.canonical]` | Every line ending is a line feed, inside multi-line strings too (`r[lex.lit.multiline-value]` makes that value-preserving), and a byte order mark is removed | 1 |
 | `r[tool.fmt.hex-digits]` | Hex digits uppercase in integer literals, and under question 2 in the `\u{...}` and `\x` escapes the lexer decodes: never in raw strings, tagged literals or comments, and never in `\\x`, an escaped backslash | 1 |
 | `r[tool.fmt.shorthand]` (question 1) | `name: name` becomes `name:`, in calls, struct literals and field patterns | 4 |
-| Question 9 | An arm whose block holds one expression, other than a map literal, loses the braces | 4 |
+| `r[tool.fmt.arm-braces]` (question 9) | A one-expression arm is written without braces when it starts on the arm's line, and in braces when it can't | 4 |
 | `r[mod.import.one-line]` | Two imports of one package become one; `import p.{self}` alone becomes `import p` (question 10) | 5 |
 
 Spaces, tabs and trailing whitespace outside literals are layout, not rewrites. Under question 3, `- 1` written as `-1` is layout too, since both are one literal. A rewrite doesn't apply across a comment (decision 5).
@@ -244,7 +246,7 @@ Spaces, tabs and trailing whitespace outside literals are layout, not rewrites. 
 Imports come before declarations (`grammar.file`), and the formatter rewrites them as one block (`r[tool.fmt.imports]`, `r[mod.import.one-line]`):
 - **Merge.** Imports of the same package path, neither with `as`, become one import: `import std.log` and `import std.log.{Log}` become `import std.log.{self, Log}` (`r[mod.import.self]`). A name imported twice is written once. `import p.{self}` alone is written `import p` (question 10). An import with `as` is never merged, and two that import one package under different names are left for M2's checker. A merged list of names is a list (decision 6), and breaks like one.
 - **Group.** The standard library first (imports whose first name is `std`), then other packages, then the project's own library, named in `FormatOptions` (decision 1). With no name given, there's no third group. Each group is separated by one blank line.
-- **Sort** (question 10). Within a group, by package path, comparing names one at a time. Names compare as rustfmt's 2024 style compares them: runs of digits as numbers, so `http_v2` comes before `http_v10`, which matters because a second major version is imported by its manifest key (`r[mod.import.major]`); anything else in byte order. Inside braces, `self` first, then the names, compared the same way.
+- **Sort** (question 10). Within a group, by package path, comparing names one at a time. Names compare as rustfmt's 2024 style compares them: runs of digits as numbers, so `http_v2` comes before `http_v10`, which matters because a second major version is imported by its manifest key (`r[mod.import.major]`); anything else in byte order. Two names equal that way, such as `a01` and `a1`, compare in byte order, so the order is total. Inside braces, `self` first, then the names, compared the same way.
 - **Comments.** Comment lines at the very start of the file, before the first import, stay at the top: they are a file header, such as a fixture's directives, even though the tree puts them in the first import's node. Other comment lines above an import move with it, whether a blank line separates them or not. A trailing comment stays on its import's line. When two imports merge, their comment lines go above the merged one in source order, and a trailing comment becomes a comment line there, so none is lost.
 
 This is the only place the formatter reorders code.
@@ -254,8 +256,8 @@ This is the only place the formatter reorders code.
 Before `format` returns, it checks its output, as Black does:
 - **No errors.** The output parses with no syntax error.
 - **The same tree.** The output's tree, with trivia removed, equals the input's tree with trivia removed: the same node kinds, nested the same way, with the same token texts. Before comparing, the input tree has the rewrites of decision 8 applied: hex digits uppercased, shorthand, arm braces removed, and its import block replaced by the merged, sorted block. A trailing `,` before a closing bracket is ignored on both sides. A multi-line string compares by its value (`literal::string_value`), not its `StringIndent` text.
-- **The same comments, in the same places.** Each comment is recorded with the significant tokens before and after it, and the two sequences must match, outside the imports in order, and within the import block as a multiset. A comment allowed to move past a `,` (decision 5) is recorded after it on both sides. Comments compare without trailing spaces and tabs, doc comments included.
-- **Stable.** Formatting the output again gives the output.
+- **The same comments, in the same places.** Each comment is recorded with the significant tokens before and after it, and the two sequences must match, outside the imports in order, and within the import block as a multiset. A trailing `,` is ignored in that record, as in the tree comparison, so `b // c` followed by `)`, which becomes `b, // c`, records the same. A comment allowed to move past a `,` (decision 5) is recorded after it on both sides. The file header's comments, kept at the top (decision 9), compare in order as the start of the file. Comments compare without trailing spaces and tabs. Doc comments are significant tokens, so the tree comparison trims them the same way.
+- **Stable.** Formatting the output again gives the output. That second format runs without these checks, so it doesn't recurse.
 
 If a check fails, `format` returns `Internal`, and the CLI writes nothing and asks for a bug report. So a formatter bug can stop `fmt`, but can't damage a file.
 
@@ -273,7 +275,8 @@ The parser doc left typed accessors over the CST to the first stage that needs t
 
 - `quince fmt <file>...` formats each file in place. `quince fmt -` reads standard input and writes standard output, as Black's `-` does, for editors and pipes.
 - `quince fmt --check <file>...` writes nothing, and prints the path of each file whose formatted text differs, one per line, on standard output.
-- **Exit codes:** 0 when every file is formatted, or was, and nothing was refused; 1 when `--check` found a file that would change; 2 when any file was refused, couldn't be read or written, or hit `Internal`, and for a usage error. A refused file is left as it was, and the others are still formatted. Black uses 123 for an internal error. One code for "fmt couldn't do its job" is enough here.
+- `quince fmt --check -` reads standard input, writes nothing to standard output, and exits 1 when the text would change.
+- **Exit codes:** 0 when every file is formatted, or was, and nothing was refused; 1 when `--check` found a file that would change; 2 when any file was refused, couldn't be read or written, or hit `Internal`, and for a usage error. A refused file is left as it was, and the others are still formatted. Refused standard input writes nothing to standard output. Black uses 123 for an internal error. One code for "fmt couldn't do its job" costs a script the ability to tell a usage error from a refused file without reading standard error, which is acceptable while JSON output (M5) is the interface for tools.
 - **Errors** go to standard error, one line each: `path:line:column: CODE message`. That's provisional: JSON output for every command is M5's.
 - **Writing.** A file is written only when its text changes. It is written to a temporary file in the same folder as its target, given the original's permissions, and renamed over it, so an interrupted run never leaves half a file. A symbolic link is followed, and its target is written. A file named twice is formatted once.
 - No file arguments is a usage error in M1. M2 makes `quince fmt` with no arguments format the project, `testdata/` excluded, along with `quince.toml`, as `cargo fmt` does over rustfmt.
@@ -319,7 +322,7 @@ Each layer builds and passes `cargo xtask ci` on its own. Until layer 6, `format
 5. `m1/fmt-imports`: decision 9. Spec question 10.
 6. `m1/fmt-cli`: `quince fmt`, `-` and `--check`; `Unsupported` removed; the fuzz target and its seeds; `AGENTS.md`; the fuzz run.
 
-Question 7 changes no code in M1: its findings land in M2 and M3. Its spec change lands with layer 1, so `fmt` never claims rules it doesn't enforce. Layers should come in at 500 to 900 changed lines, not counting fixtures' expected outputs. Layer 1 is the largest: if it runs past 1,000 lines, the fixture mode moves to a layer 1b, with layer 1's fixtures.
+Question 7 changes no code in M1: its findings land in M2 and M3. Its spec change lands with layer 1, so `fmt` never claims rules it doesn't enforce. Layers should come in at 500 to 900 changed lines, not counting fixtures' expected outputs. Layer 1 is the largest: if it runs past 1,000 lines, the fixture mode moves to a layer 1b, with layer 1's fixtures. Layer 1's `fn` printer has no signature rules until layer 2, so its fixtures keep headers short.
 
 ## Spec questions
 
@@ -339,7 +342,7 @@ Each gives proposed wording. Every ID uses a construct already in `spec/chapters
 
 *Precedent:* Rust compiles `let a: i8 = - 128;` with no error (checked), and OCaml's parser folds `- 1` into a negative constant (reported): the space doesn't matter. Swift makes a space after a prefix operator an error (checked). Quince's own patterns already fold `- 5` into `-5` (parser decision 5, "as in Rust").
 
-Proposed: retire `lex.lit.neg-adjacent`, and add `r[lex.lit.neg-literal]` "A minus in prefix position before an integer or float literal is part of the literal, whatever lies between them, unless a postfix operator follows the literal. So `- 1` and `-1` are the same literal, and `-2.pow(2)` is `-(2.pow(2))`, as `-x.abs()` is." The parser puts any trivia between them inside the `Literal`, as it does in patterns. Then `fmt` writing `-1` is layout, not a rewrite, and Quince has one rule for negative numbers in expressions and patterns.
+Proposed: retire both `lex.lit.int.neg` and `lex.lit.neg-adjacent`, since the first says "directly before" and the second defines it, and add `r[lex.lit.neg-literal]` "A minus in prefix position before an integer or float literal is part of the literal, whatever spaces, line breaks or comments lie between them, unless a postfix operator follows the literal. So `Int.MIN` can be written `-9_223_372_036_854_775_808`, `- 1` and `-1` are the same literal, and `-2.pow(2)` is `-(2.pow(2))`, as `-x.abs()` is." (Revised after approval, found in review pass 2: the approved wording left `lex.lit.int.neg` saying "directly before". The meaning David approved is unchanged.) The parser puts any trivia between them inside the `Literal`, as it does in patterns. A break after a prefix `-` is already spacing, so a `Literal` can span lines: the formatter drops spaces and line breaks inside it, and keeps a comment there with the line break it needs. Then `fmt` writing `-1` is layout, not a rewrite, and Quince has one rule for negative numbers in expressions and patterns.
 
 *Alternative:* Swift's rule, making `- 1` an error. Rejected: it makes spacing a syntax error, which `r[tool.fmt.check]` avoids ("unformatted code compiles").
 
@@ -351,9 +354,9 @@ Proposed: retire `lex.lit.neg-adjacent`, and add `r[lex.lit.neg-literal]` "A min
 
 *Precedent, and why Quince deviates:* Prettier, rustfmt and Black count display width, where an East Asian wide character is two columns (reported). That width comes from a Unicode table that changes with each Unicode release. Under `r[tool.fmt.check]`, a compiler upgrade that changed a character's width could make formatted code fail `check`. Characters never change. Code outside literals and comments is ASCII (`r[lex.source.ascii]`), trailing comments don't count, and so the difference shows only in a line whose string holds wide characters. Not counting trailing comments is Prettier's choice (reported).
 
-**6. Blank lines (layer 2).** "The formatter decides all line breaks" doesn't say whether it keeps an author's blank lines, and the output depends on the answer (decision 4). Proposed, a new rule after `r[tool.fmt.width]`: `r[tool.fmt.blank-lines]` "A declaration or member that spans several lines, or has doc comments or attributes, has one blank line before and after it. Elsewhere, one blank line is kept where the source had one or more, except after an opening bracket, before a closing one, and inside an expression."
+**6. Blank lines (layer 2).** "The formatter decides all line breaks" doesn't say whether it keeps an author's blank lines, and the output depends on the answer (decision 4). Proposed, a new rule after `r[tool.fmt.width]`: `r[tool.fmt.blank-lines]` "No blank line comes after an opening bracket, before a closing one, after an attribute or a doc comment, between imports of one group, or inside an expression or a signature. Otherwise, a declaration or member that spans several lines, or has doc comments or attributes, has one blank line before and after it; import groups are separated by one blank line; and elsewhere one blank line is kept where the source had one or more." (Reworded after approval, found in review pass 2, to say what decision 4 says: the approved wording put the bracket exception after the rule it overrides, and left out imports and attributes.)
 
-*Precedent:* gofmt and Black (decision 4). Keeping the author's choice between one-line declarations keeps every `effect` and `foreign` block in the spec as written.
+*Precedent:* Black, and gofmt where it agrees (decision 4). Keeping the author's choice between one-line declarations keeps most `effect` and `foreign` blocks in the spec as written. Two change: `effects.md:308`'s `fn run(...)` runs past 100 columns, so it breaks and gets blank lines around it, and `interop.md:24`'s `@borrowed` function gets one before it.
 
 **7. Rewrites that need names or types become `check` findings (layer 1's spec change, code in M2 and M3).** Three rules make `fmt` do something it can't do from one file's tree (decision 8). Proposed:
 - retire `item.arg.fmt-positional`, and add `r[item.arg.positional-first]` "When the first argument may be positional, writing its name is reported by `quince` `check` like unformatted code (`r[tool.fmt.check]`), with a fix that removes it. So `http.serve(8080``, handler: h)` is the one form, even when the first parameter's name carries meaning: `Channel<Job>.new(16)`, `log.json(cfg.log_level)`."
@@ -370,15 +373,15 @@ Proposed: retire `lex.lit.neg-adjacent`, and add `r[lex.lit.neg-literal]` "A min
 
 *Alternative:* leave both, and have question 7's finding cover `-> ()` too.
 
-**9. Braces around a one-expression arm (layer 4).** `r[expr.match.arm-syntax]` allows `pattern => expr,` and `pattern => { block },`, so `0 => { 1 },` and `0 => 1,` are two forms of one arm. Proposed, a new rule: `r[tool.fmt.arm-braces]` "`quince` `fmt` writes an arm whose block holds a single expression, other than a map literal, without the braces." A map literal keeps them, since `=> {` starts a block (`r[expr.match.arm-block]`).
+**9. Braces around a one-expression arm (layer 4).** `r[expr.match.arm-syntax]` allows `pattern => expr,` and `pattern => { block },`, so `0 => { 1 },` and `0 => 1,` are two forms of one arm. Revised after approval, for David to confirm (review pass 2 found the approved version only half of rustfmt's rule). Proposed, a new rule: `r[tool.fmt.arm-braces]` "`quince` `fmt` writes an arm whose body is a single expression without braces when the expression starts on the arm's line, and in braces when it has to start on the next one. A map literal stays in braces, since `=> {` starts a block (`r[expr.match.arm-block]`)."
 
-*Precedent:* rustfmt makes the same rewrite (checked: `0 => { 1 }` becomes `0 => 1`).
+*Precedent:* the Rust style guide, rustfmt's default (checked: `0 => { 1 }` becomes `0 => 1`, and a body too long for the arm's line gets braces, `0 => {` with the body on the next line). The approved version removed the braces always, and broke after `=>`, which is rustfmt's non-default setting. With braces a body never starts on the line after `=>`, so a long arm reads like a short block.
 
 **10. Import order, and `{self}` alone (layer 5).** `r[tool.fmt.imports]` says "sorted" without an order, and `import p.{self}` alone is a second form of `import p`. Proposed, keeping the ID, since "sorted" needed an order: "Imports sorted and grouped (standard library, then packages, then local). Paths and names are compared name by name, with runs of digits compared as numbers, so `http_v2` comes before `http_v10`, and inside braces `self` comes first." And added to `r[mod.import.self]`: "`import p.{self}` alone is written `import p`."
 
 *Precedent:* rustfmt's 2024 style (checked).
 
-**11. Trailing commas where a list isn't bracketed (layer 1).** `r[tool.fmt.trailing-comma]` says "all multi-line lists", but a `uses` list and `with` handlers take no trailing comma (parser layer 2a). Proposed, keeping the ID, since the parser already reads it this way: "Trailing commas required in every multi-line bracketed list: arguments, parameters, fields, variants, collections, and arms."
+**11. Trailing commas where a list isn't bracketed (layer 1).** `r[tool.fmt.trailing-comma]` says "all multi-line lists", but a `uses` list and `with` handlers take no trailing comma (parser layer 2a). Proposed, keeping the ID, since the parser already reads it this way: "Trailing commas required in every multi-line bracketed list, such as arguments, parameters, fields, variants, collections, and arms." ("such as" added after approval, found in review pass 2, so the list doesn't read as complete.)
 
 ## Risks and trade-offs
 
@@ -401,7 +404,7 @@ Revert the stack's PRs. Nothing changes outside `quince_syntax`, the conformance
 - **M2:** the unformatted-code diagnostic in `check` (decision 13), and question 7's `-> Unit` finding once names resolve; `quince fmt` over a project, `testdata/` excluded; `quince.toml` formatting; `FormatOptions` filled from the manifest; typed accessors (decision 11).
 - **M3:** question 7's argument findings, once calls resolve.
 - **After layer 6:** one spec PR formats the spec's code blocks (decision B).
-- **M5:** JSON output for `fmt`; formatting part of a file for the language server; whether the language server formats around errors (decision 2).
+- **M5:** `quince fix` formats each file it changes, so one command reaches the canonical form under question 7, as `go fix` prints formatted code (found in review pass 2); JSON output for `fmt`; formatting part of a file for the language server; whether the language server formats around errors (decision 2).
 
 ## Tasks
 
@@ -409,9 +412,11 @@ Rule IDs in brackets are what each task's fixtures cite.
 
 **Before building**
 - [x] Design review, pass 1: Ready with changes. Its findings are addressed in this revision.
+- [x] Design review, pass 2: Ready with changes. Its findings are addressed in this revision.
 - [ ] Design review passes.
-- [ ] David decides A, B and C.
-- [ ] David decides spec questions 1 to 11.
+- [x] David decides A, B and C (2026-11-13: approved as proposed).
+- [x] David decides spec questions 1 to 11 (2026-11-13: approved as proposed).
+- [ ] David confirms question 9 as revised after approval.
 
 **Parser PRs, before layer 0**
 - [ ] `m1/neg-literal-spacing`: question 3, and a bump. The parser's unit tests for `- 1`. [`lex.lit.neg-literal`]
