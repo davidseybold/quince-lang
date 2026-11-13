@@ -1,5 +1,5 @@
-//! Declarations: the file, imports, `fn`, `test`, `const`, `impl`, structs, newtypes, enums
-//! and type aliases, with their doc comments and attributes, and their parts.
+//! Declarations: the file, imports, `fn`, `test`, `const`, `impl`, `interface`, structs,
+//! newtypes, enums and type aliases, with their doc comments and attributes, and their parts.
 
 use super::input::Break;
 use super::{Holds, Parser, Sync, exprs, types};
@@ -10,18 +10,27 @@ use quince_diagnostics::Applicability;
 /// The file: declarations, one per line (`grammar.file`).
 pub(super) fn file(p: &mut Parser) {
     let marker = p.start();
-    p.lines(Holds::File, None, |p| decl(p, Holds::File));
+    p.lines(Holds::File, None, |p| decl(p, Owner::File));
     // Doc comments at the end of the file document nothing.
     p.stray_docs();
     p.complete(marker, File);
 }
 
-/// A declaration in the file, or a method in an `impl` body, with its doc comments, its
-/// attributes and its `pub` (`grammar.decl`, `grammar.impl_item`). Anything else is skipped as
-/// an error. Layer 7b of the parser adds the other members. The item is chosen at its keyword,
+/// What holds a declaration: the file, or the body of an `impl` or an `interface`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Owner {
+    File,
+    Impl,
+    Interface,
+}
+
+/// A declaration in the file, or a member of an `impl` or an `interface`, with its doc
+/// comments, its attributes and its `pub` (`grammar.decl`, `grammar.impl_item`,
+/// `grammar.interface_decl`). Anything else is skipped as an error, so a `const` in an
+/// interface is one (`r[item.const.assoc.no-interface]`). The item is chosen at its keyword,
 /// once what comes before it is parsed.
-fn decl(p: &mut Parser, holds: Holds) {
-    let file = holds == Holds::File;
+fn decl(p: &mut Parser, owner: Owner) {
+    let file = owner == Owner::File;
     if file && p.kind() == ImportKw {
         return import(p);
     }
@@ -32,43 +41,89 @@ fn decl(p: &mut Parser, holds: Holds) {
     p.doc_comments();
     attributes(p);
     if p.kind() == PubKw {
+        // An interface's members take no `pub`, and neither does an impl's associated type:
+        // an E0016, and the member is parsed on. Taking the `pub` ends recovery, as a member
+        // start does, so the error is the member's own, unless the line is no member.
+        let interface = owner == Owner::Interface;
+        let wrong = interface || (owner == Owner::Impl && p.nth_kind(1) == TypeKw);
+        let error = wrong.then(|| {
+            p.unexpected(
+                if interface {
+                    "`fn` or `type`"
+                } else {
+                    "`type`"
+                },
+                false,
+            )
+        });
         p.bump();
+        if let Some(error) = error
+            && (!quiet || matches!(p.kind(), FnKw | TypeKw))
+        {
+            p.report(error);
+        }
         if p.at_break() {
             // `pub` doesn't continue the line, so a break after it ends the declaration.
-            p.expected(if file { "a declaration" } else { "`fn`" });
+            if !wrong {
+                p.expected(if file {
+                    "a declaration"
+                } else {
+                    "`fn` or `const`"
+                });
+            }
             p.complete(marker, Skipped);
             return;
         }
     }
-    let parse: fn(&mut Parser) -> SyntaxKind = match (file, p.kind()) {
-        (_, FnKw) => |p| {
-            fn_decl(p);
+    let parse: fn(&mut Parser) -> SyntaxKind = match (owner, p.kind()) {
+        (Owner::Interface, FnKw) => |p| {
+            fn_decl(p, false);
             FnDecl
         },
-        (true, ConstKw) => |p| {
+        (_, FnKw) => |p| {
+            fn_decl(p, true);
+            FnDecl
+        },
+        (Owner::File | Owner::Impl, ConstKw) => |p| {
             const_decl(p);
             ConstDecl
         },
-        (true, TestKw) => |p| {
+        (Owner::Impl, TypeKw) => |p| {
+            assoc_type(p, true);
+            AssocType
+        },
+        (Owner::Interface, TypeKw) => |p| {
+            assoc_type(p, false);
+            AssocType
+        },
+        (Owner::File, TestKw) => |p| {
             test_decl(p);
             TestDecl
         },
-        (true, ImplKw) => |p| {
+        (Owner::File, ImplKw) => |p| {
             impl_decl(p);
             ImplDecl
         },
-        (true, StructKw) => struct_decl,
-        (true, EnumKw) => |p| {
+        (Owner::File, InterfaceKw) => |p| {
+            interface_decl(p);
+            InterfaceDecl
+        },
+        (Owner::File, StructKw) => struct_decl,
+        (Owner::File, EnumKw) => |p| {
             enum_decl(p);
             EnumDecl
         },
-        (true, TypeKw) => |p| {
+        (Owner::File, TypeKw) => |p| {
             alias_decl(p);
             AliasDecl
         },
         _ => {
             p.recovering |= quiet;
-            let what = if file { "a declaration" } else { "`fn` or `}`" };
+            let what = match owner {
+                Owner::File => "a declaration",
+                Owner::Impl => "`fn`, `const`, `type` or `}`",
+                Owner::Interface => "`fn`, `type` or `}`",
+            };
             if p.steps.len() == marker.0 + 1 {
                 // Nothing before the item, so the skip's own node is enough.
                 p.abandon(marker);
@@ -154,25 +209,26 @@ fn skip(what: &str, p: &mut Parser) {
     p.recover(Sync::Line, true);
 }
 
-/// `fn` name [ generics ] `(` params `)` [ `->` type ] [ `uses` effects ] { contract } block
-/// (`grammar.fn_decl`, `grammar.fn_sig`). A line that starts with `->`, `uses`, `requires`,
-/// `ensures` or `{` continues the header (`r[lex.continue.fn-header]`).
-fn fn_decl(p: &mut Parser) {
+/// `fn` name [ generics ] `(` params `)` [ `->` type ] [ `uses` effects ] { contract }, then
+/// a block when `body` (`grammar.fn_decl`, `grammar.fn_sig`). An interface's methods have none
+/// (`r[item.iface.no-default]`). A line that starts with `->`, `uses`, `requires`, `ensures` or
+/// `{` continues the header (`r[lex.continue.fn-header]`).
+fn fn_decl(p: &mut Parser, body: bool) {
     p.bump();
     let outer_header = std::mem::replace(&mut p.in_fn_header, true);
     if name(p, "a function name")
         && (!p.at(Lt) || types::generics(p))
         && param_list(p, param, starts_param)
     {
-        fn_rest(p, true);
+        fn_rest(p, true, body);
     }
     p.in_fn_header = outer_header;
 }
 
 /// What follows a function's parameters, in a declaration or a closure: [ `->` type ]
-/// [ `uses` effects ], its contracts when `contracts`, and its block. The caller has set
-/// `in_fn_header`.
-pub(super) fn fn_rest(p: &mut Parser, contracts: bool) {
+/// [ `uses` effects ], its contracts when `contracts`, and its block when `body`. Without one
+/// the signature ends its line. The caller has set `in_fn_header`.
+pub(super) fn fn_rest(p: &mut Parser, contracts: bool, body: bool) {
     const HEADER_PARTS: [&str; 4] = ["`->`", "`uses`", "`requires`", "`ensures`"];
     let mut from = 0;
     if p.at(Arrow) {
@@ -197,6 +253,14 @@ pub(super) fn fn_rest(p: &mut Parser, contracts: bool) {
     }
     // A body missing after a contract that held a slip is part of that slip.
     let slipped = contracts && self::contracts(p);
+    if !body {
+        // A `}` on the line closes the body the signature is in.
+        if !p.at_break() && p.kind() != RBrace {
+            p.recovering |= slipped;
+            p.expected(&one_of(&HEADER_PARTS[from.min(to)..to], "a line break"));
+        }
+        return;
+    }
     if p.at(LBrace) {
         exprs::block(p);
     } else {
@@ -345,19 +409,63 @@ fn const_decl(p: &mut Parser) {
     exprs::expr(p);
 }
 
-/// `impl` type `{` methods `}`: an inherent `impl`, with one `[ pub ] fn` per line
-/// (`grammar.impl_decl`).
+/// `impl` [ generics ] [ type_path [ type_args ] `for` ] type `{` members `}`
+/// (`grammar.impl_decl`): an inherent `impl`, or one of an interface or an effect for a type.
 fn impl_decl(p: &mut Parser) {
     p.bump();
-    if types::type_(p) && !p.at_or_join(LBrace) {
+    let mut ok = !p.at(Lt) || types::generics(p);
+    // Only a type path can name an interface or an effect.
+    let path = matches!(p.kind(), Ident | SelfTypeKw);
+    ok = ok && types::type_(p);
+    let mut target = !path;
+    if ok && path && p.at(ForKw) {
+        p.bump();
+        ok = types::type_(p);
+        target = true;
+    }
+    if ok && !p.at_or_join(LBrace) {
+        p.expected(if target { "`{`" } else { "`for` or `{`" });
+    }
+    body(p, Owner::Impl);
+}
+
+/// `interface` Name [ generics ] `{` members `}` (`grammar.interface_decl`).
+fn interface_decl(p: &mut Parser) {
+    p.bump();
+    let ok = name(p, "an interface name") && (!p.at(Lt) || types::generics(p));
+    if ok && !p.at_or_join(LBrace) {
         p.expected("`{`");
     }
+    body(p, Owner::Interface);
+}
+
+/// The members of an `impl` or an `interface` in braces, one per line. After a slip in the
+/// header, the rest of its line is skipped up to its `{`, so the body is still parsed.
+fn body(p: &mut Parser, owner: Owner) {
     skip_to_brace(p);
     if !p.at(LBrace) {
         return;
     }
     p.bump();
-    p.lines(Holds::Body, Some(RBrace), |p| decl(p, Holds::Body));
+    let member: fn(&mut Parser) = match owner {
+        Owner::Interface => |p| decl(p, Owner::Interface),
+        _ => |p| decl(p, Owner::Impl),
+    };
+    p.lines(Holds::Body, Some(RBrace), member);
+}
+
+/// `type` Name, then `=` and a type when `value`: an associated type, which an `impl` fixes
+/// and an `interface` declares (`grammar.impl_item`, `grammar.interface_decl`).
+fn assoc_type(p: &mut Parser, value: bool) {
+    p.bump();
+    if !name(p, "a type name") || !value {
+        return;
+    }
+    if !p.at_or_join(Eq) {
+        return p.expected("`=`");
+    }
+    p.bump();
+    types::type_(p);
 }
 
 /// `import` path, then `.` and names in braces, or [ `as` name ] (`grammar.import`). There is

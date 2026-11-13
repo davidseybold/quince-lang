@@ -12,7 +12,7 @@ pub(super) fn closure(p: &mut Parser) -> Completed {
     p.bump();
     let outer_header = std::mem::replace(&mut p.in_fn_header, true);
     if items::param_list(p, cparam, starts_cparam) {
-        items::fn_rest(p, false);
+        items::fn_rest(p, false, true);
     }
     p.in_fn_header = outer_header;
     p.complete(marker, Closure)

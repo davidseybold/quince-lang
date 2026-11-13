@@ -104,8 +104,10 @@ syntax_kinds! {
         Variant,
         /// A variant's fields in parentheses.
         VariantFields,
-        AliasDecl, Attribute,
-        /// The doc comments of a declaration, a field or a variant.
+        AliasDecl, Attribute, InterfaceDecl,
+        /// `type` and a name, then `=` and a type in an `impl`.
+        AssocType,
+        /// The doc comments of a declaration, a field, a variant or a member.
         DocComments,
         /// A type path with its type arguments.
         TypePath, TypeArgs,
@@ -253,6 +255,8 @@ impl SyntaxKind {
                 | NewtypeDecl
                 | EnumDecl
                 | AliasDecl
+                | InterfaceDecl
+                | AssocType
                 | FieldDecl
                 | Variant
                 | MatchArm

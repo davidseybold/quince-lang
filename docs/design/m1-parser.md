@@ -191,7 +191,7 @@ A keyword where a name goes is an E0016 that names the keyword (`r[lex.keyword-n
 Every error goes through one rule: report it, then skip to a sync point, reporting nothing more until the parser gets there. The skipped tokens go in a `Skipped` node. That name avoids the lexer's `Error` token kind.
 
 **Sync points.** Each open construct has its own:
-- A list syncs at its next `,` and at its closing bracket.
+- A list syncs at its next `,` and at its closing bracket. Type arguments and generics also close at a `{`, as at a closing bracket further out, since no type holds braces (layer 7b, found in review).
 - A line context syncs at its next break.
 - Any construct syncs at a member start of a container around it (below), which closes it.
 
@@ -281,6 +281,9 @@ Doc comments and attributes aren't member starts: they belong to the declaration
 | `with Db = {` then lines `serve()` and `}` | E0016 at `{`, and the block is parsed (layer 6b) |
 | `background() {}` | E0016 at `)` (layer 6b, found in review: it left an empty node) |
 | `let x = ) /// a` followed by a line `y` | E0016 at `)`: the doc comment is in the skip, so it is part of the slip (layer 7a) |
+| In an interface, `type T = Int` followed by a line `pub fn f(self)` | E0016 at `=`, and E0016 at `pub`, the member's own slip (layer 7b) |
+| In an interface, `fn f(self)` followed by lines `{`, `x` and `}` | E0016 at `{`, and the body is skipped whole (layer 7b) |
+| `interface I<T {` then lines `fn f(self)`, `fn g(self)` and `}` | E0017 at `<`: no type holds braces, so the `{` closes the generics and the body is parsed (layer 7b, found in review: the skip took the `{` and every method failed as a file's `fn`) |
 
 ### 10. Diagnostics
 
@@ -616,8 +619,8 @@ Layer 7 is three PRs (split by size, 2026-11-12), since its four declarations an
 - [x] An `impl`'s members take doc comments and attributes. E0023 and its `explain` text: the doc comments before one token that document nothing are one error, and those in tokens skipped after an error are part of that slip. `lex/control.qnc`'s doc comment moved above a `test`. [`grammar.impl_item`, `lex.comment.doc`, `lex.comment.doc-placement`, `lex.comment.doc-exact`]
 
 **Layer 7b: `m1/parser-impl-interface`**
-- [ ] Spec: question 9 for `interface_decl`, and a bump.
-- [ ] The rest of `impl` (generics, `for`, `type` and `const` members) and `interface`, whose contracts reuse `contracts` through `fn_rest`. [`grammar.impl_decl`, `grammar.interface_decl`, `item.const.assoc.no-interface`]
+- [x] Spec: question 9 for `interface_decl`, and a bump (v0.24).
+- [x] The rest of `impl` (generics, `for`, `type` and `const` members) and `interface`, whose contracts reuse `contracts` through `fn_rest`. A method signature in an interface ends its line, so a body is an E0016 (`r[item.iface.no-default]`). `pub` on an interface's member or an impl's associated type is an E0016, and the member is parsed on. [`grammar.impl_decl`, `grammar.interface_decl`, `item.const.assoc.no-interface`, `item.iface.no-default`]
 
 **Layer 7c: `m1/parser-effect-foreign`**
 - [ ] Spec: question 4, question 9 for `effect_decl` and `foreign_decl`, and a bump.

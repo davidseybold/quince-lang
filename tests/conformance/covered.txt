@@ -61,8 +61,10 @@ grammar.generic
 grammar.generics
 grammar.handler
 grammar.if_expr
+grammar.impl_decl
 grammar.impl_item
 grammar.import
+grammar.interface_decl
 grammar.jump
 grammar.list_lit
 grammar.logic
@@ -99,7 +101,9 @@ grammar.with_expr
 intro.excl.macros
 intro.excl.wildcard-imports
 item.attr.own-line
+item.const.assoc.no-interface
 item.enum.field-visibility
+item.iface.no-default
 item.struct.no-fields
 item.struct.update
 lex.braces

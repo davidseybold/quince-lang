@@ -1,0 +1,34 @@
+// rule: grammar.impl_decl
+// rule: grammar.impl_item
+// mode: parse
+// An `impl` takes generics, and an interface or effect and `for` before its type. Its
+// members are methods, associated types and constants, each on its own line, and only the
+// methods and constants take `pub`.
+impl<T> Stack<T> {
+  pub fn len(self) -> Int { self.items.len() }
+}
+
+impl Display for Email {
+  fn display(self) -> String { self.0 }
+}
+
+impl Sub<Money> for Money {
+  type Output = Money
+  fn sub(self, rhs: Money) -> Money { Money(self.0 - rhs.0) }
+}
+
+impl<T> Iterator for Counter<T> { type Item = T }
+
+impl Int { pub const MAX: Int = 9_223_372_036_854_775_807 }
+
+impl<uses E> Router<uses E> {
+  const LIMIT: Int = 8
+}
+
+impl Db for PgDb {}
+
+impl Shape {
+  pub type Area = Float //~ E0016
+}
+
+impl (Int, Int) for Pair {} //~ E0016

@@ -184,7 +184,7 @@ impl Display for User {
 ```
 
 ```ebnf
-interface_decl = "interface" Name [ generics ] "{" { ( "type" Name | fn_sig { contract } ) NEWLINE } "}"
+interface_decl = "interface" Name [ generics ] "{" { { doc_comment } { attribute NEWLINE } ( "type" Name | fn_sig { contract } ) NEWLINE } "}"
 ```
 
 r[item.iface.explicit]

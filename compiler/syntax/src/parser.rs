@@ -787,6 +787,12 @@ impl<'t> Parser<'t> {
         {
             return Some(Stop::Outer);
         }
+        // A type never holds braces, so a `{` closes the type arguments and generics open
+        // around it, and the types they hold, as a closing bracket further out does. Nothing
+        // but types opens inside them, so no other frame closes.
+        if token.kind == LBrace && self.frame_closed_by(Gt).is_some() {
+            return Some(Stop::Outer);
+        }
         // `=>` goes only between an arm's pattern or guard and its body, never inside a
         // bracket, so it closes what the arm left open.
         if token.kind == FatArrow && self.arms_frame().is_some_and(|at| at < top) {

@@ -11,6 +11,7 @@ mod cst;
 mod decls;
 mod errors;
 mod exprs;
+mod members;
 mod multiline;
 mod mutations;
 mod numbers;

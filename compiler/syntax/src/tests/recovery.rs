@@ -109,10 +109,13 @@ fn a_broken_impl_header_keeps_its_body() {
     }
     assert_eq!(
         messages("impl A A {\n  fn f() {}\n}\n"),
-        ["expected `{`, found the name `A`"]
+        ["expected `for` or `{`, found the name `A`"]
     );
     let text = "impl A {\n  pub\n  fn f() {}\n}\n";
-    assert_eq!(messages(text), ["expected `fn`, found a line break"]);
+    assert_eq!(
+        messages(text),
+        ["expected `fn` or `const`, found a line break"]
+    );
     assert_eq!(decls(text), [SyntaxKind::ImplDecl]);
 }
 
