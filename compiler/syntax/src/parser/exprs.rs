@@ -1,9 +1,9 @@
-//! Blocks, statements and expressions: `let`, `var`, `while`, assignment, `if`, literals,
-//! names, collections, operators, `is` and postfix forms. Later layers of the parser add the
-//! rest.
+//! Blocks, statements and expressions: `let`, `var`, `while`, `for`, assignment, `if`,
+//! literals, names, collections, operators, `is` and postfix forms. `match` is in `arms`.
+//! Later layers of the parser add the rest.
 
 use super::input::Break;
-use super::{Completed, Holds, Parser, Sync, items, patterns, types};
+use super::{Completed, Holds, Parser, Sync, arms, items, patterns, types};
 use crate::SyntaxKind::{self, *};
 use crate::{SyntaxError, codes};
 use quince_diagnostics::Applicability;
@@ -18,12 +18,13 @@ pub(super) fn block(p: &mut Parser) {
     p.complete(marker, Block);
 }
 
-/// A statement (`grammar.stmt`): `let`, `var`, `while`, an assignment, or an expression.
-/// Anything else is skipped as an error.
+/// A statement (`grammar.stmt`): `let`, `var`, `for`, `while`, an assignment, or an
+/// expression. Anything else is skipped as an error.
 fn stmt(p: &mut Parser) {
     match p.kind() {
         LetKw => let_stmt(p),
         VarKw => var_stmt(p),
+        ForKw => for_stmt(p),
         WhileKw => while_stmt(p),
         kind if starts_expr(kind) => expr_or_assign(p),
         _ => {
@@ -115,9 +116,9 @@ fn let_stmt(p: &mut Parser) {
     p.complete(marker, LetStmt);
 }
 
-/// The pattern after `let`. False when there is none. One missing from its line is taken from
-/// the next line, after the error, as a missing condition is, so that line isn't a second
-/// error. Then what is missing after it is part of that slip.
+/// The pattern after `let` or `for`. False when there is none. One missing from its line is
+/// taken from the next line, after the error, as a missing condition is, so that line isn't a
+/// second error. Then what is missing after it is part of that slip.
 fn leading_pattern(p: &mut Parser) -> bool {
     let missing = p.at_break();
     if missing {
@@ -141,11 +142,32 @@ fn var_stmt(p: &mut Parser) {
     p.complete(marker, VarStmt);
 }
 
+/// `for` pattern `in` expr block (`grammar.stmt`). A slip before the `in` is skipped up to
+/// the `{` on its line, so the block is still the block.
+fn for_stmt(p: &mut Parser) {
+    let marker = p.start();
+    p.bump();
+    let pattern = leading_pattern(p);
+    if pattern && p.at(InKw) {
+        p.bump();
+        condition_and(p, block);
+    } else {
+        if pattern {
+            p.expected("`in`");
+        }
+        p.recover(Sync::Block, false);
+        if p.at(LBrace) {
+            block(p);
+        }
+    }
+    p.complete(marker, ForStmt);
+}
+
 /// `while` expr block (`grammar.stmt`).
 fn while_stmt(p: &mut Parser) {
     let marker = p.start();
     p.bump();
-    condition_and_block(p);
+    condition_and(p, block);
     p.complete(marker, WhileStmt);
 }
 
@@ -153,7 +175,7 @@ fn while_stmt(p: &mut Parser) {
 fn if_expr(p: &mut Parser) -> Completed {
     let marker = p.start();
     p.bump();
-    if condition_and_block(p) && else_follows(p) {
+    if condition_and(p, block) && else_follows(p) {
         p.bump();
         match p.kind() {
             IfKw if !p.at_break() => {
@@ -186,12 +208,13 @@ fn else_follows(p: &mut Parser) -> bool {
     }
 }
 
-/// The condition of an `if` or a `while`, and the block after it on its line. False when there
-/// is no block. After a slip, the rest of the condition is skipped up to the `{` on its line,
-/// so the block is still the block, and nothing after the condition is a second error. A
-/// condition missing from its line is taken from the next line, after the error, for the same
-/// reason.
-fn condition_and_block(p: &mut Parser) -> bool {
+/// The condition of an `if` or a `while`, the subject of a `match` or the iterable of a `for`,
+/// and the braces after it on its line, which `parse_braces` parses: a block, or a `match`'s
+/// arms. False when there are no braces. After a slip, the rest of the condition is skipped up
+/// to the `{` on its line, so the braces are still the braces, and nothing after the condition
+/// is a second error. A condition missing from its line is taken from the next line, after the
+/// error, for the same reason.
+pub(super) fn condition_and(p: &mut Parser, parse_braces: fn(&mut Parser)) -> bool {
     let missing = p.at_break();
     if missing {
         p.expected("an expression");
@@ -200,7 +223,7 @@ fn condition_and_block(p: &mut Parser) -> bool {
             return false;
         }
         if p.kind() == LBrace {
-            block(p);
+            parse_braces(p);
             return true;
         }
     }
@@ -216,7 +239,7 @@ fn condition_and_block(p: &mut Parser) -> bool {
             return false;
         }
     }
-    block(p);
+    parse_braces(p);
     true
 }
 
@@ -697,7 +720,7 @@ fn postfix(p: &mut Parser) -> Option<Completed> {
 }
 
 /// A literal, a name, `self`, `Self`, a list or map literal, a tuple, an expression in
-/// parentheses, or an `if` (`grammar.primary`). A statement starts after a break, so this doesn't check
+/// parentheses, an `if` or a `match` (`grammar.primary`). A statement starts after a break, so this doesn't check
 /// for one: each caller has taken a token that continues the line, or is at the start of a
 /// statement.
 fn primary(p: &mut Parser) -> Option<Completed> {
@@ -732,8 +755,12 @@ fn primary(p: &mut Parser) -> Option<Completed> {
             p.abandon(marker);
             return Some(if_expr(p));
         }
-        // At the top of a condition, `{` is the block, so there is no expression
-        // (`r[expr.block.cond-brace]`). Inside brackets in it, `{` starts a map.
+        MatchKw => {
+            p.abandon(marker);
+            return Some(arms::match_expr(p));
+        }
+        // At the top of a condition, `{` is the block or a `match`'s arms, so there is no
+        // expression (`r[expr.block.cond-brace]`). Inside brackets in it, `{` starts a map.
         LBrace if p.condition_frames == Some(p.frames.len()) => {
             p.abandon(marker);
             return condition_brace(p);
@@ -967,6 +994,7 @@ fn starts_expr(kind: SyntaxKind) -> bool {
             | LParen
             | LBrace
             | IfKw
+            | MatchKw
             | Minus
             | Bang
             | Tilde

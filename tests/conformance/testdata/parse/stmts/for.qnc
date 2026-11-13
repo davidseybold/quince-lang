@@ -1,0 +1,22 @@
+// rule: grammar.stmt
+// rule: stmt.loop.stmt
+// mode: parse
+// `for`, a pattern, `in`, an expression and a block is the loop over collections. `for` and
+// `while` are statements, so neither can be a value.
+fn f(xs: List<Int>, pairs: Map<String, Int>, var total: Int) {
+  for x in xs {
+    total += x
+  }
+  for (name, count) in pairs { log(name) }
+  for _ in 0..3 {
+    for i in 0..=total { total -= i }
+  }
+  for Some(x) in options() {
+    total += x
+  }
+  let looped = for x in xs { total += x } //~ E0016
+  let waited = while total > 0 { total -= 1 } //~ E0016
+  for x xs { total += x } //~ E0016
+  for in xs { total += 1 } //~ E0016
+  for x in { total += 1 } //~ E0016
+}
