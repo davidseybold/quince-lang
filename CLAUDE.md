@@ -15,6 +15,7 @@ Quince is a statically typed, reference-counted, effect-tracked language for ser
 | `docs/repo-plan.md` | Repo layout, crate list, and why Rust. |
 | `docs/milestones.md` | M0 to M14 with exit criteria. Work in this order. |
 | `docs/design/` | One design doc per milestone chunk, with its task list. |
+| `docs/benchmark-plan.md` | How Quince's effectiveness for agents is measured against other languages, phased by milestone. |
 | `AGENTS.md` | Build and check commands, and a map of the code. |
 
 ## Decisions already made (don't reopen without asking David)
