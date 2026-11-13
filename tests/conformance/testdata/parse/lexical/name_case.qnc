@@ -1,0 +1,86 @@
+// rule: lex.name.case
+// rule: lex.name.enforced
+// rule: lex.name.declared
+// rule: lex.ident-classes
+// mode: parse
+// Types and enum variants are PascalCase. Functions, bindings, fields and packages are
+// snake_case. Constants are SCREAMING_SNAKE_CASE. The compiler enforces the case where a
+// name is declared, and a name that fits no class can't be declared outside a foreign block.
+import std.json as fast_json
+import std.json as FastJson //~ E0021
+
+const MAX_RETRIES: Int = 3
+const MaxRetries: Int = 3 //~ E0021
+const max_retries: Int = 3 //~ E0021
+
+struct HttpServer<T, Item: Show> {
+  port_number: Int,
+  PortNumber: Int, //~ E0021
+}
+
+struct userId(Int) //~ E0021
+
+struct Point_2d { //~ E0021
+  x: Int,
+}
+
+enum Shape<Elem> {
+  Circle(radius: Float),
+  rect(Width: Float), //~ E0021 E0021
+  TWO_POINTS, //~ E0021
+}
+
+type Meters = Float
+type meters = Float //~ E0021
+
+interface Show {
+  type Output
+  type output //~ E0021
+  fn show(self) -> String
+  fn Render(self) -> String //~ E0021
+}
+
+impl<item> Show for List<item> { //~ E0021
+  type Output = String
+  const LIMIT: Int = 1
+  const limit: Int = 1 //~ E0021
+  fn show(self) -> String { "" }
+}
+
+effect Clock {
+  fn now() -> Instant
+  fn Sleep(d: Duration) //~ E0021
+}
+
+effect clock_two = Clock //~ E0021
+
+fn run<uses E, uses e>(f: fn() uses E) uses E { //~ E0021
+  f()
+}
+
+fn add_one(n: Int) -> Int ensures (result) result > n {
+  n + 1
+}
+
+fn AddTwo(N: Int) -> Int ensures (Result) Result > N { //~ E0021 E0021 E0021
+  N + 2
+}
+
+fn bindings(xs: List<Int>, _: Int, _unused: Int) { //~ E0021
+  let total = 0
+  let _skip = 1 //~ E0021
+  let (first, second) = (1, 2)
+  var count = 0
+  var Count = 0 //~ E0021
+  for item in xs {}
+  for _item in xs {} //~ E0021
+  let double = fn(value, _) { value * 2 }
+  let triple = fn(_value) { _value * 3 } //~ E0021
+  let done = background(scope: TaskScope) {}
+  let late = background(Scope: TaskScope) {} //~ E0021
+  match total {
+    some_value => some_value,
+  }
+}
+
+test "a test's name is a string, so its case isn't checked" {}

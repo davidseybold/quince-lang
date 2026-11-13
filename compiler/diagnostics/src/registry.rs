@@ -116,6 +116,11 @@ pub const REGISTRY: &[CodeInfo] = &[
         include_str!("../explain/E0020.md"),
     ),
     error(
+        "E0021",
+        "a name of the wrong case where it's declared",
+        include_str!("../explain/E0021.md"),
+    ),
+    error(
         "E0023",
         "a doc comment that documents nothing",
         include_str!("../explain/E0023.md"),

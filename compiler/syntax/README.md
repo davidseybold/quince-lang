@@ -1,6 +1,6 @@
 # quince_syntax
 
-The lexer, the parser and its CST now, and the formatter later. This file holds the contracts the spec leaves to the implementation: what a token is, which errors the lexer owns, the shape of the CST and where trivia sits in it, and how the parser recovers from errors. The designs are in [`docs/design/m1-lexer.md`](../../docs/design/m1-lexer.md) and [`docs/design/m1-parser.md`](../../docs/design/m1-parser.md). The language rules are in the spec's [Lexical structure](../../spec/reference/lexical.md) chapter, and aren't restated here.
+The lexer, the parser and its CST now, and the formatter later. This file holds the contracts the spec leaves to the implementation: what a token is, which errors the lexer owns, the shape of the CST and where trivia sits in it, how the parser recovers from errors, and how the naming case is checked. The designs are in [`docs/design/m1-lexer.md`](../../docs/design/m1-lexer.md) and [`docs/design/m1-parser.md`](../../docs/design/m1-parser.md). The language rules are in the spec's [Lexical structure](../../spec/reference/lexical.md) chapter, and aren't restated here.
 
 ## Source text
 
@@ -73,7 +73,7 @@ Messages describe Quince, the same way for every input. An error says what Quinc
 
 ## The CST
 
-The tree is a `rowan` tree, in the `cst` module. `parse(&Decoded)`, or `parse_str` for text that never came from bytes, gives a `Parse`: the root, a `File` node, and every error the lexer and the parser found, in source order. `Parse::diagnostics` turns them into `Diagnostic`s, as `Lexed::diagnostics` does.
+The tree is a `rowan` tree, in the `cst` module. `parse(&Decoded)`, or `parse_str` for text that never came from bytes, gives a `Parse`: the root, a `File` node, and every error the lexer, the parser and the checks on its tree found, in source order. `Parse::diagnostics` turns them into `Diagnostic`s, as `Lexed::diagnostics` does.
 
 - `SyntaxKind` holds the node kinds after the token kinds, and `QuinceLanguage` maps it to `rowan`. A node kind is named after the grammar production it holds, where there is one. `File` is the root, and `Skipped` holds the tokens the parser skipped while recovering from an error.
 - The tree is lossless: its text is the input, and its tokens are the lexer's, in order, with their kinds. The exceptions are `GtGt` and `GtEq`, CST-only tokens that each hold a `>` and the token right after it, which the parser joins. No token is empty, and no node is, except the root of an empty file.
@@ -237,7 +237,21 @@ The parser reads the significant tokens: every token but the trivia and the doc 
 | E0018 | A line break that ends a construct before a token that continues it, at the break | Replace everything between the two tokens with a space (`safe`), unless a comment lies between them, or the token before the break is the `>` of type arguments that joining would make less-than |
 | E0019 | An operand that needs parentheses: `&&` mixed with `||`, a bit operator or a shift as an operand of another operator or with an arithmetic operand, `&`, `|` or `^` mixed, a shift of a shift, or a range as an operand | Add the parentheses of the usual reading (`needs-review`) |
 | E0020 | A chained comparison or range, at its second operator | For comparisons, repeat each middle operand: `a < b && b < c` (`needs-review`), in parentheses when the chain is an operand of `\|\|`. None when a middle operand holds a comment or a line break or needs parentheses itself, and none for ranges |
+| E0021 | A name of the wrong case, or of no case, where it is declared, over the name (see Naming case) | None |
 | E0023 | A doc comment that documents nothing, over the doc comments before one token | Make each an ordinary comment (`safe`) |
 | E0024 | A struct with no fields written with braces, at the braces | Remove them (`safe`), unless a `requires` follows or a comment lies before or between them |
 | E0025 | `{}` where an expression is expected, over the braces | Insert `:` after the `{` (`needs-review`) |
 | E0026 | An assignment whose left side isn't a place, over the left side. Not reported when the left side holds a syntax error | None |
+
+## Naming case
+
+`parse` runs the `validate` module over the finished tree, whatever errors it holds, and adds its errors to the parser's. It checks the naming case of the names declared in source (the spec's Naming section) and nothing else so far. The case of file names and of the manifest's package name is checked by the stage that reads them (M2).
+
+- **Where.** Only a `Name`, a name being declared, is checked. A `NameRef` is a use, and a use is wrong only when its declaration is, which gets the error. So `width:` alone in a variant pattern, which binds `width`, isn't checked: it names a field, a `NameRef`. A name the parser skipped while recovering is in no `Name`, so it isn't checked either. Nor is a name glued to one of the lexer's `Error` tokens, as `bauche` is in `Ébauche`: the lexer split one identifier, and its E0001 covers that slip, as the parser drops an error right after an `Error` token.
+- **Which class.** The node around the `Name` decides:
+  - `snake_case`: a function, including an interface's method and an effect's operation; a parameter, including a closure's and a `background` scope's; a `let` or pattern binding (`BindPat`); a `var`; an `ensures` binder; a field, of a struct or a variant; a package's name after `as` in an import.
+  - `PascalCase`: a struct, newtype, enum, alias, interface, effect, associated type, variant, type parameter and effect variable (`uses E` in generics).
+  - `SCREAMING_SNAKE_CASE`: a constant, in the file or an `impl`.
+  - None: any `Name` inside a `foreign` block, which keeps its C spelling.
+- **E0021.** A name not of its class, including one that fits no class, is one E0021 over the name. The message names the class and what the name declares, then gives the name written in that class: its words, split at underscores, where a lowercase letter or a digit meets a capital, and before the last capital of a run that a lowercase letter follows (`HTTPServer` is `http` and `server`), joined in the class's case. When that gives no name of the class, or gives a keyword, the message gives none: `const N` is `N` in `SCREAMING_SNAKE_CASE`, which takes two letters, so only the author can choose a new name. E0021 has no fix in M1, since renaming a declaration needs its uses, which name resolution finds.
+- **Patterns.** Case decides whether a name in a pattern binds (see Parsing), so `Second` in `let (first, Second) = p` is a path, which name resolution checks, and `_rest` is a binding, with an E0021 that suggests `rest`.

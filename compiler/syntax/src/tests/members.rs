@@ -29,7 +29,7 @@ fn codes(text: &str) -> Vec<&'static str> {
 #[test]
 fn an_impl_of_an_interface() {
     assert_eq!(
-        valid("impl<T> Sum<T> for List<T> {\n  type Output = T\n  pub const N: Int = 1\n}\n"),
+        valid("impl<T> Sum<T> for List<T> {\n  type Output = T\n  pub const SIZE: Int = 1\n}\n"),
         r#"File
   ImplDecl
     ImplKw "impl"
@@ -66,7 +66,7 @@ fn an_impl_of_an_interface() {
       PubKw "pub"
       ConstKw "const"
       Name
-        Ident "N"
+        Ident "SIZE"
       Colon ":"
       TypePath
         Ident "Int"
@@ -153,7 +153,7 @@ fn impl_errors() {
     valid("impl Self for T {}\n");
     // A member start closes the method's block.
     assert_eq!(
-        codes("impl S {\n  fn f() {\n  const N: Int = 1\n}\n"),
+        codes("impl S {\n  fn f() {\n  const SIZE: Int = 1\n}\n"),
         ["E0017"]
     );
 }

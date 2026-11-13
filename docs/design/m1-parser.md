@@ -173,6 +173,8 @@ That keeps case out of the parser, and lets code use a foreign name such as `SQL
 **The case check** (`r[lex.name.case]`, `r[lex.name.enforced]`) runs in `validate` over the finished tree. It checks a name only where it's declared: functions, parameters, bindings in `let`, `var`, `for` and patterns, fields, types, variants, generics, effects, constants, import aliases and the `ensures` binder. A use can't be wrong unless its declaration is, and the declaration gets the error.
 - A name that isn't of the class its position takes, including a name that fits no class, is E0021. The message names the class and gives the name converted to it. There's no fix in M1 (see Non-goals).
 - Names declared in a `foreign` block are skipped (`r[lex.name.foreign-exempt]`).
+- A name glued to one of the lexer's `Error` tokens isn't checked: the lexer split one identifier, and its error covers the slip (found in layer 8's review).
+- `r[lex.name.case]` also gives files and packages `snake_case`. The parser sees neither a file's name nor the manifest, so M2, which reads them, checks those.
 - Spec question 1 defines the classes.
 
 A keyword where a name goes is an E0016 that names the keyword (`r[lex.keyword-not-name]`, `r[lex.ident-not-keyword]`). The lexer gives every keyword its own kind and none is contextual (`r[lex.no-contextual]`), so the parser never has to guess. A C function whose name is a keyword is spec question 4.
@@ -656,10 +658,11 @@ Layer 7 is three PRs (split by size, 2026-11-12), since its four declarations an
 - [x] Measured on 300,000 generated inputs before and after, with a generator that isn't checked in: fewer errors in total and in every mutation kind but a dropped `}`, which is unchanged, and no new error on any input that had none (decision 9).
 
 **Layer 8: `m1/parser-names`**
-- [ ] Spec: question 1, and a bump.
-- [ ] `validate` and the case check; E0021. [`lex.name.case`, `lex.name.enforced`, `lex.name.foreign-exempt`, `lex.ident-classes`]
+- [x] Spec: question 1, and a bump (v0.26). [`lex.name.snake`, `lex.name.pascal`, `lex.name.screaming`, `lex.name.declared`]
+- [x] `validate` and the case check; E0021. `parse` runs it over every tree, with errors or not. The node around a `Name` decides its class, and a `background` scope is a parameter. When the name written in its class fits no class or is a keyword, the message gives none, as for `const N`. Unit tests whose constants had one letter, or whose binding was `_rest`, got names that fit. [`lex.name.case`, `lex.name.enforced`, `lex.name.foreign-exempt`, `lex.ident-classes`]
 
 **Layer 9: `m1/parser-fuzz`**
+- [ ] A `test`'s `forall` parameters and `uses` effects (`grammar.test_decl`), which no layer parses yet: `test_decl` stops after the name (found in layer 8). Its parameters are `Param`s, so the case check covers them with no change.
 - [ ] Parsing ahead (layer 3b) nests type arguments as deep as the `<`s it meets, so `g(a < b, a < b, ...)` nests far deeper than its tree. The depth counter must cover parsing ahead, and an E0022 while parsing ahead is a slip, not an error (found in layer 3b's review).
 - [ ] `fuzz::check_parse` and its unit test over every fixture; the fuzz crate and its thin target; the command in `AGENTS.md`.
 - [ ] The nesting limit, measured; E0022; the deep-nesting tests on spawned threads. `tests::stmts::deeply_nested_blocks` (layer 4c) nests 300 blocks, past the 256 looks `LOOKAHEAD_LIMIT` allows: if the limit rejects that depth, the test expects the one E0022 and still checks that no look trips the guard.

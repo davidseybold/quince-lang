@@ -201,10 +201,10 @@ fn a_skip_stops_at_a_declaration() {
 fn the_end_of_the_file_closes_everything() {
     assert_eq!(errors("fn f() {\n  g(1"), ["E0017 7..8", "E0017 12..13"]);
     assert_eq!(
-        messages("const A: Int ="),
+        messages("const AB: Int ="),
         ["expected an expression, found the end of the file"]
     );
-    assert_eq!(errors("const A: Int ="), ["E0016 14..14"]);
+    assert_eq!(errors("const AB: Int ="), ["E0016 15..15"]);
     assert_eq!(
         messages("fn f() ->"),
         ["expected a type, found the end of the file"]
@@ -333,7 +333,7 @@ fn a_semicolon_ends_a_statement() {
     // The same holds when the end of the file comes after the `;`.
     assert_eq!(errors("fn f() ->;"), [r#"E0002 9..10 => "fn f() ->""#]);
     assert_eq!(errors("fn f() ->;\n"), [r#"E0002 9..10 => "fn f() ->\n""#]);
-    assert_eq!(codes("const A: Int =; // done\n"), ["E0002"]);
+    assert_eq!(codes("const AB: Int =; // done\n"), ["E0002"]);
     // An unclosed bracket still gets its E0017 there.
     assert_eq!(codes("fn f() {\n  let a =;"), ["E0017", "E0002"]);
 }
@@ -404,14 +404,14 @@ fn a_line_break_too_early() {
         ("impl T\n{}", "impl T {}", 6..7),
         ("enum E\n{ A }", "enum E { A }", 6..7),
         ("test \"t\"\n{}", "test \"t\" {}", 8..9),
-        ("const N: Int\n  = 1", "const N: Int = 1", 12..13),
+        ("const NS: Int\n  = 1", "const NS: Int = 1", 13..14),
         ("type T\n  = Int", "type T = Int", 6..7),
         (
             "fn f() {\n  let x\n  : Int = 1\n}",
             "fn f() {\n  let x : Int = 1\n}",
             16..17,
         ),
-        ("const N\n  : Int = 1", "const N : Int = 1", 7..8),
+        ("const NS\n  : Int = 1", "const NS : Int = 1", 8..9),
         ("struct S\n{ a: Int }", "struct S { a: Int }", 8..9),
         (
             "fn f() {\n  g(\n    a\n    + b\n  )\n}",
