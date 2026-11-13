@@ -2,6 +2,7 @@
 //! Also the tree dumps that the parser's tests compare.
 
 use crate::cst::{Event, QuinceLanguage, build};
+use crate::fuzz::check_lossless;
 use crate::{Lexed, SyntaxError, SyntaxKind, SyntaxNode, lex_str};
 use SyntaxKind::*;
 use rowan::{Language, NodeOrToken, WalkEvent};
@@ -38,37 +39,6 @@ fn dump(node: &SyntaxNode, trivia: bool) -> String {
         }
     }
     out
-}
-
-/// The tree's text is `text`, and its tokens are the lexer's, in order, apart from the joins,
-/// each of which spells its kind with two lexer tokens. No token is empty, and no node but
-/// the root.
-pub(crate) fn check_lossless(text: &str, lexed: &Lexed, root: &SyntaxNode) {
-    assert_eq!(root.text().to_string(), text);
-    let mut lexer_tokens = lexed.ranges();
-    for element in root.descendants_with_tokens() {
-        let token = match element {
-            NodeOrToken::Node(node) => {
-                let is_root = node.parent().is_none();
-                assert!(
-                    is_root || !node.text_range().is_empty(),
-                    "an empty {node:?}"
-                );
-                continue;
-            }
-            NodeOrToken::Token(token) => token,
-        };
-        let (kind, range) = lexer_tokens.next().expect("the tree has extra tokens");
-        match SyntaxKind::JOINED.iter().find(|&&(_, k)| k == token.kind()) {
-            Some(&(joined_text, _)) => {
-                let (_, second) = lexer_tokens.next().expect("a join of the last token");
-                assert_eq!(token.text(), joined_text);
-                assert_eq!(&text[range.start..second.end], joined_text);
-            }
-            None => assert_eq!((token.kind(), token.text()), (kind, &text[range])),
-        }
-    }
-    assert_eq!(lexer_tokens.next(), None, "the tree lost a token");
 }
 
 /// Builds the tree of `text` from `events`, with every token significant but trivia and doc

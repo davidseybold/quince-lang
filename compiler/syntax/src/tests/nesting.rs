@@ -5,16 +5,12 @@
 
 use super::errors::describe;
 use super::parser::checked;
+use crate::codes;
+use crate::fuzz::{NESTING_SLACK_LEVELS, tree_depth};
 use crate::parser::{NESTING_LIMIT, speculated_tokens};
-use crate::{SyntaxNode, codes};
-use rowan::WalkEvent;
 
 /// The stack of a Rust test thread, which the limit is measured against (README).
 const TEST_STACK_BYTES: usize = 2 << 20;
-
-/// How far past [`NESTING_LIMIT`] the tree may go: the nodes a construct opens before its next
-/// recursive entry checks the depth, such as a match arm around its body (README).
-const NESTING_SLACK_LEVELS: usize = 4;
 
 /// Far deeper than the limit, so a construct that the limit misses overflows the stack.
 const DEEP_LEVELS: usize = 10_000;
@@ -77,21 +73,6 @@ fn wrap(levels: usize, open: &str, inner: &str, close: &str) -> String {
 
 fn body(line: &str) -> String {
     format!("fn f() {{\n  {line}\n}}\n")
-}
-
-/// The levels of the tree, the file's included.
-fn tree_depth(root: &SyntaxNode) -> usize {
-    let (mut depth, mut deepest) = (0usize, 0usize);
-    for event in root.preorder() {
-        match event {
-            WalkEvent::Enter(_) => {
-                depth += 1;
-                deepest = deepest.max(depth);
-            }
-            WalkEvent::Leave(_) => depth -= 1,
-        }
-    }
-    deepest
 }
 
 /// Runs `check` on a thread with [`TEST_STACK_BYTES`] of stack.

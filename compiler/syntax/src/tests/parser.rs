@@ -1,9 +1,11 @@
 //! The parser's trees: declarations, types, statements and expressions, where a line ends, and
 //! where trivia sits. Each expected dump is written by hand. Errors are in `recovery`.
 
-use super::cst::{check_lossless, dump_tree, dump_tree_without_trivia};
+use super::cst::{dump_tree, dump_tree_without_trivia};
 use super::repo_root;
-use crate::{Parse, SyntaxError, SyntaxKind, decode_source, lex, lex_str, parse, parse_str};
+pub(super) use crate::fuzz::check_error_ranges;
+use crate::fuzz::{check_lossless, check_parse as fuzz_check};
+use crate::{Parse, SyntaxKind, decode_source, lex, lex_str, parse, parse_str};
 
 /// The tree without trivia, after checking that the text parses with no error.
 pub(super) fn valid(text: &str) -> String {
@@ -36,28 +38,10 @@ pub(super) fn checked(text: &str) -> Parse {
 }
 
 /// The tree is lossless, and every error range lies inside the text on character boundaries,
-/// in source order. Only an error at the end of the text may be empty.
+/// in source order, as [`crate::fuzz::check_parse`] checks.
 pub(super) fn check_parse(text: &str, parse: &Parse) {
     check_lossless(text, &lex_str(text), &parse.syntax());
     check_error_ranges(text, parse.errors());
-}
-
-pub(super) fn check_error_ranges(text: &str, errors: &[SyntaxError]) {
-    for e in errors {
-        let (start, end) = (e.range.start as usize, e.range.end as usize);
-        assert!(
-            (start < end || start == text.len()) && end <= text.len(),
-            "{text:?}: {e:?}"
-        );
-        assert!(
-            text.is_char_boundary(start) && text.is_char_boundary(end),
-            "{text:?}: {e:?}"
-        );
-    }
-    assert!(
-        errors.is_sorted_by_key(|e| e.range.start),
-        "{text:?}: errors out of order: {errors:?}"
-    );
 }
 
 /// The `lex/` fixtures are valid syntax: the parser adds no error to the lexer's.
@@ -78,6 +62,32 @@ fn the_lex_fixtures_parse() {
         assert_eq!(parse.errors(), expected, "{}", path.display());
         check_lossless(&decoded.text, &lexed, &parse.syntax());
     }
+}
+
+/// Every conformance fixture, `lex/` and `parse/` alike, and every fuzz seed passes the fuzz
+/// target's check, so CI keeps the check compiling and passing, and only the fuzz crate's few
+/// lines can break unseen (decision 11).
+#[test]
+fn every_fixture_passes_the_fuzz_check() {
+    let mut dirs = vec![
+        repo_root().join("tests/conformance/testdata"),
+        repo_root().join("compiler/syntax/fuzz/testdata"),
+    ];
+    let mut checked = 0;
+    while let Some(dir) = dirs.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                dirs.push(path);
+            } else if path.extension().is_some_and(|ext| ext == "qnc") {
+                let bytes = std::fs::read(&path).unwrap();
+                let result = std::panic::catch_unwind(|| fuzz_check(&bytes));
+                assert!(result.is_ok(), "{}", path.display());
+                checked += 1;
+            }
+        }
+    }
+    assert!(checked >= 110, "found only {checked} fixtures and seeds");
 }
 
 #[test]

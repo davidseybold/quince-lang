@@ -10,5 +10,9 @@ publish.workspace = true
 quince_diagnostics = { path = "../diagnostics" }
 rowan = "=0.17.0"
 
+[features]
+# `fuzz::check_parse`, for the fuzz target in `fuzz/`. Tests have it without the feature.
+fuzz = []
+
 [lints]
 workspace = true
