@@ -108,7 +108,7 @@ The parser checks that one function, `at_break()`, wherever a construct may end 
 **Line contexts and list contexts** (spec question 3, revised by David, 2026-11-12). Inside parentheses, square brackets, type arguments and generics, and the braces of a comma-separated list (fields, variants, map entries, import names, match and select arms, a `concurrent` spawn list), a break before a `,` or the closing bracket is spacing. Elsewhere in a list the line-context rules apply: a line that starts with `-` or `(` is a new item, so a missing `,` before it is an E0016 whose fix inserts it, and a line that starts with `+` is an E0018. So one rule covers the whole language, and a missing comma never silently joins two items into one expression. A block inside a list is a line context again. So `f(\n  a,\n  b\n)` parses without its trailing comma, as `r[tool.fmt.check]` requires, since unformatted code compiles.
 
 **A break that ends a statement too early** is one error, E0018, not two. The parser reports E0018 at the break and parses on as though the lines were joined when the next line starts with:
-- a token that can't start a statement but would continue the construct the break ended: `=`, a compound assignment, `=>`, a binary operator that can't also start an expression, `?`, or `:` after the name in `let`, `var` or `const` (decided by David, 2026-11-12);
+- a token that can't start a statement but would continue the construct the break ended: `=`, a compound assignment, `=>`, a binary operator that can't also start an expression, `?`, or `:` after the name in `let`, `var` or `const` (decided by David, 2026-11-12). `uses` after an `effect` or `foreign` header is one too (layer 7d): `uses` starts nothing. In a `fn` header a line that starts with `uses` isn't a break at all (`r[lex.continue.fn-header]`), so it joins there with no error;
 - `else` after an `if`'s block (`r[lex.else-same-line]`). This applies in list contexts too;
 - `{` where the construct the break ended needs its body next, as in `if x` followed by a line `{`. A struct's `{` counts (decided by David, 2026-11-12): a struct with no fields has no braces, but at the top of a file a `{` can start nothing else. Outside a `fn` header, which `r[lex.continue.fn-header]` continues, a body's `{` sits on its construct's line.
 
@@ -216,6 +216,18 @@ Doc comments and attributes aren't member starts: they belong to the declaration
 
 **A `match` missing its `}`** (layer 5b, accepted by David, 2026-11-12). A `let`, `var` or `while` line after the last arm is a member start, so it closes the arms with one E0017 at the `match`'s `{`. Any other line reads as an arm: `log(a)` is a pattern with no `=>` after it, an E0016 at the line break, and the function's `}` closes the arms silently, so the end of the file gives an E0017 at the function's `{`. Map braces cascade the same way. Two errors for one slip is accepted, with no heuristic for it.
 
+**A missing body `{`** (layer 7d, decided by David, 2026-11-13). An `impl`, `interface`, `effect` or `foreign` header with no slip that ends its line where its `{` belongs is one E0016 at the line break. The parser then acts as though the `{` were there: it opens the body's frame, marked as assumed, and parses the lines after it as members up to the `}`. So the members after a missing `{` get no errors of their own, where each used to get one that pointed at a correct line, such as one that asked an interface's method for a body.
+- **The fix** inserts ` {` right after the header's last token, before any comment on the line (`safe`). It's attached only once the assumed body has closed at its `}`. With no `}`, the `{` alone would leave the body unclosed, so there is no fix.
+- **With no `}`,** the assumed body closes the way a body missing its `}` does: at a line that starts a member only the file holds (`struct`, `impl`, `test` and the rest of the file's list above that a body's isn't), or at the end of the file. It gets no E0017, since it has no opener and the E0016 covers it. The cost is a top-level `fn`, `type` or `const` after it, which the body holds: each is parsed as a member, and gets an error where the owner can't take it, such as a function's block in an interface. That is the cascade every body missing its `}` already has.
+- **After a slip on the header's line,** no body is assumed, since the header may not take one: `effect Tick->s = time.Clock` is an alias with a slip, not an effect missing its `{`. The header's line is skipped up to its `{` as before.
+- **An unclosed string that swallows the `{`,** as in `foreign "c {`, is the lexer's E0004 and E0007. The header's E0016 falls on that line, so it's dropped (above), and the body is assumed with no more errors.
+- **Measured** on 300,000 generated inputs (valid programs built from declaration templates with up to two mutations each: a dropped header `{`, a dropped `}`, both, a misspelled keyword, `uses` moved to the next line, a dropped or inserted token; a quarter of them conformance fixtures). Errors fell from 655,665 to 576,641 with all three 7d changes. 56,948 inputs had fewer errors and 1,300 more, 977 of those by one, and no input that parsed with no error gained one. Dropping a header's `{` alone went from 66,760 errors to 46,802. Dropping both braces went from 63,157 to 50,438, with 479 of its 28,367 inputs worse, the cascade above.
+
+**A line that is no declaration** (layer 7d, decided by David, 2026-11-13). A line in the file or a body that starts no declaration or member is one E0016, and the line is skipped. When a `{` on it, outside any bracket, opens a block, the skip takes the block to its `}` in a frame of its own:
+- In the file the frame holds what a body holds, so a line that starts with `fn` and a name, `type` or `const` doesn't end the skip, and a line that only the file holds does. So `interfce I {` and its methods are one error, where each method after the first used to fail as a file's `fn`.
+- In a body the frame is a block, which a member start closes, since a line that is no member stands where a method would. So a stray `{` in a member line, as in `t{ype FILE`, ends at the next member, and doesn't run on to the body's `}`. A misspelled method's block holds only statements, so it's skipped whole.
+- A frame closed early, or at the end of the file, is closed while the parser is skipping, so it gets no E0017: the E0016 covers the missing `}`.
+
 **E0016** is the general syntax error: "expected X, found Y", where X lists what may go there in Quince terms ("an expression", "`,` or `)`", "a line break").
 - When a list item is followed, on the next line, by something that starts another item, its fix inserts the missing `,` (`needs-review`).
 - Two expressions on one line, such as adjacent literals (`"press "b" now"`, from the lexer doc), are an E0016 that expects a line break, with no hint for that shape (lexer decision 9).
@@ -284,6 +296,14 @@ Doc comments and attributes aren't member starts: they belong to the declaration
 | In an interface, `type T = Int` followed by a line `pub fn f(self)` | E0016 at `=`, and E0016 at `pub`, the member's own slip (layer 7b) |
 | In an interface, `fn f(self)` followed by lines `{`, `x` and `}` | E0016 at `{`, and the body is skipped whole (layer 7b) |
 | `interface I<T {` then lines `fn f(self)`, `fn g(self)` and `}` | E0017 at `<`: no type holds braces, so the `{` closes the generics and the body is parsed (layer 7b, found in review: the skip took the `{` and every method failed as a file's `fn`) |
+| `interface I`, `impl S for T`, `effect E uses Fs` or `foreign "c"`, then member lines and `}` | E0016 at the line break, with a fix that inserts ` {` (`safe`), and the lines are the body's members (layer 7d) |
+| `interface I`, then a line `fn f(self)`, then a line `struct S` or the end of the file | E0016 at the line break, with no fix (layer 7d) |
+| `effect E -> s = time.Clock`, then a line `fn g() {}` | E0016 at `->`, and no body is assumed (layer 7d) |
+| `foreign "c {`, then member lines and `}` | E0004 and E0007, the lexer's (layer 7d) |
+| `effect E` or `foreign "c"`, then a line `uses Fs {` | E0018 (layer 7d) |
+| `interfce I {`, then lines `fn f(self)`, `fn g(self)` and `}` | E0016 at `interfce`, and the block is skipped whole (layer 7d) |
+| `imlp S {`, then a line `fn f() {}`, then a line `struct T` | E0016 at `imlp`, and the skip ends at `struct` (layer 7d) |
+| In an `impl`, `t{ype A = Int` then a line `fn f() {}` | E0016 at `t`, and the skip ends at `fn` (layer 7d) |
 
 ### 10. Diagnostics
 
@@ -293,7 +313,7 @@ The operators Quince leaves out (`r[expr.op.excluded]`) get no code or hint of t
 
 | Code | Problem | Fix | Rule from |
 | --- | --- | --- | --- |
-| E0016 | A token that can't go here: "expected X, found Y" | Insert a line break after an attribute on its declaration's line (`safe`); insert a missing `,` between list items on separate lines (`needs-review`), or after a match's last arm (`safe`); remove parentheses around a type that isn't a function type (`safe`, Q14). Otherwise none | |
+| E0016 | A token that can't go here: "expected X, found Y" | Insert a line break after an attribute on its declaration's line (`safe`); insert a missing `,` between list items on separate lines (`needs-review`), or after a match's last arm (`safe`); remove parentheses around a type that isn't a function type (`safe`, Q14); insert ` {` after an `impl`, `interface`, `effect` or `foreign` header whose `{` is missing, once its body's `}` comes (`safe`, decision 9). Otherwise none | |
 | E0017 | An opening bracket with no closing one, at the opener | None | |
 | E0018 | A line break that ends a statement too early, including before `else` or a body's `{` (decision 4) | Replace everything between the two tokens with a space (`safe`), unless a comment lies between them | Q3, Q12 |
 | E0019 | Operators that need parentheses (decision 6) | Add the parentheses for the usual reading (`needs-review`) | |
@@ -380,7 +400,7 @@ The layers:
 4. `m1/parser-stmts`: statements, assignment and E0026; list contexts; E0018; `if` and `else`.
 5. `m1/parser-patterns` (5a): patterns, `let` patterns and `is`. `m1/parser-match` (5b): `match`, guards and `for`.
 6. `m1/parser-closures` (6a): closures, `return`, `break`, `continue` and contracts. `m1/parser-concurrency` (6b): `concurrent`, `background`, `select`, `with` and `spawn`.
-7. `m1/parser-doc-placement` (7a): members' doc comments and attributes, and E0023. `m1/parser-impl-interface` (7b): the rest of `impl`, and `interface`. `m1/parser-effect-foreign` (7c): `effect` and `foreign`.
+7. `m1/parser-doc-placement` (7a): members' doc comments and attributes, and E0023. `m1/parser-impl-interface` (7b): the rest of `impl`, and `interface`. `m1/parser-effect-foreign` (7c): `effect` and `foreign`. `m1/parser-header-recovery` (7d): recovery when a header's `{` is missing, `uses` on the next line, and the block of a line that is no declaration.
 8. `m1/parser-names`: `validate`, the case check and E0021.
 9. `m1/parser-fuzz`: the fuzz crate, the nesting limit and E0022, and the deep-nesting tests.
 
@@ -625,6 +645,12 @@ Layer 7 is three PRs (split by size, 2026-11-12), since its four declarations an
 **Layer 7c: `m1/parser-effect-foreign`**
 - [x] Spec: question 4, question 9 for `effect_decl` and `foreign_decl`, and a bump (v0.25).
 - [x] `effect` and `foreign`, with their members' doc comments and attributes. An effect's operations take no contracts or body, and a C function only named parameters and a return type. A keyword as a C name is an E0016, as anywhere a name goes. [`grammar.effect_decl`, `grammar.foreign_decl`, `grammar.c_fn`, `ffi.cbind.keyword-name`]
+
+**Layer 7d: `m1/parser-header-recovery`** (decided by David, 2026-11-13)
+- [x] A header with no slip whose `{` is missing is one E0016 at the line break, and the body is assumed up to its `}`, in a frame that closes with no E0017. The fix inserts ` {` once the `}` comes (`safe`). After a slip on the header's line no body is assumed (found while measuring: `effect Tick->s = time.Clock` took the declarations after it). Unit-tested only, since this is recovery and no rule a parser could break (decision 11).
+- [x] `uses` at the start of a line after an `effect` or `foreign` header is an E0018 (decision 4).
+- [x] A line that is no declaration or member skips the block it opens to its `}`: as a body in the file, and as a block in a body (found while measuring: as a body, a stray `{` in a member line ran on to the body's `}`).
+- [x] Measured on 300,000 generated inputs before and after, with a throwaway generator: fewer errors in total and in every mutation kind but a dropped `}`, which is unchanged, and no new error on any input that had none (decision 9).
 
 **Layer 8: `m1/parser-names`**
 - [ ] Spec: question 1, and a bump.

@@ -3,7 +3,7 @@
 //! attributes, and their parts.
 
 use super::input::Break;
-use super::{Holds, Parser, Sync, exprs, types};
+use super::{Holds, Parser, Step, Sync, exprs, types};
 use crate::SyntaxKind::{self, *};
 use crate::{SyntaxError, codes};
 use quince_diagnostics::Applicability;
@@ -166,9 +166,9 @@ fn decl(p: &mut Parser, owner: Owner) {
             if p.steps.len() == marker.0 + 1 {
                 // Nothing before the item, so the skip's own node is enough.
                 p.abandon(marker);
-                return skip(what, p);
+                return skip(what, file, p);
             }
-            skip(what, p);
+            skip(what, file, p);
             p.complete(marker, Skipped);
             return;
         }
@@ -243,9 +243,42 @@ fn not_on_own_line(p: &mut Parser, at: usize) {
     p.report(error);
 }
 
-fn skip(what: &str, p: &mut Parser) {
+/// A line that starts no declaration or member: one E0016, and the line is skipped. A block
+/// it opens is skipped to its `}` (decision 9). In the `file`, that block is skipped as an
+/// `impl` body: a line that starts a member of one doesn't end it, and a line that only the
+/// file holds closes it. In a body, the block is skipped as a block, which a line that starts
+/// a member closes.
+fn skip(what: &str, file: bool, p: &mut Parser) {
     p.expected_member(what);
-    p.recover(Sync::Line, true);
+    let first = p.pos;
+    if p.kind() != LBrace {
+        p.recover(Sync::Block, true);
+    }
+    if p.kind() == LBrace && (p.pos == first || !p.at_break()) {
+        skip_block(p, if file { Holds::Body } else { Holds::Block });
+    }
+}
+
+/// Skips a block from its `{` to its `}` after the E0016 for the line that opens it, as a
+/// frame that `holds` the lines a member start doesn't close. A member start that closes it,
+/// or the end of the file, ends the skip: the E0016 covers the missing `}`.
+fn skip_block(p: &mut Parser, holds: Holds) {
+    let marker = p.start();
+    p.take();
+    p.push_frame(holds, Some(RBrace));
+    loop {
+        if p.kind() == RBrace {
+            p.pop_frame();
+            p.take();
+            break;
+        }
+        if let Some(stop) = p.stop() {
+            p.close_frame(stop);
+            break;
+        }
+        p.recover(Sync::Line, true);
+    }
+    p.complete(marker, Skipped);
 }
 
 /// `fn` name [ generics ] `(` params `)` [ `->` type ] [ `uses` effects ], its contracts, and a
@@ -513,24 +546,20 @@ fn impl_decl(p: &mut Parser) {
         ok = types::type_(p);
         target = true;
     }
-    if ok && !p.at_or_join(LBrace) {
-        p.expected(if target { "`{`" } else { "`for` or `{`" });
-    }
-    body(p, Owner::Impl);
+    let what = if target { "`{`" } else { "`for` or `{`" };
+    body(p, Owner::Impl, ok.then_some(what));
 }
 
 /// `interface` Name [ generics ] `{` members `}` (`grammar.interface_decl`).
 fn interface_decl(p: &mut Parser) {
     p.bump();
     let ok = name(p, "an interface name") && (!p.at(Lt) || types::generics(p));
-    if ok && !p.at_or_join(LBrace) {
-        p.expected("`{`");
-    }
-    body(p, Owner::Interface);
+    body(p, Owner::Interface, ok.then_some("`{`"));
 }
 
 /// `effect` Name, then [ `uses` effects ] and its operations in braces, or `=` and the path of
-/// another effect (`grammar.effect_decl`).
+/// another effect (`grammar.effect_decl`). A line that starts with `uses` continues the header,
+/// as an E0018 (decision 4).
 fn effect_decl(p: &mut Parser) {
     p.bump();
     if !name(p, "an effect name") {
@@ -545,45 +574,74 @@ fn effect_decl(p: &mut Parser) {
         }
         return;
     }
-    let uses = p.at(UsesKw);
-    if (!uses || types::effects(p)) && !p.at_or_join(LBrace) {
-        p.expected(if uses { "`{`" } else { "`uses`, `{` or `=`" });
-    }
-    body(p, Owner::Effect);
+    let uses = p.at_or_join(UsesKw);
+    let ok = !uses || types::effects(p);
+    let what = if uses { "`{`" } else { "`uses`, `{` or `=`" };
+    body(p, Owner::Effect, ok.then_some(what));
 }
 
 /// `foreign` string [ `uses` effects ] `{` members `}` (`grammar.foreign_decl`): the library
-/// and its C functions and types.
+/// and its C functions and types. A line that starts with `uses` continues the header, as an
+/// E0018 (decision 4).
 fn foreign_decl(p: &mut Parser) {
     p.bump();
     if !p.at(StringStart) {
         p.expected("the library's name, a string");
-    } else {
-        exprs::literal(p);
-        let uses = p.at(UsesKw);
-        if (!uses || types::effects(p)) && !p.at_or_join(LBrace) {
-            p.expected(if uses { "`{`" } else { "`uses` or `{`" });
-        }
+        return body(p, Owner::Foreign, None);
     }
-    body(p, Owner::Foreign);
+    exprs::literal(p);
+    let uses = p.at_or_join(UsesKw);
+    let ok = !uses || types::effects(p);
+    let what = if uses { "`{`" } else { "`uses` or `{`" };
+    body(p, Owner::Foreign, ok.then_some(what));
 }
 
-/// The members of an `impl`, an `interface`, an `effect` or a `foreign` block in braces, one
-/// per line. After a slip in the
-/// header, the rest of its line is skipped up to its `{`, so the body is still parsed.
-fn body(p: &mut Parser, owner: Owner) {
-    skip_to_brace(p);
-    if !p.at(LBrace) {
-        return;
+/// The body of an `impl`, an `interface`, an `effect` or a `foreign` block: its members in
+/// braces, one per line. `expected` is what the header takes next, `{` among it, when the
+/// header parsed with no slip. After a slip in the header, the rest of its line is skipped up
+/// to its `{`, so the body is still parsed. A header with no slip that ends its line where the
+/// `{` belongs is one E0016 at the line break, and the lines after it are its members, up to
+/// the `}`, as though the `{` were there (decision 9). When that `}` comes, the E0016 gets a
+/// fix that inserts the `{`.
+fn body(p: &mut Parser, owner: Owner, expected: Option<&str>) {
+    let mut assumed = false;
+    // The E0016 at the line break where the `{` belongs, by its step, and where the `{` goes.
+    let mut missing = None;
+    if let Some(what) = expected
+        && !p.at_or_join(LBrace)
+    {
+        let (at, end) = (p.steps.len(), p.input.tokens[p.pos - 1].range.end);
+        assumed = p.at_break();
+        p.expected(what);
+        if assumed && matches!(p.steps.get(at), Some(Step::Error(_))) {
+            missing = Some((at, end));
+        }
     }
-    p.bump();
+    skip_to_brace(p);
     let member: fn(&mut Parser) = match owner {
         Owner::Interface => |p| decl(p, Owner::Interface),
         Owner::Effect => |p| decl(p, Owner::Effect),
         Owner::Foreign => |p| decl(p, Owner::Foreign),
         _ => |p| decl(p, Owner::Impl),
     };
-    p.lines(Holds::Body, Some(RBrace), member);
+    if p.at(LBrace) {
+        p.bump();
+        p.lines(Holds::Body, Some(RBrace), member);
+        return;
+    }
+    if !assumed {
+        return;
+    }
+    p.push_assumed_frame(Holds::Body, RBrace);
+    let closed = p.lines_in(Some(RBrace), member);
+    if let (true, Some((at, end))) = (closed, missing)
+        && let Step::Error(error) = &mut p.steps[at]
+    {
+        let edit = (end..end, " {".to_string());
+        *error = error
+            .clone()
+            .with_fix("insert the `{`", Applicability::Safe, vec![edit]);
+    }
 }
 
 /// `type` Name, then `=` and a type when `value`: an associated type, which an `impl` fixes

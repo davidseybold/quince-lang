@@ -1,7 +1,9 @@
 //! The parser's trees for `impl`, `interface`, `effect` and `foreign` declarations and their
 //! members, and their errors. Each expected dump is written by hand.
 
+use super::cst::dump_tree_without_trivia;
 use super::parser::{checked, valid};
+use quince_diagnostics::Applicability;
 
 /// Each error as `code start..end: message`.
 fn errors(text: &str) -> Vec<String> {
@@ -396,5 +398,139 @@ fn foreign_errors() {
     assert_eq!(
         errors("foreign \"c\" {\n  fn f() -> fn(Int) -> Int uses Io\n}\n"),
         ["E0016 41..45: expected a line break, found the keyword `uses`"]
+    );
+}
+
+/// The text after applying each error's fix, with its applicability, for errors that have
+/// one.
+fn fixed(text: &str) -> Vec<(String, Applicability)> {
+    checked(text)
+        .errors()
+        .iter()
+        .flat_map(|e| &e.fixes)
+        .map(|fix| {
+            let mut fixed = text.to_string();
+            for (range, with) in fix.edits.iter().rev() {
+                fixed.replace_range(range.start as usize..range.end as usize, with);
+            }
+            (fixed, fix.applicability)
+        })
+        .collect()
+}
+
+/// A header that ends its line where its body's `{` belongs is one E0016 at the line break,
+/// and the lines after it are parsed as the body's members up to its `}`. The fix inserts the
+/// `{` when a `}` closes the body (decision 9).
+#[test]
+fn a_missing_brace_is_assumed() {
+    let text = "interface I\n  fn f() -> Int\n  fn g(x: Int)\n  type T\n}\n";
+    assert_eq!(
+        errors(text),
+        ["E0016 11..12: expected `{`, found a line break"]
+    );
+    assert_eq!(
+        fixed(text),
+        [(
+            "interface I {\n  fn f() -> Int\n  fn g(x: Int)\n  type T\n}\n".to_string(),
+            Applicability::Safe
+        )]
+    );
+    // The members are the interface's.
+    let tree = dump_tree_without_trivia(&checked(text).syntax());
+    assert_eq!(tree.matches("InterfaceDecl").count(), 1, "{tree}");
+    assert!(tree.trim_end().ends_with("RBrace \"}\""), "{tree}");
+    // A comment after the header stays after the `{`.
+    assert_eq!(
+        fixed("impl S for T // c\n  fn f() {}\n}\n"),
+        [(
+            "impl S for T { // c\n  fn f() {}\n}\n".to_string(),
+            Applicability::Safe
+        )]
+    );
+    assert_eq!(
+        errors("impl S\n  fn f() {}\n  type A = Int\n}\n"),
+        ["E0016 6..7: expected `for` or `{`, found a line break"]
+    );
+    assert_eq!(
+        errors("effect E\n  fn f()\n  fn g() -> Int\n}\n"),
+        ["E0016 8..9: expected `uses`, `{` or `=`, found a line break"]
+    );
+    assert_eq!(
+        errors("effect E uses Fs\n  fn f()\n}\n"),
+        ["E0016 16..17: expected `{`, found a line break"]
+    );
+    assert_eq!(
+        errors("foreign \"c\"\n  type FILE\n  fn f() -> CInt\n}\n"),
+        ["E0016 11..12: expected `uses` or `{`, found a line break"]
+    );
+    // With no `}`, the body ends at a line it can't hold, or at the end of the file, with no
+    // error of its own and no fix: inserting the `{` would leave it unclosed.
+    for text in [
+        "interface I\n  fn f(self)\nstruct S\n",
+        "interface I\n  fn f(self)\n",
+        "interface I\n",
+    ] {
+        assert_eq!(codes(text), ["E0016"], "{text:?}");
+        assert_eq!(fixed(text), [], "{text:?}");
+    }
+    // After a slip on the header's line, no body is assumed: the header may not take one.
+    assert_eq!(
+        errors("effect E -> s = time.Clock\nfn g() {}\n"),
+        ["E0016 9..11: expected `uses`, `{` or `=`, found `->`"]
+    );
+    // A `{` that an unclosed string swallowed: the lexer's errors are the slip.
+    assert_eq!(
+        codes("foreign \"c {\n  fn f()\n  fn g()\n}\n"),
+        ["E0004", "E0007"]
+    );
+}
+
+/// `uses` can't start a line, so after an `effect` or `foreign` header it continues the
+/// header: an E0018 (decision 4).
+#[test]
+fn uses_continues_a_header() {
+    let text = "effect E\nuses Fs {\n  fn f()\n}\n";
+    assert_eq!(
+        errors(text),
+        ["E0018 8..9: a line break can't come before `uses`, which continues the line above"]
+    );
+    assert_eq!(
+        fixed(text),
+        [(
+            "effect E uses Fs {\n  fn f()\n}\n".to_string(),
+            Applicability::Safe
+        )]
+    );
+    assert_eq!(
+        codes("foreign \"c\"\n  uses Fs {\n  fn f()\n}\n"),
+        ["E0018"]
+    );
+    // A `fn` header continues at `uses` (`r[lex.continue.fn-header]`).
+    valid("fn f()\n  uses Io {\n}\n");
+}
+
+/// A line that starts no declaration or member is one E0016, and a block it opens is skipped
+/// to its `}`, the members in it included (decision 9).
+#[test]
+fn a_line_that_is_no_declaration_skips_its_block() {
+    assert_eq!(
+        errors("interfce I {\n  fn f(self)\n  fn g(self)\n}\nfn h() {}\n"),
+        ["E0016 0..8: expected a declaration, found the name `interfce`"]
+    );
+    assert_eq!(codes("{\n  fn f(self)\n  type T\n}\n"), ["E0016"]);
+    // With no `}`, the skip ends at a line its block can't hold, or at the end of the file.
+    assert_eq!(
+        codes("imlp S {\n  fn f() {}\n  type A = Int\nstruct T\nfn g() x\n"),
+        ["E0016", "E0016"]
+    );
+    assert_eq!(codes("imlp S {\n  fn f() {}\n"), ["E0016"]);
+    // In a body, the block is a method's, so a member start ends the skip.
+    assert_eq!(
+        errors("impl S {\n  fnn f() {\n    let x = 1\n    while x {}\n  }\n  fn h() {}\n}\n"),
+        ["E0016 11..14: expected `fn`, `const`, `type` or `}`, found the name `fnn`"]
+    );
+    assert_eq!(
+        codes("impl S {\n  t{ype A = Int\n  fn f() {}\n}\nfn g() {}\n"),
+        ["E0016"]
     );
 }
