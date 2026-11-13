@@ -41,6 +41,7 @@ pub mod codes {
     pub const EARLY_LINE_BREAK: &str = "E0018";
     pub const PARENTHESES_NEEDED: &str = "E0019";
     pub const CHAINED_OPERATOR: &str = "E0020";
+    pub const STRAY_DOC_COMMENT: &str = "E0023";
     pub const EMPTY_STRUCT_BRACES: &str = "E0024";
     pub const EMPTY_BRACES: &str = "E0025";
     pub const NOT_A_PLACE: &str = "E0026";
@@ -70,6 +71,7 @@ pub mod codes {
         EARLY_LINE_BREAK,
         PARENTHESES_NEEDED,
         CHAINED_OPERATOR,
+        STRAY_DOC_COMMENT,
         EMPTY_STRUCT_BRACES,
         EMPTY_BRACES,
         NOT_A_PLACE,

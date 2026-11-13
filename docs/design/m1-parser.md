@@ -180,7 +180,7 @@ A keyword where a name goes is an E0016 that names the keyword (`r[lex.keyword-n
 ### 8. Declarations, doc comments and attributes
 
 - **Declarations.** A declaration is its doc comments, its attributes, `pub`, and the item (`grammar.decl`). The doc comments are tokens in a `DocComments` node at its start, and the attributes are `Attribute` nodes. Fields, variants and variant fields take the same (`grammar.field`, `grammar.evariant`, `grammar.vfield`). So do impl items, interface methods, effect operations and foreign items (spec question 9).
-- **Stray doc comments.** A doc comment that comes before nothing it can document is E0023, with a fix that makes it an ordinary comment (`safe`, spec question 10). Until E0023 lands in layer 7, such a doc comment is read as an ordinary comment, with no error. `lex/control.qnc` has one in a function body. Layer 7 adds its expectation, or turns it into a `//` comment if the fixture is about something else.
+- **Stray doc comments.** A doc comment that comes before nothing it can document is E0023, with a fix that makes it an ordinary comment (`safe`, spec question 10). Until E0023 landed in layer 7a, such a doc comment was read as an ordinary comment, with no error. `lex/control.qnc` had one in a function body: layer 7a moved it above a `test`, since that fixture is about control characters and a `lex/` fixture adds no parser error. A doc comment after an attribute is an E0023 too, since `grammar.decl` puts doc comments before attributes.
 - **Attributes.** An attribute goes on its own line (`r[item.attr.own-line]`). One on its declaration's line is an E0016 whose fix inserts a line break (`safe`). Whether the attribute's name is known (`r[item.attr.unknown]`) is checked by a later stage, since the set depends on the edition.
 - **Imports** come before declarations (`grammar.file`). An import after a declaration is an E0016.
 - **What the grammar rejects is an E0016:** `pub` on a variant field (`grammar.vfield`, `r[item.enum.field-visibility]`), a `const` in an interface (`grammar.interface_decl`, `r[item.const.assoc.no-interface]`), and a wildcard import (`r[intro.excl.wildcard-imports]`).
@@ -280,6 +280,7 @@ Doc comments and attributes aren't member starts: they belong to the declaration
 | `background(bg: TaskScope,, on_error: p) {}` | E0016 at the second `,` (layer 6b, found in review) |
 | `with Db = {` then lines `serve()` and `}` | E0016 at `{`, and the block is parsed (layer 6b) |
 | `background() {}` | E0016 at `)` (layer 6b, found in review: it left an empty node) |
+| `let x = ) /// a` followed by a line `y` | E0016 at `)`: the doc comment is in the skip, so it is part of the slip (layer 7a) |
 
 ### 10. Diagnostics
 
@@ -376,7 +377,7 @@ The layers:
 4. `m1/parser-stmts`: statements, assignment and E0026; list contexts; E0018; `if` and `else`.
 5. `m1/parser-patterns` (5a): patterns, `let` patterns and `is`. `m1/parser-match` (5b): `match`, guards and `for`.
 6. `m1/parser-closures` (6a): closures, `return`, `break`, `continue` and contracts. `m1/parser-concurrency` (6b): `concurrent`, `background`, `select`, `with` and `spawn`.
-7. `m1/parser-items`: the rest of `impl`, `interface`, `effect` and `foreign`; members' doc comments and attributes; E0023.
+7. `m1/parser-doc-placement` (7a): members' doc comments and attributes, and E0023. `m1/parser-impl-interface` (7b): the rest of `impl`, and `interface`. `m1/parser-effect-foreign` (7c): `effect` and `foreign`.
 8. `m1/parser-names`: `validate`, the case check and E0021.
 9. `m1/parser-fuzz`: the fuzz crate, the nesting limit and E0022, and the deep-nesting tests.
 
@@ -607,10 +608,20 @@ Layer 6 is two PRs (decided by David, 2026-11-12), since its eight constructs wo
 - [x] `select` arms (`pattern = expr => ...`) push `Holds::Arms`, as a `match`'s do. Otherwise in `match s { 0 => select { x = c.recv() => 1, }, }` the `select` arm's `=>` would find the outer `match`'s frame and close the `select`'s braces (found in layer 5b's review). The arms reuse `arms.rs`'s list, unclosed-literal handling included, and its `=>` and body.
 - [x] `concurrent`, `background`, `select`, `with` and `spawn`, `spawn in` included. A fan-out's `for` is a `ForStmt` in the `ConcurrentExpr`. Handlers missing from the line of `with` are taken from the next line, as a condition is (found in review). Rules about runtime or types, such as `conc.block` and `effect.with.install`, aren't cited (decision 11). [`grammar.concurrent`, `grammar.spawn`, `grammar.background`, `grammar.select`, `grammar.with_expr`, `grammar.handler`, `grammar.jump`, `conc.background.spawn-in`, `conc.background.scope-value`, `conc.select.arm`]
 
-**Layer 7: `m1/parser-items`**
-- [ ] Spec: questions 4, 9 and 10, and a bump.
-- [ ] Spec (wording approved by David, 2026-11-12): `r[lex.comment.doc]` gains "A doc comment after code on its line documents nothing." So `let x = 1 /// note` gets E0023.
-- [ ] The rest of `impl` (generics, `for`, `type` and `const` members), `interface`, `effect` and `foreign`; members' doc comments and attributes; E0023; `lex/control.qnc`'s doc comment. [`grammar.impl_decl`, `grammar.interface_decl`, `grammar.effect_decl`, `grammar.foreign_decl`, `item.const.assoc.no-interface`, `lex.comment.doc-exact`]
+Layer 7 is three PRs (split by size, 2026-11-12), since its four declarations and E0023 would run past 1,000 lines: doc comment placement, then `impl` and `interface`, then `effect` and `foreign`. Question 9's grammar change lands with the parsing of each declaration it changes, each with its own bump.
+
+**Layer 7a: `m1/parser-doc-placement`**
+- [x] Spec: question 10, question 9 for `impl_item`, and a bump (v0.23).
+- [x] Spec (wording approved by David, 2026-11-12), in the same bump: `r[lex.comment.doc]` gains "A doc comment after code on its line documents nothing." So `let x = 1 /// note` gets E0023.
+- [x] An `impl`'s members take doc comments and attributes. E0023 and its `explain` text: the doc comments before one token that document nothing are one error, and those in tokens skipped after an error are part of that slip. `lex/control.qnc`'s doc comment moved above a `test`. [`grammar.impl_item`, `lex.comment.doc`, `lex.comment.doc-placement`, `lex.comment.doc-exact`]
+
+**Layer 7b: `m1/parser-impl-interface`**
+- [ ] Spec: question 9 for `interface_decl`, and a bump.
+- [ ] The rest of `impl` (generics, `for`, `type` and `const` members) and `interface`, whose contracts reuse `contracts` through `fn_rest`. [`grammar.impl_decl`, `grammar.interface_decl`, `item.const.assoc.no-interface`]
+
+**Layer 7c: `m1/parser-effect-foreign`**
+- [ ] Spec: question 4, question 9 for `effect_decl` and `foreign_decl`, and a bump.
+- [ ] `effect` and `foreign`, with their members' doc comments and attributes. [`grammar.effect_decl`, `grammar.foreign_decl`, `grammar.c_fn`, `ffi.cbind.keyword-name`]
 
 **Layer 8: `m1/parser-names`**
 - [ ] Spec: question 1, and a bump.

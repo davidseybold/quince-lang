@@ -185,7 +185,10 @@ r[lex.comment.line]
 - `//` line comments only. No block comments, which break easily under partial edits.
 
 r[lex.comment.doc]
-- `///` doc comments attach to the next declaration and may contain executable examples (see [Testing](testing.md)).
+- `///` doc comments attach to the next declaration and may contain executable examples (see [Testing](testing.md)). A doc comment after code on its line documents nothing.
+
+r[lex.comment.doc-placement]
+- A doc comment must come before a declaration, a field, a variant or a member. Anywhere else it is a compile error, whose fix makes it an ordinary comment.
 
 r[lex.comment.doc-exact]
 - A doc comment starts with exactly three slashes: `////` starts an ordinary comment.

@@ -267,6 +267,10 @@ struct Parser<'t> {
     slips: u32,
     /// The file has had a declaration, so an import is out of place.
     imports_closed: bool,
+    /// The index among the significant tokens of the last token whose doc comments the parser
+    /// has dealt with, taking them or reporting them as an E0023, or the token count for the
+    /// end of the file.
+    docs_done: Option<usize>,
     lookahead: Cell<u32>,
     /// A block's statement closed the map literal whose `{` is at this index among the
     /// significant tokens: no entry came before it, so the braces were a block, which can't go
@@ -299,6 +303,7 @@ struct Checkpoint {
     closed_early: bool,
     after_operator: bool,
     joined: Option<usize>,
+    docs_done: Option<usize>,
 }
 
 impl<'t> Parser<'t> {
@@ -320,6 +325,7 @@ impl<'t> Parser<'t> {
             joined: None,
             slips: 0,
             imports_closed: false,
+            docs_done: None,
             lookahead: Cell::new(0),
             block_at: None,
             speculating: false,
@@ -485,6 +491,7 @@ impl<'t> Parser<'t> {
     // Taking tokens and building nodes.
 
     fn bump(&mut self) {
+        self.stray_docs();
         self.recovering = false;
         self.closed_early = false;
         self.take();
@@ -496,6 +503,7 @@ impl<'t> Parser<'t> {
             self.pos < self.input.tokens.len(),
             "took a token past the end"
         );
+        self.stray_docs();
         self.steps.push(Step::Token);
         self.taken.push(self.input.tokens[self.pos].index);
         self.pos += 1;
@@ -518,19 +526,103 @@ impl<'t> Parser<'t> {
     }
 
     /// Takes the doc comments right before the current token into a `DocComments` node, if
-    /// there are any. Those it doesn't take stay trivia.
+    /// there are any. One after code on its line documents nothing (`r[lex.comment.doc]`), so
+    /// it is an E0023 and stays trivia.
     fn doc_comments(&mut self) {
-        let Some(from) = self.current().and_then(|t| t.docs_from) else {
+        if self.docs_done == Some(self.pos) {
             return;
-        };
+        }
+        self.docs_done = Some(self.pos);
+        let (mut docs, after_code) = self.docs_before(self.pos);
+        if after_code {
+            let first = docs.remove(0);
+            self.report_stray_docs(&[first]);
+        }
+        if docs.is_empty() {
+            return;
+        }
         let marker = self.start();
-        for index in from..self.input.tokens[self.pos].index {
-            if self.lexed.tokens[index].kind == DocComment {
-                self.steps.push(Step::Token);
-                self.taken.push(index);
-            }
+        for (index, _) in docs {
+            self.steps.push(Step::Token);
+            self.taken.push(index);
         }
         self.complete(marker, DocComments);
+    }
+
+    /// Reports the doc comments right before the current token, or at the end of the file, as
+    /// an E0023, unless the parser has taken them or is skipping after an error, whose slip
+    /// they are part of. Each token's are dealt with once.
+    fn stray_docs(&mut self) {
+        if self.docs_done == Some(self.pos) {
+            return;
+        }
+        self.docs_done = Some(self.pos);
+        if self.recovering {
+            return;
+        }
+        let has_docs = self
+            .input
+            .tokens
+            .get(self.pos)
+            .is_none_or(|t| t.docs_from.is_some());
+        if has_docs {
+            let (docs, _) = self.docs_before(self.pos);
+            self.report_stray_docs(&docs);
+        }
+    }
+
+    /// The doc comments between the significant token before the one at `pos` and it, or the
+    /// end of the file, as lexer token indexes and ranges. True when the first comes after code
+    /// on that token's line.
+    fn docs_before(&self, pos: usize) -> (Vec<(usize, Range<usize>)>, bool) {
+        let (mut index, mut offset) = match pos.checked_sub(1) {
+            Some(before) => {
+                let token = &self.input.tokens[before];
+                (token.index + 1, token.range.end)
+            }
+            None => (0, 0),
+        };
+        let end = self
+            .input
+            .tokens
+            .get(pos)
+            .map_or(self.lexed.tokens.len(), |t| t.index);
+        let mut docs = Vec::new();
+        let mut after_code = pos > 0;
+        for token in &self.lexed.tokens[index..end] {
+            let len = token.len as usize;
+            match token.kind {
+                Newline if docs.is_empty() => after_code = false,
+                DocComment => docs.push((index, offset..offset + len)),
+                _ => {}
+            }
+            index += 1;
+            offset += len;
+        }
+        after_code &= !docs.is_empty();
+        (docs, after_code)
+    }
+
+    /// One E0023 over doc comments that document nothing, whose fix makes each an ordinary
+    /// comment (`r[lex.comment.doc-placement]`).
+    fn report_stray_docs(&mut self, docs: &[(usize, Range<usize>)]) {
+        let (Some((_, first)), Some((_, last))) = (docs.first(), docs.last()) else {
+            return;
+        };
+        let message = "a doc comment documents nothing here: it goes before a declaration, \
+            a field, a variant or a member"
+            .to_string();
+        let error = SyntaxError::new(first.start..last.end, codes::STRAY_DOC_COMMENT, message);
+        let edits = docs
+            .iter()
+            .map(|(_, range)| (range.start..range.start + 3, "//".to_string()))
+            .collect();
+        let label = if docs.len() == 1 {
+            "make it an ordinary comment"
+        } else {
+            "make them ordinary comments"
+        };
+        self.emit(error.with_fix(label, Applicability::Safe, edits));
     }
 
     fn start(&mut self) -> Marker {
@@ -959,6 +1051,7 @@ impl<'t> Parser<'t> {
             closed_early: self.closed_early,
             after_operator: self.after_operator,
             joined: self.joined,
+            docs_done: self.docs_done,
         }
     }
 
@@ -977,6 +1070,7 @@ impl<'t> Parser<'t> {
         self.closed_early = checkpoint.closed_early;
         self.after_operator = checkpoint.after_operator;
         self.joined = checkpoint.joined;
+        self.docs_done = checkpoint.docs_done;
         self.after_attributes = false;
         self.lookahead.set(0);
     }

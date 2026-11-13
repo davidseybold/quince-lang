@@ -35,7 +35,7 @@ newtype_decl = "struct" Name [ generics ] "(" [ "pub" ] type ")"
 alias_decl   = "type" Name [ generics ] "=" type
 
 impl_decl    = "impl" [ generics ] [ type_path [ type_args ] "for" ] type "{" { impl_item NEWLINE } "}"
-impl_item    = [ "pub" ] fn_decl | "type" Name "=" type | [ "pub" ] const_decl
+impl_item    = { doc_comment } { attribute NEWLINE } ( [ "pub" ] fn_decl | "type" Name "=" type | [ "pub" ] const_decl )
 
 interface_decl = "interface" Name [ generics ] "{" { ( "type" Name | fn_sig { contract } ) NEWLINE } "}"
 

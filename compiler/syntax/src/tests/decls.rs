@@ -207,25 +207,105 @@ fn a_newtype_and_an_alias() {
     );
 }
 
-/// A doc comment that documents nothing stays a comment until E0023 arrives (layer 7): in a
-/// function body, after an attribute, and in an `impl` body, whose members take theirs in
-/// layer 7.
+/// A doc comment that documents nothing is an E0023, whose fix makes it an ordinary comment,
+/// and stays trivia (`r[lex.comment.doc-placement]`): in a function body, after an attribute,
+/// before an import, before a closing brace, and at the end of the file.
 #[test]
-fn doc_comments_that_document_nothing_stay_comments() {
-    for text in [
-        "fn f() {\n  /// stray\n}\n",
-        "@test_only\n/// after the attribute\nfn f() {}\n",
-        "impl S {\n  /// a method\n  fn m(self) {}\n}\n",
-        "fn f() {}\n/// at the end\n",
+fn doc_comments_that_document_nothing() {
+    for (text, expected) in [
+        (
+            "fn f() {\n  /// stray\n}\n",
+            r#"E0023 11..20 => "fn f() {\n  // stray\n}\n""#,
+        ),
+        (
+            "@test_only\n/// after the attribute\nfn f() {}\n",
+            r#"E0023 11..34 => "@test_only\n// after the attribute\nfn f() {}\n""#,
+        ),
+        ("/// d\nimport a\n", r#"E0023 0..5 => "// d\nimport a\n""#),
+        (
+            "struct S {\n  a: Int,\n  /// d\n}\n",
+            r#"E0023 23..28 => "struct S {\n  a: Int,\n  // d\n}\n""#,
+        ),
+        (
+            "fn f() {}\n/// at the end\n",
+            r#"E0023 10..24 => "fn f() {}\n// at the end\n""#,
+        ),
     ] {
-        let parse = checked(text);
-        assert_eq!(parse.errors(), [], "{text:?}");
-        let docs = parse
+        assert_eq!(errors(text), [expected], "{text:?}");
+        let docs = checked(text)
             .syntax()
             .descendants()
             .any(|n| n.kind() == DocComments);
         assert!(!docs, "{text:?}");
     }
+}
+
+/// The doc comments before one token that document nothing are one E0023, whose fix makes
+/// each an ordinary comment, ordinary comments and blank lines between them included.
+#[test]
+fn doc_comments_together_are_one_error() {
+    assert_eq!(
+        errors("fn f() {\n  /// one\n  // note\n\n  /// two\n  x\n}\n"),
+        [r#"E0023 11..39 => "fn f() {\n  // one\n  // note\n\n  // two\n  x\n}\n""#]
+    );
+}
+
+/// A doc comment after code on its line documents nothing (`r[lex.comment.doc]`), and the
+/// ones on the lines below it still document the declaration after them.
+#[test]
+fn a_doc_comment_after_code() {
+    let text = "const A: Int = 1 /// a\n/// b\nfn g() {}\n";
+    assert_eq!(
+        errors(text),
+        [r#"E0023 17..22 => "const A: Int = 1 // a\n/// b\nfn g() {}\n""#]
+    );
+    let g = checked(text).syntax().children().nth(1).expect("`g`");
+    assert_eq!(g.text().to_string(), "/// b\nfn g() {}");
+    assert_eq!(codes("fn f() {} /// a\n"), ["E0023"]);
+    // At the start of the file, nothing comes before it.
+    assert_eq!(codes("/// a\nfn f() {}\n"), [""; 0]);
+}
+
+/// A doc comment in tokens skipped after an error is part of that slip.
+#[test]
+fn a_doc_comment_in_a_skip() {
+    assert_eq!(codes("fn f() {\n  let x = ) /// a\n  y\n}\n"), ["E0016"]);
+    assert_eq!(codes("fn f() {\n  g(1 2 /// a\n  3)\n}\n"), ["E0016"]);
+}
+
+/// An `impl`'s members take doc comments and attributes, as declarations do
+/// (`grammar.impl_item`).
+#[test]
+fn an_impl_member_with_doc_comments_and_attributes() {
+    let text = "impl S {\n  /// Make one.\n  @verify\n  pub fn new() {}\n}\n";
+    assert_eq!(
+        valid(text),
+        r#"File
+  ImplDecl
+    ImplKw "impl"
+    TypePath
+      Ident "S"
+    LBrace "{"
+    FnDecl
+      DocComments
+        DocComment "/// Make one."
+      Attribute
+        At "@"
+        NameRef
+          Ident "verify"
+      PubKw "pub"
+      FnKw "fn"
+      Name
+        Ident "new"
+      ParamList
+        LParen "("
+        RParen ")"
+      Block
+        LBrace "{"
+        RBrace "}"
+    RBrace "}"
+"#
+    );
 }
 
 /// An ordinary comment above the doc comments goes in the declaration with them.
@@ -307,7 +387,8 @@ fn empty_struct_braces() {
     assert_eq!(errors("struct S {} requires x"), ["E0024 9..11"]);
     // Removing them would delete a comment.
     assert_eq!(errors("struct S { // TODO\n}\n"), ["E0024 9..20"]);
-    assert_eq!(errors("struct S {\n  /// doc\n}\n"), ["E0024 9..22"]);
+    // The doc comment documents nothing, an error of its own.
+    assert_eq!(codes("struct S {\n  /// doc\n}\n"), ["E0024", "E0023"]);
 }
 
 #[test]
