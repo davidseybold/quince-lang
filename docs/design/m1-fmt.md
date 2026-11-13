@@ -1,6 +1,6 @@
 # M1: Formatter
 
-Status: draft, in design review. Pass 1 and pass 2 returned "Ready with changes", and this revision addresses both. On 2026-11-13 David approved decisions A, B and C and spec questions 1 to 11 as proposed. Question 9 was revised after that approval (pass 2 found its precedent only half right), and awaits his confirmation. Each decision is tested against what other formatters do (Precedent, below). This is the third and last design doc of M1 (Syntax), after [the lexer](m1-lexer.md) and [the parser](m1-parser.md).
+Status: draft, in design review. Passes 1 to 3 returned "Ready with changes", and this revision addresses all three. On 2026-11-13 David approved decisions A, B and C and spec questions 1 to 11 as proposed. Question 9 was revised after that approval (pass 2 found its precedent only half right), and awaits his confirmation. Each decision is tested against what other formatters do (Precedent, below). This is the third and last design doc of M1 (Syntax), after [the lexer](m1-lexer.md) and [the parser](m1-parser.md).
 
 ## Why
 
@@ -52,7 +52,7 @@ The guiding rule for this doc: where other formatters agree, Quince does the sam
 | Single-expression closure and arm blocks | rustfmt removes the braces when the body starts on the arm's line, and adds them when it can't (checked) | Arms: same (question 9). Closures need braces, so they stay on one line |
 | Last-argument closure | rustfmt and Prettier keep it on the call's line (rustfmt checked) | Same (decision 7) |
 | Method chains | rustfmt: one per line past a width; Prettier: a call-count heuristic | rustfmt's, by the full width |
-| Long right-hand side | rustfmt: next line when it then fits on one line, else same line (reported) | Same |
+| Long right-hand side | rustfmt: next line when it then fits on one line, else on the same line, breaking inside (checked) | Same |
 | Trailing comment and width | Prettier doesn't count it (reported) | Doesn't count |
 | Aligned trailing comments | gofmt aligns (checked); rustfmt, Prettier don't | Don't align |
 | Width unit | Prettier, rustfmt, Black: display width, East Asian wide = 2 (reported) | Characters (question 5 says why) |
@@ -129,7 +129,7 @@ The formatter builds a document for the file, and the engine lays it out at 100 
 The rules:
 - Groups are laid out from the outside in: a group is flat only when everything in it fits on the rest of the line, so outer constructs break first.
 - A `hard_line` breaks every group that holds it, up to the nearest `choice`. It doesn't pass through a `choice`.
-- `choice` takes `first` when the text from the current position to `first`'s first line break fits, laying `first` out normally, including any `hard_line` in it. When `first` holds no line break, the measure runs on into the text after the `choice`, up to the next place a line may break. Otherwise it takes `second`. So a hugged closure with three statements still hugs, as long as the call's line up to `{` fits.
+- `choice` takes `first` when the text from the current position to `first`'s first line break fits, laying `first` out normally, including any `hard_line` in it. When `first` holds no line break, the measure runs on into the text after the `choice`, up to the next place a line may break. A `choice` nested inside `first` is resolved by its own rule while measuring. Each measure is bounded by the width, so this stays linear. Otherwise it takes `second`. So a hugged closure with three statements still hugs, as long as the call's line up to `{` fits.
 - The option a `choice` takes is laid out with its own groups measured afresh, whatever the mode of the groups around it. A group around a hugging call may be flat, since it was measured only up to the `{`, as in `let t = a + orders.fold(0, fn(s, o) {`. The closure's statements are still measured and broken at 100 columns. After a `hard_line` printed inside a flat group, the rest of that group is measured again too. This is Prettier's `shouldRemeasure`. An engine unit test covers that case.
 - The check that something fits stops at the first line break, so each check is bounded by the width.
 - Documents are shared (`Rc`), so the two options of a `choice` share their parts. Nested choices, as in `f([g([h(...)])])`, never copy a subtree, and layout stays linear.
@@ -165,7 +165,7 @@ Every comment ends a line, so a comment is a `hard_line`, which breaks every gro
 
 **Why a comment can always keep its line break.** A `//` comment ends its line, so the input had a line break between the same two significant tokens, and parsed. The parser decides what a break means from the token before it and its role, the token after it, and whether it is in a list, a line context or a `fn` header (parser decision 4). The formatter keeps each comment, and so its break, between the same two tokens, so the break means what it meant in the input. Three refinements:
 - **A `,` moves before the comment.** In `a` then `// c` then a line `, b`, the output is `a, // c`. A break after `,` always continues the line, so that's safe.
-- **Rewrites don't apply across a comment.** Field shorthand (`x: // c` followed by a line `x` keeps both `x`s) and arm braces (question 9) are skipped when a comment lies inside what they change.
+- **Rewrites don't apply across a comment.** Field shorthand (`x: // c` followed by a line `x` keeps both `x`s) and removing an arm's braces (question 9) are skipped when a comment lies inside what they change. Adding braces is always safe: in `0 => // c` followed by a line `a + b`, the comment ends up after `{`.
 - **A pattern's negative literal** may hold a comment between `-` and its number (parser decision 5), and so may an expression's under question 3. The printer prints the trivia inside a `Literal`.
 
 The formatter itself never breaks a line where the parser would read the break differently: before `(`, `[`, `?` or a binary operator; after `return`, `spawn` or a prefix operator; between `}` and `else`; before a body's `{` outside a `fn` header. Decision 6's rules only break where a break continues the construct. Decision 10 checks both claims on every run.
@@ -203,7 +203,7 @@ A closure's header follows the same steps. A `test` header follows them for `for
 - A binary expression that doesn't fit breaks after its operators, all those at one level at once, with the lines after the first indented one level. Nested levels are groups of their own.
 - A chain of two or more calls or fields that doesn't fit breaks before each `.`, indented (`r[lex.continue.more]`), keeping a leading run of plain names and fields on the first line: `self.items` stays together. That's rustfmt's rule, applied at the full width rather than rustfmt's separate 60-column chain width, since one width is one rule.
 - **A right-hand side**, after `=` in `let`, `var`, an assignment, a `const` or a default value, follows rustfmt: the whole on one line when it fits; else the right side alone on the next line, indented, when it fits there on one line; else the right side on the `=` line, breaking inside itself. So `let s = """` stays on its line, a long call breaks its arguments, and a long sum moves to the next line when it fits there.
-- **An arm's body** follows the Rust style guide (question 9): on the arm's line when it fits there, or when its first line does and it breaks inside itself, as a call or a closure does; otherwise in a block, `=> {` with the body on the lines after it and `},`. So a body never starts on the line after `=>`.
+- **An arm's body** follows the Rust style guide (question 9): on the arm's line when it fits there, or when its first line does and it is a kind that breaks inside itself: a call, a closure, a collection, an `if`, a `match`, a block form or a multi-line string. Any other body that doesn't fit, such as a long binary expression, goes in a block, `=> {` with the body on the lines after it and `},`. So a body never starts on the line after `=>`.
 - A prefix operator has nothing between it and its operand, and a range nothing around `..` or `..=`, as in `0..3`. Other binary operators have one space on each side.
 
 **Spacing**, following the spec's examples: no spaces inside `(`, `[`, `<`, a map's braces (`{"a": 1}`) or import braces (`{self, Log}`); one space inside a one-line block, closure or spawn list (`{ n + 1 }`); one space after `:` and `,`, none before; none inside an interpolation's braces.
@@ -255,7 +255,7 @@ This is the only place the formatter reorders code.
 
 Before `format` returns, it checks its output, as Black does:
 - **No errors.** The output parses with no syntax error.
-- **The same tree.** The output's tree, with trivia removed, equals the input's tree with trivia removed: the same node kinds, nested the same way, with the same token texts. Before comparing, the input tree has the rewrites of decision 8 applied: hex digits uppercased, shorthand, arm braces removed, and its import block replaced by the merged, sorted block. A trailing `,` before a closing bracket is ignored on both sides. A multi-line string compares by its value (`literal::string_value`), not its `StringIndent` text.
+- **The same tree.** The output's tree, with trivia removed, equals the input's tree with trivia removed: the same node kinds, nested the same way, with the same token texts. Before comparing, the input tree has the rewrites of decision 8 applied: hex digits uppercased, shorthand, and its import block replaced by the merged, sorted block. Two differences are ignored on both sides instead, since whether the formatter makes them depends on its layout: a trailing `,` before a closing bracket, and braces around an arm body that is one expression, so `=> { e }` equals `=> e`. A multi-line string compares by its value (`literal::string_value`), not its `StringIndent` text.
 - **The same comments, in the same places.** Each comment is recorded with the significant tokens before and after it, and the two sequences must match, outside the imports in order, and within the import block as a multiset. A trailing `,` is ignored in that record, as in the tree comparison, so `b // c` followed by `)`, which becomes `b, // c`, records the same. A comment allowed to move past a `,` (decision 5) is recorded after it on both sides. The file header's comments, kept at the top (decision 9), compare in order as the start of the file. Comments compare without trailing spaces and tabs. Doc comments are significant tokens, so the tree comparison trims them the same way.
 - **Stable.** Formatting the output again gives the output. That second format runs without these checks, so it doesn't recurse.
 
@@ -354,7 +354,7 @@ Proposed: retire both `lex.lit.int.neg` and `lex.lit.neg-adjacent`, since the fi
 
 *Precedent, and why Quince deviates:* Prettier, rustfmt and Black count display width, where an East Asian wide character is two columns (reported). That width comes from a Unicode table that changes with each Unicode release. Under `r[tool.fmt.check]`, a compiler upgrade that changed a character's width could make formatted code fail `check`. Characters never change. Code outside literals and comments is ASCII (`r[lex.source.ascii]`), trailing comments don't count, and so the difference shows only in a line whose string holds wide characters. Not counting trailing comments is Prettier's choice (reported).
 
-**6. Blank lines (layer 2).** "The formatter decides all line breaks" doesn't say whether it keeps an author's blank lines, and the output depends on the answer (decision 4). Proposed, a new rule after `r[tool.fmt.width]`: `r[tool.fmt.blank-lines]` "No blank line comes after an opening bracket, before a closing one, after an attribute or a doc comment, between imports of one group, or inside an expression or a signature. Otherwise, a declaration or member that spans several lines, or has doc comments or attributes, has one blank line before and after it; import groups are separated by one blank line; and elsewhere one blank line is kept where the source had one or more." (Reworded after approval, found in review pass 2, to say what decision 4 says: the approved wording put the bracket exception after the rule it overrides, and left out imports and attributes.)
+**6. Blank lines (layer 2).** "The formatter decides all line breaks" doesn't say whether it keeps an author's blank lines, and the output depends on the answer (decision 4). Proposed, a new rule after `r[tool.fmt.width]`: `r[tool.fmt.blank-lines]` "No blank line comes at the start of the file, after an opening bracket, before a closing one, after an attribute or a doc comment, between imports of one group, or inside an expression or a signature. Otherwise, a declaration or member that spans several lines, or has doc comments or attributes, has one blank line before and after it; import groups are separated by one blank line, and one follows the last import; and elsewhere one blank line is kept where the source had one or more." (Reworded after approval, found in review pass 2, to say what decision 4 says: the approved wording put the bracket exception after the rule it overrides, and left out imports and attributes.)
 
 *Precedent:* Black, and gofmt where it agrees (decision 4). Keeping the author's choice between one-line declarations keeps most `effect` and `foreign` blocks in the spec as written. Two change: `effects.md:308`'s `fn run(...)` runs past 100 columns, so it breaks and gets blank lines around it, and `interop.md:24`'s `@borrowed` function gets one before it.
 
@@ -413,13 +413,14 @@ Rule IDs in brackets are what each task's fixtures cite.
 **Before building**
 - [x] Design review, pass 1: Ready with changes. Its findings are addressed in this revision.
 - [x] Design review, pass 2: Ready with changes. Its findings are addressed in this revision.
+- [x] Design review, pass 3: Ready with changes. Its findings are addressed in this revision.
 - [ ] Design review passes.
 - [x] David decides A, B and C (2026-11-13: approved as proposed).
 - [x] David decides spec questions 1 to 11 (2026-11-13: approved as proposed).
 - [ ] David confirms question 9 as revised after approval.
 
 **Parser PRs, before layer 0**
-- [ ] `m1/neg-literal-spacing`: question 3, and a bump. The parser's unit tests for `- 1`. [`lex.lit.neg-literal`]
+- [ ] `m1/neg-literal-spacing`: question 3, and a bump. The parser's unit tests for `- 1`. The doc comments that cite the retired IDs (`parser/exprs.rs` and `tests/exprs.rs`) cite the new one. [`lex.lit.neg-literal`]
 - [ ] `m1/test-header-lines`: question 4, and a bump. [`lex.continue.test-header`]
 - [ ] `m1/unit-type`: question 8, and a bump. [`type.unit`, `grammar.type`]
 
