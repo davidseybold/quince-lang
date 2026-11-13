@@ -552,6 +552,15 @@ fn match_and_for_slips() {
         codes(&checked("fn f() {\n  match x {\n    0 => \"abc\n  }\n}\n")),
         ["E0004"]
     );
+    // And before the next arm, which is parsed as one.
+    let text = "fn f() {\n  match x {\n    0 => \"abc\n    1 => 2,\n  }\n}\n";
+    assert_eq!(codes(&checked(text)), ["E0004"]);
+    let arms = checked(text)
+        .syntax()
+        .descendants()
+        .filter(|node| node.kind() == crate::SyntaxKind::MatchArm)
+        .count();
+    assert_eq!(arms, 2);
     assert_eq!(errors("  match { _ => a, }"), ["E0016 8..9"]);
     assert_eq!(
         errors("  match x {\n    0 => a,\n  let y = 1"),

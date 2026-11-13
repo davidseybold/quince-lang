@@ -16,7 +16,8 @@ pub(super) fn match_expr(p: &mut Parser) -> Completed {
 /// The arms in braces, a comma-separated list (`r[lex.continue.lists]`). Every arm ends with
 /// a `,`, the last one included (`r[expr.match.arm-comma]`), so a `}` right after an arm is an
 /// E0016 whose fix inserts it. After an arm whose line an unclosed string or char ends, the
-/// missing `,` is part of that slip, and may be inside the literal, so it isn't reported.
+/// missing `,` is part of that slip, and may be inside the literal, so it isn't reported,
+/// before the `}` or before an arm on the next line.
 fn arms(p: &mut Parser) {
     let marker = p.start();
     p.bump();
@@ -40,11 +41,12 @@ fn arms(p: &mut Parser) {
         } else {
             p.expected("a match arm or `}`");
         }
+        let end = p.input.tokens[p.pos - 1].range.end;
+        let after_unclosed_line = p.input.on_unclosed_line(end);
         match p.kind() {
             Comma => p.bump(),
             RBrace => {
-                let end = p.input.tokens[p.pos - 1].range.end;
-                if p.input.on_unclosed_line(end) {
+                if after_unclosed_line {
                     p.slip();
                 } else {
                     let error = p.unexpected("`,`", false).with_fix(
@@ -60,6 +62,8 @@ fn arms(p: &mut Parser) {
                 p.close_in_place("`,`");
                 break;
             }
+            // A pattern always takes its first token, so the next arm moves the loop on.
+            kind if patterns::starts_pattern(kind) && after_unclosed_line => p.slip(),
             _ => {
                 p.expected_in_list("`,`", patterns::starts_pattern);
                 p.recover(Sync::List, false);
