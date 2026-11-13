@@ -71,7 +71,7 @@ fn the_lex_fixtures_parse() {
 fn every_fixture_passes_the_fuzz_check() {
     let mut dirs = vec![
         repo_root().join("tests/conformance/testdata"),
-        repo_root().join("compiler/syntax/fuzz/seeds"),
+        repo_root().join("compiler/syntax/fuzz/testdata"),
     ];
     let mut checked = 0;
     while let Some(dir) = dirs.pop() {
