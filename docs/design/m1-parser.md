@@ -191,7 +191,7 @@ A keyword where a name goes is an E0016 that names the keyword (`r[lex.keyword-n
 Every error goes through one rule: report it, then skip to a sync point, reporting nothing more until the parser gets there. The skipped tokens go in a `Skipped` node. That name avoids the lexer's `Error` token kind.
 
 **Sync points.** Each open construct has its own:
-- A list syncs at its next `,` and at its closing bracket.
+- A list syncs at its next `,` and at its closing bracket. Type arguments and generics also close at a `{`, as at a closing bracket further out, since no type holds braces (layer 7b, found in review).
 - A line context syncs at its next break.
 - Any construct syncs at a member start of a container around it (below), which closes it.
 
