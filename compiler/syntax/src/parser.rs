@@ -1079,10 +1079,16 @@ impl<'t> Parser<'t> {
                 }
                 // After an item whose line an unclosed string or char ends, the missing `,`
                 // is part of that slip, and may be inside the literal, so it isn't reported
-                // and the next item is parsed as one.
+                // and the next item is parsed as one. An item can stop at the line break
+                // before it, as a parameter does, so one that takes nothing is skipped.
                 kind if starts_item(kind) && self.after_unclosed_line() => {
                     self.slip();
-                    continue;
+                    let at = self.pos;
+                    item(self);
+                    if self.pos == at {
+                        self.recover(Sync::List, true);
+                    }
+                    after_item = true;
                 }
                 _ => {
                     self.expected_in_list(&format!("`,` or {close}"), starts_item);

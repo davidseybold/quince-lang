@@ -258,6 +258,16 @@ fn a_lists_comma_after_an_unclosed_literal() {
         codes("fn f() {\n  g(\n    x: \"abc\n    y: 1,\n  )\n}\n"),
         ["E0004"]
     );
+    // An item that takes nothing at the line break is skipped, so the parser goes on: a
+    // parameter stops at a break, and a field argument needs its `name:`.
+    assert_eq!(
+        codes("fn f(\n  a: String = \"abc\n  b: Int,\n) {}\n"),
+        ["E0004"]
+    );
+    assert_eq!(
+        codes("fn f() {\n  g(\n    ..base,\n    x: \"abc\n    y,\n  )\n}\n"),
+        ["E0004"]
+    );
     let text = "fn f() {\n  g(\n    \"abc\n    b,\n  )\n}\n";
     let args = checked(text)
         .syntax()
