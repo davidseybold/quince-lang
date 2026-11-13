@@ -9,7 +9,7 @@ There is no `async` or `await`; blocking calls look like ordinary calls, and the
 ## Concurrent blocks
 
 ```ebnf
-concurrent   = "concurrent" [ "(" arg { "," arg } ")" ]
+concurrent   = "concurrent" [ "(" arg { "," arg } [ "," ] ")" ]
                ( "{" spawn { "," spawn } [ "," ] "}" | "for" pattern "in" expr block )
 spawn        = "spawn" expr
 ```

@@ -192,6 +192,24 @@ syntax_kinds! {
         /// `requires` and an expression, or `ensures`, a name in parentheses if present, and
         /// an expression.
         Contract,
+        /// `concurrent`, an `ArgList` if present, and a `SpawnList` or a `ForStmt`.
+        ConcurrentExpr,
+        /// A `concurrent`'s spawns in braces.
+        SpawnList,
+        /// `spawn`, `in` and a scope if present, and an expression.
+        SpawnExpr,
+        /// `background`, the scope's `Param` and an argument in parentheses, and a block.
+        BackgroundExpr,
+        /// `select` and a `SelectArmList`.
+        SelectExpr,
+        /// A `select`'s arms in braces.
+        SelectArmList,
+        /// A pattern, `=`, an expression, `=>`, and an expression or a block.
+        SelectArm,
+        /// `with`, its `Handler`s, and a block.
+        WithExpr,
+        /// An effect's `TypePath`, `=` and an expression.
+        Handler,
     ],
 }
 
@@ -220,7 +238,8 @@ impl SyntaxKind {
     }
 
     /// True for the node kinds that take the comments directly above them: declarations,
-    /// fields, enum variants, members and match arms. The README's CST section has the rule.
+    /// fields, enum variants, members, and match and select arms. The README's CST section has
+    /// the rule.
     pub fn attaches_comments(self) -> bool {
         use SyntaxKind::*;
         matches!(
@@ -237,6 +256,7 @@ impl SyntaxKind {
                 | FieldDecl
                 | Variant
                 | MatchArm
+                | SelectArm
         )
     }
 

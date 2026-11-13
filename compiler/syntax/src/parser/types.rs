@@ -56,9 +56,9 @@ fn type_path(p: &mut Parser) -> bool {
     ok
 }
 
-/// A path in a pattern: its names and the dots between them, with no type arguments, as a
-/// `TypePath`. The caller checked the first name.
-pub(super) fn pattern_path(p: &mut Parser) -> bool {
+/// A path with no type arguments, in a pattern or a `with` handler: its names and the dots
+/// between them, as a `TypePath`. The caller checked the first name.
+pub(super) fn bare_path(p: &mut Parser) -> bool {
     let (marker, ok) = path_names(p, "a name");
     p.complete(marker, TypePath);
     ok

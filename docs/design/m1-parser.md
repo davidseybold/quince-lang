@@ -269,6 +269,12 @@ Doc comments and attributes aren't member starts: they belong to the declaration
 | `fn f() requires a b if c { d } else { e }` then the body on the next line | E0016 at `b`, and the rest of the declaration is skipped, as after a return type (layer 6a, found in review) |
 | `g(a,` then lines `fn(x) { x }` and `}` | E0017 at `(` (layer 6a) |
 | `g(1,` then lines `@attr(`, `fn(x: Int) { x },` and `)`, then `fn h() {}` | E0017 at the function's `{` and at `(`, none at `@` (layer 6a) |
+| `match s { 0 => select { (x => 1, }, 1 => 2, }` | E0017 at `(` (layer 6b) |
+| `match s { 0 => select { x = c.recv( => 1, }, 1 => 2, }` | E0017 at `(` (layer 6b) |
+| `select {` then lines `x = "abc` and `}` | E0004 (layer 6b) |
+| `concurrent`, `select`, `with Db = db` or `background(bg: TaskScope)` followed by a line `{` | E0018 (layer 6b) |
+| `let x = concurrent {` then lines `spawn a()` and `let y = 1`, with the `}` missing | E0017 at `{` (layer 6b) |
+| `with = db { run() }` | E0016 at `=`, and the block is parsed (layer 6b) |
 
 ### 10. Diagnostics
 
@@ -591,9 +597,9 @@ Layer 6 is two PRs (decided by David, 2026-11-12), since its eight constructs wo
 - [x] Closures, `return`, `break`, `continue`, and contracts after a declaration's signature. `return`, `break` and `continue` are never operands. A block clears the `fn` header flag, so a block in a contract or a closure is a line context of its own. The scans that stop at a member start take `fn` as one only before a name, as the member-start check does (decision 9), so a closure in an attribute's arguments doesn't stop the look-past. Layer 7 parses an interface's contracts with the same function. After a slip in a contract the parser syncs at the next contract or the body's `{` (found in review: syncing at any `{` took one inside a later `ensures` for the body). Something after a whole condition skips the rest of the declaration, as after a return type: syncing at the `{` on its line took a later construct's braces for the body (found in review). `grammar.jump` is cited from 6b, which parses its `spawn` alternative. Rules about runtime or types, such as `contract.requires` and `expr.ret.bare`, aren't cited, since no parser could break them (decision 11). [`grammar.closure`, `grammar.cparam`, `grammar.contract`, `expr.closure.syntax`, `expr.closure.underscore`, `expr.jump.expr`, `expr.op.keyword-forms`, `contract.ensures-name`]
 
 **Layer 6b: `m1/parser-concurrency`**
-- [ ] Spec, and a bump (v0.22): `concurrent`'s arguments take an optional trailing `,` (layer 2a's trailing-comma decision).
-- [ ] `select` arms (`pattern = expr => ...`) push `Holds::Arms`, as a `match`'s do. Otherwise in `match s { 0 => select { x = c.recv() => 1, }, }` the `select` arm's `=>` would find the outer `match`'s frame and close the `select`'s braces (found in layer 5b's review). The arms reuse `arms.rs` where the shapes match, unclosed-literal handling included.
-- [ ] `concurrent`, `background`, `select`, `with` and `spawn`, `spawn in` included. [`grammar.concurrent`, `grammar.spawn`, `grammar.background`, `grammar.select`, `grammar.with_expr`, `grammar.handler`, `grammar.jump`, `expr.op.keyword-forms`]
+- [x] Spec, and a bump (v0.22): `concurrent`'s arguments take an optional trailing `,` (layer 2a's trailing-comma decision).
+- [x] `select` arms (`pattern = expr => ...`) push `Holds::Arms`, as a `match`'s do. Otherwise in `match s { 0 => select { x = c.recv() => 1, }, }` the `select` arm's `=>` would find the outer `match`'s frame and close the `select`'s braces (found in layer 5b's review). The arms reuse `arms.rs`'s list, unclosed-literal handling included, and its `=>` and body.
+- [x] `concurrent`, `background`, `select`, `with` and `spawn`, `spawn in` included. A fan-out's `for` is a `ForStmt` in the `ConcurrentExpr`. [`grammar.concurrent`, `grammar.spawn`, `grammar.background`, `grammar.select`, `grammar.with_expr`, `grammar.handler`, `grammar.jump`, `conc.block`, `conc.settle`, `conc.fanout.limit`, `conc.background.spawn-in`, `conc.background.scope-value`, `conc.select.wait`, `conc.select.arm`, `effect.with.install`]
 
 **Layer 7: `m1/parser-items`**
 - [ ] Spec: questions 4, 9 and 10, and a bump.

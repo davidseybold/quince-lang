@@ -4,6 +4,7 @@
 
 mod arms;
 mod closures;
+mod concurrency;
 mod exprs;
 mod input;
 mod items;

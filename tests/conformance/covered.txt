@@ -1,6 +1,14 @@
+conc.background.scope-value
+conc.background.spawn-in
+conc.block
+conc.fanout.limit
+conc.select.arm
+conc.select.wait
+conc.settle
 contract.ensures-binder
 contract.ensures-name
 effect.uses-list
+effect.with.install
 expr.block.brace-map
 expr.block.cond-brace
 expr.block.last-newline
@@ -30,6 +38,7 @@ grammar.args
 grammar.arith
 grammar.arm
 grammar.attribute
+grammar.background
 grammar.bits
 grammar.block
 grammar.bound
@@ -38,6 +47,7 @@ grammar.bounds
 grammar.closure
 grammar.cmp_op
 grammar.compare
+grammar.concurrent
 grammar.contract
 grammar.cparam
 grammar.effect_ref
@@ -54,8 +64,10 @@ grammar.fn_sig
 grammar.fn_type
 grammar.generic
 grammar.generics
+grammar.handler
 grammar.if_expr
 grammar.import
+grammar.jump
 grammar.list_lit
 grammar.logic
 grammar.map_lit
@@ -72,6 +84,8 @@ grammar.postfix
 grammar.prefix
 grammar.primary
 grammar.range
+grammar.select
+grammar.spawn
 grammar.stmt
 grammar.struct_decl
 grammar.struct_lit
@@ -85,6 +99,7 @@ grammar.type_path
 grammar.variant
 grammar.variant_pat
 grammar.vfield
+grammar.with_expr
 intro.excl.macros
 intro.excl.wildcard-imports
 item.attr.own-line

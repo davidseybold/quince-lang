@@ -1,7 +1,8 @@
-//! `match` and its arms (`grammar.match_expr`, `grammar.arm`).
+//! `match` and its arms (`grammar.match_expr`, `grammar.arm`), and the arms list a `select`
+//! shares.
 
 use super::{Completed, Holds, Parser, Sync, exprs, patterns};
-use crate::SyntaxKind::*;
+use crate::SyntaxKind::{self, *};
 use quince_diagnostics::Applicability;
 
 /// `match` expr `{` { arm `,` } `}`. At the top of the subject, `{` starts the arms
@@ -9,16 +10,19 @@ use quince_diagnostics::Applicability;
 pub(super) fn match_expr(p: &mut Parser) -> Completed {
     let marker = p.start();
     p.bump();
-    exprs::condition_and(p, arms);
+    exprs::condition_and(p, |p| arms(p, "a match arm", arm, MatchArmList));
     p.complete(marker, MatchExpr)
 }
 
-/// The arms in braces, a comma-separated list (`r[lex.continue.lists]`). Every arm ends with
-/// a `,`, the last one included (`r[expr.match.arm-comma]`), so a `}` right after an arm is an
-/// E0016 whose fix inserts it. After an arm whose line an unclosed string or char ends, the
-/// missing `,` is part of that slip, and may be inside the literal, so it isn't reported,
-/// before the `}` or before an arm on the next line.
-fn arms(p: &mut Parser) {
+/// The arms in braces, each parsed by `arm`, as a `list` node: a comma-separated list
+/// (`r[lex.continue.lists]`) whose frame holds arms, so an arm's `=>` closes the brackets
+/// opened in it (decision 9). Every arm ends with a `,`, the last one included
+/// (`r[expr.match.arm-comma]`, `grammar.select`), so a `}` right after an arm is an E0016 whose
+/// fix inserts it. After an arm whose line an unclosed string or char ends, the missing `,` is
+/// part of that slip, and may be inside the literal, so it isn't reported, before the `}` or
+/// before an arm on the next line. Every arm starts with a pattern.
+pub(super) fn arms(p: &mut Parser, what_arm: &str, arm: fn(&mut Parser), list: SyntaxKind) {
+    let what = format!("{what_arm} or `}}`");
     let marker = p.start();
     p.bump();
     p.push_frame(Holds::Arms, Some(RBrace));
@@ -33,13 +37,13 @@ fn arms(p: &mut Parser) {
             break;
         }
         if p.unmatched_closer() {
-            p.close_in_place("a match arm or `}`");
+            p.close_in_place(&what);
             break;
         }
         if patterns::starts_pattern(p.kind()) {
             arm(p);
         } else {
-            p.expected("a match arm or `}`");
+            p.expected(&what);
         }
         let end = p.input.tokens[p.pos - 1].range.end;
         let after_unclosed_line = p.after_unclosed_line();
@@ -70,7 +74,7 @@ fn arms(p: &mut Parser) {
             }
         }
     }
-    p.complete(marker, MatchArmList);
+    p.complete(marker, list);
 }
 
 /// pattern [ `if` expr ] `=>` ( block | expr ) (`r[expr.match.arm-syntax]`). In an arm, `{`
@@ -93,6 +97,13 @@ fn arm_parts(p: &mut Parser) {
         p.complete(guard, MatchGuard);
         what = "`=>`";
     }
+    arrow_and_body(p, what);
+}
+
+/// An arm's `=>` and its body, an expression or a block, after what comes before them, unless
+/// that held a slip. In an arm `{` starts a block (`r[expr.match.arm-block]`). `what` is what
+/// may go where the `=>` is.
+pub(super) fn arrow_and_body(p: &mut Parser, what: &str) {
     if p.recovering {
         return;
     }

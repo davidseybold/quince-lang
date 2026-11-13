@@ -1,0 +1,19 @@
+// rule: grammar.with_expr
+// rule: grammar.handler
+// rule: effect.with.install
+// mode: parse
+// `with`, one or more handlers separated by commas, and a block. A handler is an effect's
+// path, `=` and an expression. The handlers aren't in brackets, so a trailing `,` is an error.
+fn main() -> Result<Unit, AppError> uses * {
+  let cfg = load_config("app.toml")?
+  with Db = PgDb.connect(cfg.db, max: 20)?,
+       Log = log.json(cfg.log_level) {
+    http.serve(cfg.port, handler: route).map_err(AppError.Serve)
+  }
+  with Clock = testing.fixed_clock(start) { purge() }
+  with app.Db = db { run() }
+  with Db { run() } //~ E0016
+  with Db = db, { run() } //~ E0016
+  with = db { run() } //~ E0016
+  with Db = db //~ E0016
+}

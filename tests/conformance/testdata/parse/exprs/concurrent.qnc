@@ -1,0 +1,33 @@
+// rule: grammar.concurrent
+// rule: grammar.spawn
+// rule: conc.block
+// rule: conc.settle
+// rule: conc.fanout.limit
+// mode: parse
+// `concurrent`, optional arguments in parentheses, then `spawn`s in braces, separated by
+// commas, or `for`, a pattern, `in`, an expression and a block. The arguments and the spawns
+// take a trailing comma. Each item in the braces is `spawn` and an expression.
+fn load(user: UserId, urls: List<Url>) -> Result<Dashboard, LoadError> uses Net {
+  let (profile, orders) = concurrent {
+    spawn fetch_profile(user),
+    spawn fetch_orders(user).map_err(LoadError.Orders),
+  }?
+  let both = concurrent { spawn a(), spawn b() }
+  let settled = concurrent(settle: true) { spawn a(), spawn b() }
+  let pages = concurrent(limit: 10) for url in urls {
+    spawn fetch(url)
+  }
+  let all = concurrent(
+    limit: 10,
+    settle: true,
+  ) for (i, url) in urls.enumerate() {
+    let page = url.with_page(i)
+    spawn fetch(page)
+  }
+  let none = concurrent {} //~ E0016
+  let unspawned = concurrent { a(), spawn b() } //~ E0016
+  let empty_args = concurrent() { spawn a() } //~ E0016
+  let no_body = concurrent(limit: 2) //~ E0016
+  let scoped = concurrent { spawn in bg a() } //~ E0016
+  Ok(Dashboard(profile:, orders:))
+}

@@ -590,6 +590,74 @@ fn a_slip_in_a_contract() {
     assert_eq!(errors("fn f(n: Int) requires { n }\n"), ["E0016 22..23"]);
 }
 
+/// A `select`'s arms are a `match`'s list: an arm's `=>` closes the brackets opened in its own
+/// arm, even in a `select` inside a `match` arm, so the arms after it parse. After an arm
+/// whose line an unclosed string ends, the missing `,` is part of that slip.
+#[test]
+fn slips_in_select_arms() {
+    assert_eq!(
+        errors("fn f() {\n  match s { 0 => select { x = c.recv( => 1, }, 1 => 2, }\n}\n"),
+        ["E0017 45..46"]
+    );
+    // A bracket left open in a select arm's pattern closes at the arm's `=>`, and the
+    // `select`'s braces stay open.
+    assert_eq!(
+        errors("fn f() {\n  match s { 0 => select { (x => 1, }, 1 => 2, }\n}\n"),
+        ["E0017 35..36"]
+    );
+    assert_eq!(
+        codes("fn f() {\n  select {\n    x = \"abc\n  }\n}\n"),
+        ["E0004"]
+    );
+}
+
+/// The braces of `concurrent`, `select` and `with`, and a `background`'s block, go on the line
+/// of what comes before them, as a body's do: on the next line they are an E0018, whose fix
+/// joins the lines.
+#[test]
+fn braces_on_the_next_line() {
+    for (text, at) in [
+        (
+            "fn f() {\n  concurrent\n  { spawn a() }\n}\n",
+            "E0018 21..22",
+        ),
+        (
+            "fn f() {\n  select\n  { x = c.r() => 1, }\n}\n",
+            "E0018 17..18",
+        ),
+        ("fn f() {\n  with Db = db\n  { run() }\n}\n", "E0018 23..24"),
+        (
+            "fn f() {\n  background(bg: TaskScope)\n  { run() }\n}\n",
+            "E0018 36..37",
+        ),
+    ] {
+        assert_eq!(codes(text), ["E0018"], "{text:?}");
+        assert!(
+            errors(text)[0].starts_with(at),
+            "{text:?}: {:?}",
+            errors(text)
+        );
+    }
+}
+
+/// A `concurrent`'s spawns are a list, so a block's member start closes them, with one E0017.
+/// After a slip in a `with` handler, the rest of its line is skipped up to the `{`, so the
+/// block is still the block.
+#[test]
+fn slips_in_concurrency_forms() {
+    assert_eq!(
+        errors("fn f() {\n  let x = concurrent {\n    spawn a()\n  let y = 1\n}\n"),
+        ["E0017 30..31"]
+    );
+    let text = "fn f() {\n  with = db { run() }\n}\n";
+    assert_eq!(errors(text), ["E0016 16..17"]);
+    let block = checked(text)
+        .syntax()
+        .descendants()
+        .any(|node| node.kind() == SyntaxKind::Block && node.text() == "{ run() }");
+    assert!(block);
+}
+
 /// `fn` and `(` is a closure, never a member start (decision 9): a closure on a line of its
 /// own closes nothing, and the attribute look-past reads past one in an attribute's
 /// arguments.

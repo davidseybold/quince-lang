@@ -153,7 +153,7 @@ fn path_pat(p: &mut Parser) -> Completed {
         p.bump_node(Name);
         return p.complete(marker, BindPat);
     }
-    let ok = types::pattern_path(p);
+    let ok = types::bare_path(p);
     if !(ok && p.at(LParen)) {
         return p.complete(marker, PathPat);
     }
