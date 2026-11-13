@@ -1,6 +1,6 @@
 # M1: Formatter
 
-Status: passed design review (five passes; the fifth returned "Ready to build"). On 2026-11-13 David approved decisions A, B and C and spec questions 1 to 11 as proposed. Question 9 was revised after that approval (pass 2 found its precedent only half right), and awaits his confirmation. Each decision is tested against what other formatters do (Precedent, below). This is the third and last design doc of M1 (Syntax), after [the lexer](m1-lexer.md) and [the parser](m1-parser.md).
+Status: passed design review (five passes; the fifth returned "Ready to build"). On 2026-11-13 David approved decisions A, B and C and spec questions 1 to 11 as proposed. Question 9 was revised after that approval (pass 2 found its precedent only half right), and David confirmed the revision the same day. Each decision is tested against what other formatters do (Precedent, below). This is the third and last design doc of M1 (Syntax), after [the lexer](m1-lexer.md) and [the parser](m1-parser.md).
 
 ## Why
 
@@ -19,7 +19,7 @@ The formatter matters more to Quince than to most languages, for three reasons:
   - **A. Files with errors.** `fmt` refuses a file with any syntax error (decision 2), as every formatter checked does. Only 13 of the 111 fixtures have no expected diagnostic, so M1's exit criterion "`fmt` is idempotent on every fixture" becomes: on every fixture `fmt` accepts, `fmt(fmt(x)) == fmt(x)`, and on every other fixture `fmt` refuses and writes nothing. The `fmt` fixtures this doc adds are what make the criterion bite. Layer 1 rewords the criterion in `docs/milestones.md` to say so.
   - **B. The spec's examples follow the format.** Many spec examples don't match any one layout: some put `uses` on its own line in a header that fits on one line (`concurrency.md:18`, `:70`, `effects.md:116`), others keep it on the header line (`effects.md:69`); structs and enums are written on one line; `fn display(self) -> String { self.0 }` has a one-line body; trailing comments are aligned. The rules below are chosen on their merits and by precedent, not to reproduce every example. So the examples are illustrations, not the reference layout. After layer 6 lands, one spec PR runs `quince fmt` over the spec's code blocks, with David's approval, as a one-off edit: no test formats the spec ("Fixtures, not spec"). Many blocks won't parse, such as fragments, `{ ... }` placeholders and examples of errors, so `fmt` refuses them: that PR edits those by hand to match the format where the rules apply, and leaves the rest as they are. Each layer's PR lists the spec examples its rules would change.
   - **C. `quince fmt` in M1.** The CLI gets `quince fmt <file>...`, `quince fmt -` for standard input, and `--check`, with no project walk, since that needs M2's project model (decision 12).
-- **Spec (approved by David, 2026-11-13, question 9 to be reconfirmed):** Spec questions, below, has eleven questions, each with its wording. Four only clarify (2, 5, 10 and 11). Two reverse earlier choices on precedent: question 3 reopens the parser doc's question 5, and question 7 moves three rewrites out of `fmt`. Each lands in the layer that enforces it, with a minor version bump.
+- **Spec (approved by David, 2026-11-13, question 9 as revised):** Spec questions, below, has eleven questions, each with its wording. Four only clarify (2, 5, 10 and 11). Two reverse earlier choices on precedent: question 3 reopens the parser doc's question 5, and question 7 moves three rewrites out of `fmt`. Each lands in the layer that enforces it, with a minor version bump.
 - **Diagnostic codes:** none. Refusal reports the parser's diagnostics. The diagnostic `quince check` gives an unformatted file is M2's, when `check` is wired (decision 13).
 - **Delivery:** a stack of eight PRs (decision 15).
 
@@ -373,7 +373,7 @@ Proposed: retire both `lex.lit.int.neg` and `lex.lit.neg-adjacent`, since the fi
 
 *Alternative:* leave both, and have question 7's finding cover `-> ()` too.
 
-**9. Braces around a one-expression arm (layer 4).** `r[expr.match.arm-syntax]` allows `pattern => expr,` and `pattern => { block },`, so `0 => { 1 },` and `0 => 1,` are two forms of one arm. Revised after approval, for David to confirm (review pass 2 found the approved version only half of rustfmt's rule). Proposed, a new rule: `r[tool.fmt.arm-braces]` "`quince` `fmt` writes an arm whose body is a single expression without braces when the expression starts on the arm's line, and in braces when it has to start on the next one. A map literal stays in braces, since `=> {` starts a block (`r[expr.match.arm-block]`)."
+**9. Braces around a one-expression arm (layer 4).** `r[expr.match.arm-syntax]` allows `pattern => expr,` and `pattern => { block },`, so `0 => { 1 },` and `0 => 1,` are two forms of one arm. Revised after approval, and confirmed by David, 2026-11-13 (review pass 2 found the approved version only half of rustfmt's rule). Proposed, a new rule: `r[tool.fmt.arm-braces]` "`quince` `fmt` writes an arm whose body is a single expression without braces when the expression starts on the arm's line, and in braces when it has to start on the next one. A map literal stays in braces, since `=> {` starts a block (`r[expr.match.arm-block]`)."
 
 *Precedent:* the Rust style guide, rustfmt's default (checked: `0 => { 1 }` becomes `0 => 1`, and a body too long for the arm's line gets braces, `0 => {` with the body on the next line). The approved version removed the braces always, and broke after `=>`, which is rustfmt's non-default setting. With braces a body never starts on the line after `=>`, so a long arm reads like a short block.
 
@@ -418,7 +418,7 @@ Rule IDs in brackets are what each task's fixtures cite.
 - [x] Design review passes (pass 5: Ready to build).
 - [x] David decides A, B and C (2026-11-13: approved as proposed).
 - [x] David decides spec questions 1 to 11 (2026-11-13: approved as proposed).
-- [ ] David confirms question 9 as revised after approval.
+- [x] David confirms question 9 as revised after approval (2026-11-13).
 
 **Parser PRs, before layer 0**
 - [ ] `m1/neg-literal-spacing`: question 3, and a bump. The parser's unit tests for `- 1`. The doc comments that cite the retired IDs (`parser/exprs.rs` and `tests/exprs.rs`) cite the new one. [`lex.lit.neg-literal`]
