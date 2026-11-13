@@ -66,11 +66,8 @@ r[lex.lit.int.default]
 r[lex.lit.int.context]
 - An integer literal takes another integer type from context, as in let b: UInt8 = 200, and a literal that doesn't fit that type is a compile error.
 
-r[lex.lit.int.neg]
-- A minus sign directly before an integer literal in prefix position is part of it, so Int.MIN can be written -9\_223\_372\_036\_854\_775\_808
-
-r[lex.lit.neg-adjacent]
-- Directly before means with nothing between them, not even a space, and the literal isn't followed by a postfix operator. So `- 1` is the prefix minus applied to `1`, and `-2.pow(2)` is `-(2.pow(2))`, as `-x.abs()` is.
+r[lex.lit.neg-literal]
+- A minus in prefix position before an integer or float literal is part of the literal, whatever spaces, line breaks or comments lie between them, unless a postfix operator follows the literal. So `Int.MIN` can be written `-9_223_372_036_854_775_808`, `- 1` and `-1` are the same literal, and `-2.pow(2)` is `-(2.pow(2))`, as `-x.abs()` is.
 
 r[lex.lit.float.forms]
 - Float: `3.14`, `1e-9`

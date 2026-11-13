@@ -641,16 +641,17 @@ fn prefix(p: &mut Parser) -> Option<Completed> {
     Some(p.complete(marker, Prefix))
 }
 
-/// The current `-` and the number after it are one literal (`r[lex.lit.int.neg]`,
-/// `r[lex.lit.neg-adjacent]`): nothing comes between them, and no postfix operator follows the
-/// number. A `.` after it on the next line is one, as it continues the line, unless a `;`
-/// ends the line.
+/// The current `-` and the number after it are one literal (`r[lex.lit.neg-literal]`): only
+/// trivia comes between them, which the tree builder puts in the literal, and no postfix
+/// operator follows the number. A `;` between them ends the statement instead. A `.` after the
+/// number on the next line is a postfix operator, as it continues the line, unless a `;` ends
+/// the line.
 fn negative_literal(p: &Parser) -> bool {
     let tokens = &p.input.tokens[p.pos..];
-    let [minus, number, ..] = tokens else {
+    let [_, number, ..] = tokens else {
         return false;
     };
-    if !matches!(number.kind, Int | Float) || number.range.start != minus.range.end {
+    if !matches!(number.kind, Int | Float) || number.brk == Break::Hard {
         return false;
     }
     match tokens.get(2) {
