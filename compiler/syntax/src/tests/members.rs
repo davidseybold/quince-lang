@@ -473,6 +473,25 @@ fn a_missing_brace_is_assumed() {
         assert_eq!(codes(text), ["E0016"], "{text:?}");
         assert_eq!(fixed(text), [], "{text:?}");
     }
+    // The first member reports its own slip, as after a real `{`, and a body with a slip
+    // gets no fix: the `{` isn't all that's missing.
+    for text in [
+        "interface I\n  x\n  fn f(self)\n}\n",
+        "interface I\n  fn f(\n}\n",
+    ] {
+        assert_eq!(codes(text)[0], "E0016", "{text:?}");
+        assert_eq!(codes(text).len(), 2, "{text:?}");
+        assert_eq!(fixed(text), [], "{text:?}");
+    }
+    assert_eq!(
+        codes("interface I /// d\n  fn f(self)\n}\n"),
+        ["E0023", "E0016"]
+    );
+    // Generics that the break closes, with an E0017, are a header that parsed.
+    assert_eq!(
+        errors("interface I<T\n  fn f()\n  fn g()\n}\nfn h() {}\n"),
+        ["E0017 11..12: this `<` has no matching `>`"]
+    );
     // After a slip on the header's line, no body is assumed: the header may not take one.
     assert_eq!(
         errors("effect E -> s = time.Clock\nfn g() {}\n"),
@@ -504,6 +523,13 @@ fn uses_continues_a_header() {
     assert_eq!(
         codes("foreign \"c\"\n  uses Fs {\n  fn f()\n}\n"),
         ["E0018"]
+    );
+    // So does `for` after an `impl`'s interface.
+    let text = "impl<K, V> Show<K, V>\n    for Map<K, V> {\n  fn show(self) -> String {\n    \"\"\n  }\n}\n";
+    assert_eq!(codes(text), ["E0018"]);
+    assert_eq!(
+        fixed(text)[0].0,
+        "impl<K, V> Show<K, V> for Map<K, V> {\n  fn show(self) -> String {\n    \"\"\n  }\n}\n"
     );
     // A `fn` header continues at `uses` (`r[lex.continue.fn-header]`).
     valid("fn f()\n  uses Io {\n}\n");

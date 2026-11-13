@@ -541,7 +541,8 @@ fn impl_decl(p: &mut Parser) {
     let path = matches!(p.kind(), Ident | SelfTypeKw);
     ok = ok && types::type_(p);
     let mut target = !path;
-    if ok && path && p.at(ForKw) {
+    // A line that starts with `for` continues the header, as an E0018 (decision 4).
+    if ok && path && p.at_or_join(ForKw) {
         p.bump();
         ok = types::type_(p);
         target = true;
@@ -599,10 +600,11 @@ fn foreign_decl(p: &mut Parser) {
 /// The body of an `impl`, an `interface`, an `effect` or a `foreign` block: its members in
 /// braces, one per line. `expected` is what the header takes next, `{` among it, when the
 /// header parsed with no slip. After a slip in the header, the rest of its line is skipped up
-/// to its `{`, so the body is still parsed. A header with no slip that ends its line where the
-/// `{` belongs is one E0016 at the line break, and the lines after it are its members, up to
-/// the `}`, as though the `{` were there (decision 9). When that `}` comes, the E0016 gets a
-/// fix that inserts the `{`.
+/// to its `{`, so the body is still parsed. A header that parsed, its generics or type
+/// arguments closed early at the break included, and ends its line where the `{` belongs is
+/// one E0016 at the line break. The lines after it are its members, up to the `}`, as though
+/// the `{` were there (decision 9). When that `}` comes and the body held no slip, the E0016
+/// gets a fix that inserts the `{`.
 fn body(p: &mut Parser, owner: Owner, expected: Option<&str>) {
     let mut assumed = false;
     // The E0016 at the line break where the `{` belongs, by its step, and where the `{` goes.
@@ -633,8 +635,15 @@ fn body(p: &mut Parser, owner: Owner, expected: Option<&str>) {
         return;
     }
     p.push_assumed_frame(Holds::Body, RBrace);
+    // The `{` counts as taken, so the first member reports its own slips, as after a real
+    // one, unless a `;` or a lexer error before the break owns the slip.
+    if missing.is_some() {
+        p.recovering = false;
+    }
+    let slips = p.slips;
     let closed = p.lines_in(Some(RBrace), member);
-    if let (true, Some((at, end))) = (closed, missing)
+    // The fix says the `{` is all that's missing, so a body with a slip of its own gets none.
+    if let (true, true, Some((at, end))) = (closed, p.slips == slips, missing)
         && let Step::Error(error) = &mut p.steps[at]
     {
         let edit = (end..end, " {".to_string());
