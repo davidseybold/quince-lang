@@ -487,6 +487,8 @@ fn a_missing_brace_is_assumed() {
         codes("interface I /// d\n  fn f(self)\n}\n"),
         ["E0023", "E0016"]
     );
+    // After a `;`, the lexer's E0002 is the slip, and covers the first member's.
+    assert_eq!(codes("interface I;\n  x\n  fn f(self)\n}\n"), ["E0002"]);
     // Generics that the break closes, with an E0017, are a header that parsed.
     assert_eq!(
         errors("interface I<T\n  fn f()\n  fn g()\n}\nfn h() {}\n"),
