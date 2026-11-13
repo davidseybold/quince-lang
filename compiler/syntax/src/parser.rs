@@ -201,6 +201,10 @@ struct Frame {
     /// The closing bracket, and the index of the opening one among the significant tokens.
     bracket: Option<(SyntaxKind, usize)>,
     holds: Holds,
+    /// The body of a header whose `{` is missing, which the parser assumed (decision 9). Its
+    /// opener is the header's last token. It closes without an E0017: the missing `{` is the
+    /// error.
+    assumed: bool,
 }
 
 /// Why the innermost frame must close at the current token without its closing bracket.
@@ -675,7 +679,22 @@ impl<'t> Parser<'t> {
     fn push_frame(&mut self, holds: Holds, closer: Option<SyntaxKind>) {
         let opener = self.pos.checked_sub(1);
         let bracket = closer.map(|closer| (closer, opener.expect("a bracket was taken")));
-        self.frames.push(Frame { bracket, holds });
+        self.frames.push(Frame {
+            bracket,
+            holds,
+            assumed: false,
+        });
+    }
+
+    /// Opens the frame of a body whose `{` is missing, closed by `closer`, as though the `{`
+    /// came right after the token the parser took last.
+    fn push_assumed_frame(&mut self, holds: Holds, closer: SyntaxKind) {
+        let opener = self.pos.checked_sub(1).expect("a header was taken");
+        self.frames.push(Frame {
+            bracket: Some((closer, opener)),
+            holds,
+            assumed: true,
+        });
     }
 
     fn top(&self) -> Frame {
@@ -699,7 +718,7 @@ impl<'t> Parser<'t> {
         let frame = self.frames.pop().expect("a frame to close");
         self.lookahead.set(0);
         self.closed_early = true;
-        let Some((closer, opener)) = frame.bracket else {
+        let Some((closer, opener)) = frame.bracket.filter(|_| !frame.assumed) else {
             return;
         };
         if frame.holds == Holds::Map && stop == Stop::Outer {
@@ -1255,18 +1274,23 @@ impl<'t> Parser<'t> {
 
     /// The members of a line context, after its opening bracket, which the caller took: the
     /// file, an `impl` body or a block. Each member is parsed by `member`, which skips a
-    /// token that can't start one, and ends at a break.
-    fn lines(&mut self, holds: Holds, closer: Option<SyntaxKind>, member: fn(&mut Parser)) {
+    /// token that can't start one, and ends at a break. True when `closer` closed it.
+    fn lines(&mut self, holds: Holds, closer: Option<SyntaxKind>, member: fn(&mut Parser)) -> bool {
         self.push_frame(holds, closer);
+        self.lines_in(closer, member)
+    }
+
+    /// [`Parser::lines`], in a frame the caller opened.
+    fn lines_in(&mut self, closer: Option<SyntaxKind>, member: fn(&mut Parser)) -> bool {
         loop {
             if closer.is_some() && Some(self.kind()) == closer {
                 self.pop_frame();
                 self.bump();
-                return;
+                return true;
             }
             if let Some(stop) = self.stop() {
                 self.close_frame(stop);
-                return;
+                return false;
             }
             member(self);
             let ends = Some(self.kind()) == closer || self.stop().is_some() || self.at_break();
