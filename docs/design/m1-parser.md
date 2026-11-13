@@ -214,6 +214,8 @@ Doc comments and attributes aren't member starts: they belong to the declaration
 
 **An arm's `=>`** (layer 5b, decided by David, 2026-11-12) closes the brackets opened in its arm, in the pattern, the guard or the body, with an E0017 at each opener. So `A(x => 1,` is one E0017 at the `(`, and the arms after it parse, where the `(` would otherwise hold the rest of the `match`. A bracket left open in the body, as in `0 => f(a,`, meets the next arm's pattern. When that pattern can be an item in the bracket, such as `B`, it parses as one, and the `=>` closes the bracket with an E0017. When it can't, such as `_`, it is the E0016, and the `=>` closes the bracket silently, since the parser is skipping. Either way it is one error. While the parser skips after any slip in an arm, the arm's `=>` stops the skip too, so the next arm is parsed and its own slip reported. A `=>` inside a nested `match`'s arms closes only that arm's brackets. A block in the arm stops the rule: its lines are statement lines again, and a `=>` in them is an ordinary E0016. The cost is a missing `}` in a block arm. The block runs on over the next arms, so the next arm is an E0016 (at its `=>` when its pattern is an expression, as `1` is, and at the pattern otherwise, as at `_`), the `match`'s `}` closes the block, the function's `}` is an E0016 that expects `,` and closes the `match`, and the end of the file gives an E0017 at the function's `{`. Three errors for one slip is accepted, with no heuristic for it.
 
+**A `match` missing its `}`** (layer 5b, accepted by David, 2026-11-12). A `let`, `var` or `while` line after the last arm is a member start, so it closes the arms with one E0017 at the `match`'s `{`. Any other line reads as an arm: `log(a)` is a pattern with no `=>` after it, an E0016 at the line break, and the function's `}` closes the arms silently, so the end of the file gives an E0017 at the function's `{`. Map braces cascade the same way. Two errors for one slip is accepted, with no heuristic for it.
+
 **E0016** is the general syntax error: "expected X, found Y", where X lists what may go there in Quince terms ("an expression", "`,` or `)`", "a line break").
 - When a list item is followed, on the next line, by something that starts another item, its fix inserts the missing `,` (`needs-review`).
 - Two expressions on one line, such as adjacent literals (`"press "b" now"`, from the lexer doc), are an E0016 that expects a line break, with no hint for that shape (lexer decision 9).
@@ -257,6 +259,7 @@ Doc comments and attributes aren't member starts: they belong to the declaration
 | `match x {` then a line `0 => "abc` and a line `}` | E0004 (layer 5b) |
 | `for x xs { a }` | E0016 at `xs` (layer 5b) |
 | `match s {` then lines `A(x => 1,` and `_ => 2,` | E0017 at `(` (layer 5b) |
+| `let a = match s {` then lines `0 => 1,` and `log(a)`, with the `match`'s `}` missing | E0016 at the line break after `log(a)`, E0017 at the function's `{` (layer 5b) |
 | `match s {` then lines `0 => {`, `a` and `1 => 2,`, with the block's `}` missing | E0016 at the second `=>`, E0016 at the function's `}`, E0017 at the function's `{` (layer 5b) |
 
 ### 10. Diagnostics

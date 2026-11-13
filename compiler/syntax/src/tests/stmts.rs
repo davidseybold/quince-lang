@@ -557,6 +557,15 @@ fn match_and_for_slips() {
         errors("  match x {\n    0 => a,\n  let y = 1"),
         ["E0017 10..11"]
     );
+    // A line that isn't a member start reads as an arm, so the missing `}` cascades, as a
+    // map's does (decision 9, accepted by David, 2026-11-12).
+    let text = "fn f() {\n  let a = match s {\n    0 => 1,\n  log(a)\n}\n";
+    let found: Vec<_> = checked(text)
+        .errors()
+        .iter()
+        .map(|e| describe(text, e))
+        .collect();
+    assert_eq!(found, ["E0017 7..8", "E0016 49..50"]);
     assert_eq!(errors("  for x xs { a }"), ["E0016 8..10"]);
     // The block after the slip is still the block, so a slip in it is reported too.
     assert_eq!(
