@@ -415,7 +415,7 @@ fn impl_decl(p: &mut Parser) {
     p.bump();
     let mut ok = !p.at(Lt) || types::generics(p);
     // Only a type path can name an interface or an effect.
-    let path = matches!(p.kind(), Ident | SelfKw);
+    let path = matches!(p.kind(), Ident | SelfTypeKw);
     ok = ok && types::type_(p);
     let mut target = !path;
     if ok && path && p.at(ForKw) {

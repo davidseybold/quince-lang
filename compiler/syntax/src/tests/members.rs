@@ -147,6 +147,8 @@ fn impl_errors() {
     // A file's member start closes the body (decision 9).
     assert_eq!(codes("impl S {\n  test \"t\" {}\n}\n"), ["E0017", "E0016"]);
     assert_eq!(codes("impl S for T\n{\n}\n"), ["E0018"]);
+    // `Self` is a type path.
+    valid("impl Self for T {}\n");
     // A member start closes the method's block.
     assert_eq!(
         codes("impl S {\n  fn f() {\n  const N: Int = 1\n}\n"),
@@ -191,8 +193,32 @@ fn interface_errors() {
         ["E0016"]
     );
     assert_eq!(codes("interface I\n{\n}\n"), ["E0018"]);
+    // A body missing after a contract that slipped is part of that slip.
+    assert_eq!(
+        codes("interface I {\n  fn f(self) requires\n  ensures x\n  { 1 }\n}\n"),
+        ["E0016"]
+    );
     assert_eq!(
         codes("interface I {\n  fn f(self) requires\n  fn g(self)\n}\n"),
         ["E0016"]
     );
+}
+
+/// No type holds braces, so a `{` closes the generics or type arguments open around it, and
+/// the header still finds its body: one error, however many members follow.
+#[test]
+fn a_brace_closes_generics() {
+    assert_eq!(
+        errors("interface I<T {\n  fn f(self)\n  fn g(self)\n}\n"),
+        ["E0017 11..12: this `<` has no matching `>`"]
+    );
+    assert_eq!(
+        codes("impl<T S {\n  fn f() {}\n  fn g() {}\n}\n"),
+        ["E0016"]
+    );
+    assert_eq!(
+        codes("impl<T: Ord<Int {\n  fn f() {}\n}\n"),
+        ["E0017", "E0017"]
+    );
+    assert_eq!(codes("fn f() -> List<Int {\n  x\n}\n"), ["E0017"]);
 }

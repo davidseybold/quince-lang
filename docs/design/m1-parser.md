@@ -283,6 +283,7 @@ Doc comments and attributes aren't member starts: they belong to the declaration
 | `let x = ) /// a` followed by a line `y` | E0016 at `)`: the doc comment is in the skip, so it is part of the slip (layer 7a) |
 | In an interface, `type T = Int` followed by a line `pub fn f(self)` | E0016 at `=`, and E0016 at `pub`, the member's own slip (layer 7b) |
 | In an interface, `fn f(self)` followed by lines `{`, `x` and `}` | E0016 at `{`, and the body is skipped whole (layer 7b) |
+| `interface I<T {` then lines `fn f(self)`, `fn g(self)` and `}` | E0017 at `<`: no type holds braces, so the `{` closes the generics and the body is parsed (layer 7b, found in review: the skip took the `{` and every method failed as a file's `fn`) |
 
 ### 10. Diagnostics
 
