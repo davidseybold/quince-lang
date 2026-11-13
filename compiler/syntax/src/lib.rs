@@ -4,6 +4,8 @@
 //! `README.md`.
 
 mod cst;
+#[cfg(any(test, feature = "fuzz"))]
+pub mod fuzz;
 mod kind;
 mod lexer;
 pub mod literal;

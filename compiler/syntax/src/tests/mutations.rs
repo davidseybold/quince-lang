@@ -1,9 +1,9 @@
 //! Seeded mutations of the `lex/` fixtures, which check the lexer's and the parser's invariants
 //! on inputs no test wrote.
 
-use super::cst::check_lossless;
 use super::errors::check_error_ranges;
 use super::repo_root;
+use crate::fuzz::check_lossless;
 use crate::{codes, decode_source, lex, parse};
 use std::collections::BTreeSet;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -79,7 +79,7 @@ fn mutations_keep_the_invariants() {
                 check_error_ranges(&decoded.text, &lexed);
                 let parsed = parse(&decoded);
                 check_lossless(&decoded.text, &lexed, &parsed.syntax());
-                super::parser::check_error_ranges(&decoded.text, parsed.errors());
+                crate::fuzz::check_error_ranges(&decoded.text, parsed.errors());
                 lexed.errors
             }));
             let Ok(errors) = checked else {

@@ -1,0 +1,23 @@
+[package]
+name = "quince_syntax_fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "=0.4.13"
+quince_syntax = { path = "..", features = ["fuzz"] }
+
+# Its own workspace, so `cargo xtask ci` and stable builds never build it (decision 11).
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "parse"
+path = "fuzz_targets/parse.rs"
+test = false
+doc = false
+bench = false

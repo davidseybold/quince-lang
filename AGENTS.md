@@ -20,6 +20,7 @@ How to build and check this repo. `CLAUDE.md` holds the working rules and the de
 | `cargo xtask diagnostics` | Checks that every registered diagnostic code has explain text, and every code that isn't retired has a conformance test. To add a code, see `compiler/diagnostics/src/registry.rs`. |
 | `cargo xtask conformance` | Runs the `.qnc` fixtures in `tests/conformance/testdata/` and writes spec coverage by rule ID to `target/conformance/coverage.json`. Fails when the covered rules differ from `tests/conformance/covered.txt` in either direction. The fixture format is in that folder's README. |
 | `cargo xtask conformance --write` | Rewrites `tests/conformance/covered.txt` from a run where every fixture passes. Run it when a change covers or uncovers rules on purpose, so the PR's diff shows which. |
+| `mkdir -p compiler/syntax/fuzz/corpus/parse && cargo +nightly fuzz run parse --fuzz-dir compiler/syntax/fuzz compiler/syntax/fuzz/corpus/parse tests/conformance/testdata` | Fuzzes the parser with `quince_syntax::fuzz::check_parse`, seeded with the fixtures, until it finds a crash or you stop it. Add `-- -max_total_time=<seconds>` to bound it. It needs nightly Rust and `cargo install cargo-fuzz`, and isn't part of `ci`. New inputs go in the first folder, which git ignores. A crash's input is saved in `compiler/syntax/fuzz/artifacts/parse/`: rerun it by passing the file in place of the folders, and add it as a regression test. |
 
 The toolchain is pinned in `rust-toolchain.toml`, and rustup installs it the first time you run `cargo` in the repo.
 
@@ -40,7 +41,7 @@ A spec change that adds normative text tags it in the same PR. No check can tell
 | `spec/` | The language spec. The source of truth for what Quince means. Don't edit it without David's approval. |
 | `compiler/<name>/` | One crate per compiler stage, named `quince_<name>`. Each crate's `lib.rs` says what it holds, and its `README.md`, when it has one, holds the formats and rules it enforces. |
 | `compiler/cli/` | The single `quince` binary. |
-| `compiler/syntax/` | `quince_syntax`: source decoding, the lexer, the parser and the CST, then the formatter. Its `README.md` holds the token contract, the errors the lexer owns, the CST's node shapes and trivia, how the parser recovers from errors, and the naming-case check. |
+| `compiler/syntax/` | `quince_syntax`: source decoding, the lexer, the parser and the CST, then the formatter. Its `README.md` holds the token contract, the errors the lexer owns, the CST's node shapes and trivia, how the parser recovers from errors, and the naming-case check. Its `fuzz/` folder is the parser's fuzz target, a crate outside the workspace with its own `Cargo.lock`. |
 | `compiler/spec/` | `quince_spec`: reads the spec (chapter manifest, rule tags, `ebnf` grammar blocks) for xtask and the conformance runner. |
 | `runtime/` | The runtime, built as a static library linked into every Quince binary. |
 | `std/` | The standard library in Quince (from M6), and `std/API.md`, its API doc. For a std signature, read `std/API.md`; once `quince query` works (M5), use it instead. |
