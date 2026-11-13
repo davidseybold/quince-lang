@@ -281,7 +281,9 @@ fn c_fn(p: &mut Parser) {
         if p.at(Arrow) {
             let marker = p.start();
             p.bump();
-            let returns = types::type_(p);
+            // A `uses` after a bare function type belongs to the C function, which takes
+            // none (`r[effect.uses-return]`).
+            let returns = types::return_type(p);
             p.complete(marker, RetType);
             if returns && !ends(p) {
                 p.expected("a line break");

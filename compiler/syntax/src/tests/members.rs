@@ -221,6 +221,8 @@ fn a_brace_closes_generics() {
         ["E0017", "E0017"]
     );
     assert_eq!(codes("fn f() -> List<Int {\n  x\n}\n"), ["E0017"]);
+}
+
 /// An `effect` with the effects it is built on and an operation, and one that names another
 /// (`grammar.effect_decl`).
 #[test]
@@ -349,6 +351,7 @@ fn effect_errors() {
         ["E0016 11..12: expected an effect, found `{`"]
     );
     assert_eq!(codes("effect E uses Net\n{\n}\n"), ["E0018"]);
+    assert_eq!(codes("effect E\n= Other\n"), ["E0018"]);
 }
 
 /// What the grammar rejects in a `foreign` block is an E0016: a keyword as a C name
@@ -389,4 +392,9 @@ fn foreign_errors() {
         ["E0016 8..9: expected the library's name, a string, found the name `c`"]
     );
     assert_eq!(codes("foreign \"c\"\n{\n}\n"), ["E0018"]);
+    // A `uses` after a returned function type is the C function's (`r[effect.uses-return]`).
+    assert_eq!(
+        errors("foreign \"c\" {\n  fn f() -> fn(Int) -> Int uses Io\n}\n"),
+        ["E0016 41..45: expected a line break, found the keyword `uses`"]
+    );
 }
