@@ -1,6 +1,6 @@
 # M1: Formatter
 
-Status: draft, in design review. Passes 1 to 4 returned "Ready with changes", and this revision addresses all four. On 2026-11-13 David approved decisions A, B and C and spec questions 1 to 11 as proposed. Question 9 was revised after that approval (pass 2 found its precedent only half right), and awaits his confirmation. Each decision is tested against what other formatters do (Precedent, below). This is the third and last design doc of M1 (Syntax), after [the lexer](m1-lexer.md) and [the parser](m1-parser.md).
+Status: passed design review (five passes; the fifth returned "Ready to build"). On 2026-11-13 David approved decisions A, B and C and spec questions 1 to 11 as proposed. Question 9 was revised after that approval (pass 2 found its precedent only half right), and awaits his confirmation. Each decision is tested against what other formatters do (Precedent, below). This is the third and last design doc of M1 (Syntax), after [the lexer](m1-lexer.md) and [the parser](m1-parser.md).
 
 ## Why
 
@@ -415,7 +415,7 @@ Rule IDs in brackets are what each task's fixtures cite.
 - [x] Design review, pass 2: Ready with changes. Its findings are addressed in this revision.
 - [x] Design review, pass 3: Ready with changes. Its findings are addressed in this revision.
 - [x] Design review, pass 4: Ready with changes. Its findings are addressed in this revision.
-- [ ] Design review passes.
+- [x] Design review passes (pass 5: Ready to build).
 - [x] David decides A, B and C (2026-11-13: approved as proposed).
 - [x] David decides spec questions 1 to 11 (2026-11-13: approved as proposed).
 - [ ] David confirms question 9 as revised after approval.
