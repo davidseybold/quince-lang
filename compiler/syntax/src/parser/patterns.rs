@@ -4,6 +4,7 @@
 use super::input::Break;
 use super::{Completed, Holds, Parser, exprs, types};
 use crate::SyntaxKind::{self, *};
+use crate::{SyntaxError, codes};
 
 /// A pattern: one or more alternatives joined by `|`. Inside a pattern `|` is always
 /// alternation (`r[lex.grammar-rules]`). `None` when there is no pattern, after reporting it.
@@ -94,7 +95,9 @@ fn bound(p: &mut Parser) -> bool {
     match p.kind() {
         StringStart => {
             p.abandon(marker);
+            let first = p.pos;
             exprs::literal(p);
+            no_interpolation(p, first);
             return true;
         }
         Minus => {
@@ -110,6 +113,26 @@ fn bound(p: &mut Parser) -> bool {
     }
     p.complete(marker, Literal);
     true
+}
+
+/// Reports the first interpolation in the string pattern whose tokens start at `first`: a
+/// pattern is a constant (`r[pat.no-interp]`). The string is whole, so this isn't a slip that
+/// hides what follows it.
+fn no_interpolation(p: &mut Parser, first: usize) {
+    let tokens = &p.input.tokens[first..p.pos];
+    let Some(open) = tokens.iter().position(|t| t.kind == InterpStart) else {
+        return;
+    };
+    let close = tokens[open..]
+        .iter()
+        .position(|t| t.kind == InterpEnd)
+        .map_or(open, |at| open + at);
+    let range = tokens[open].range.start..tokens[close].range.end;
+    let message = "a string pattern can't interpolate, since a pattern is a constant: \
+                   compare with a built string in a guard instead"
+        .to_string();
+    p.slip();
+    p.emit(SyntaxError::new(range, codes::UNEXPECTED_TOKEN, message));
 }
 
 /// A name or a path. A name that stands alone, with no `.` or `(` after it, binds a new

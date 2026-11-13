@@ -261,6 +261,10 @@ fn slips() {
     assert_eq!(error_count("  let\n    x"), 1);
     // A slip in an alternative ends the pattern, so a `|` after it is part of that slip.
     assert_eq!(errors("Shape. | +"), ["E0016 7..8"]);
+    // A string pattern is a constant, so it can't interpolate (`r[pat.no-interp]`). The
+    // first interpolation is the error, and the string is whole, so the pattern goes on.
+    assert_eq!(errors("\"a{b}c{d}\""), ["E0016 2..5"]);
+    assert_eq!(errors("\"a{b}\" | 1..x"), ["E0016 2..5", "E0016 12..13"]);
     // A slip inside the parentheses is the one error, and the `let` goes on after them.
     assert_eq!(errors("(a b, c)"), ["E0016 3..4"]);
     assert_eq!(errors("Some(a b)"), ["E0016 7..8"]);

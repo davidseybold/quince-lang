@@ -24,6 +24,9 @@ r[pat.all-fields]
 r[pat.forms]
 - Literals (`0`, `"GET"`), nested patterns (`Ok(Some(x))`) and alternatives (`Shape.Circle(..) | Shape.Point`) are allowed.
 
+r[pat.no-interp]
+- A string pattern can't interpolate: it is a constant. To compare with a built string, use a guard: `s if s == "user/{id}" => ...`.
+
 r[pat.alt-names]
 - Every alternative binds the same names.
 

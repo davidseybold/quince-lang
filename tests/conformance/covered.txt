@@ -128,6 +128,7 @@ lex.source.utf8
 lex.source.whitespace
 pat.const
 pat.negative
+pat.no-interp
 stmt.assign.no-chain
 stmt.assign.place
 stmt.assign.stmt
