@@ -12,7 +12,9 @@ expr.op.parens-required
 expr.op.range.no-chain
 expr.op.range.parens
 expr.op.type-args
+expr.range.pattern
 grammar.alias_decl
+grammar.alt
 grammar.arg
 grammar.args
 grammar.arith
@@ -47,6 +49,9 @@ grammar.name_ref
 grammar.names
 grammar.newtype_decl
 grammar.params
+grammar.pattern
+grammar.pfield
+grammar.pfields
 grammar.place
 grammar.postfix
 grammar.prefix
@@ -57,11 +62,13 @@ grammar.struct_decl
 grammar.struct_lit
 grammar.term
 grammar.tuple
+grammar.tuple_pat
 grammar.type
 grammar.type_arg
 grammar.type_args
 grammar.type_path
 grammar.variant
+grammar.variant_pat
 grammar.vfield
 intro.excl.macros
 intro.excl.wildcard-imports
@@ -76,6 +83,7 @@ lex.continue.fn-header
 lex.continue.lists
 lex.continue.more
 lex.else-same-line
+lex.grammar-rules
 lex.ident-not-keyword
 lex.indentation
 lex.keyword-not-name
@@ -118,6 +126,9 @@ lex.source.control
 lex.source.line-end
 lex.source.utf8
 lex.source.whitespace
+pat.const
+pat.negative
+pat.no-interp
 stmt.assign.no-chain
 stmt.assign.place
 stmt.assign.stmt

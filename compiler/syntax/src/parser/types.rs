@@ -50,21 +50,29 @@ fn starts_path(p: &Parser) -> bool {
 
 /// A type path with optional type arguments (`grammar.type_path`, `grammar.type_args`).
 fn type_path(p: &mut Parser) -> bool {
-    let (marker, ok) = path_names(p);
+    let (marker, ok) = path_names(p, "a type name");
     let ok = ok && (!p.at(Lt) || type_args(p, false));
+    p.complete(marker, TypePath);
+    ok
+}
+
+/// A path in a pattern: its names and the dots between them, with no type arguments, as a
+/// `TypePath`. The caller checked the first name.
+pub(super) fn pattern_path(p: &mut Parser) -> bool {
+    let (marker, ok) = path_names(p, "a name");
     p.complete(marker, TypePath);
     ok
 }
 
 /// A path's names and the dots between them, in a `TypePath` node the caller completes.
 /// Case-blind, so `Self` and C names are paths too. The caller checked the first name.
-fn path_names(p: &mut Parser) -> (Marker, bool) {
+fn path_names(p: &mut Parser, what_name: &str) -> (Marker, bool) {
     let marker = p.start();
     p.bump();
     while p.at(Dot) {
         p.bump();
         if !p.at(Ident) {
-            p.expected("a type name");
+            p.expected(what_name);
             return (marker, false);
         }
         p.bump();
@@ -264,7 +272,7 @@ fn bounds(p: &mut Parser) -> bool {
             p.expected("a bound");
             return false;
         }
-        let (marker, ok) = path_names(p);
+        let (marker, ok) = path_names(p, "a type name");
         let ok = ok && (!p.at(Lt) || type_args(p, true));
         p.complete(marker, TypePath);
         if !ok {
@@ -292,7 +300,7 @@ pub(super) fn effects(p: &mut Parser) -> bool {
                 p.expected("an effect");
                 break false;
             }
-            let (path, ok) = path_names(p);
+            let (path, ok) = path_names(p, "a type name");
             p.complete(path, TypePath);
             if !ok {
                 break false;

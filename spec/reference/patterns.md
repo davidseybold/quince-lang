@@ -3,8 +3,8 @@
 ```ebnf
 pattern      = alt { "|" alt }
 alt          = "_" | [ "-" ] literal [ ( ".." | "..=" ) [ "-" ] literal ] | name | NAME | type_path "." NAME | tuple_pat | variant_pat
-tuple_pat    = "(" pattern "," pattern { "," pattern } [ "," ] ")"
-variant_pat  = type_path [ "(" ( pattern { "," pattern } | pfields ) ")" ]
+tuple_pat    = "(" ")" | "(" pattern "," pattern { "," pattern } [ "," ] ")"
+variant_pat  = type_path [ "(" ( pattern { "," pattern } | pfields ) [ "," ] ")" ]
 pfields      = ".." | pfield { "," pfield } [ "," ".." ]
 pfield       = name ":" [ pattern ]
 ```
@@ -23,6 +23,9 @@ r[pat.all-fields]
 
 r[pat.forms]
 - Literals (`0`, `"GET"`), nested patterns (`Ok(Some(x))`) and alternatives (`Shape.Circle(..) | Shape.Point`) are allowed.
+
+r[pat.no-interp]
+- A string pattern can't interpolate: it is a constant. To compare with a built string, use a guard: `s if s == "user/{id}" => ...`.
 
 r[pat.alt-names]
 - Every alternative binds the same names.

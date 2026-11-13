@@ -1,0 +1,47 @@
+// rule: grammar.pattern
+// rule: grammar.alt
+// rule: grammar.tuple_pat
+// rule: grammar.variant_pat
+// rule: grammar.pfields
+// rule: grammar.pfield
+// mode: parse
+// A pattern is one or more alternatives joined by `|`. An alternative is `_`, a literal or a
+// range of two literals, a name, a path, a tuple of two or more patterns, or a variant with
+// its fields in parentheses: patterns by position, or fields by name with an optional `..`
+// last. `()` is the unit value. Each list in parentheses takes a trailing `,`. `let` takes a
+// pattern, and so does `is`, which no operator that binds tighter than a comparison follows.
+fn f(shape: Shape, pair: (Int, Int), opt: Option<Int>, res: Result<Option<Int>, String>) {
+  let _ = load()
+  let n = 1
+  let (a, b) = pair
+  let (x, (y, z),) = (1, (2, 3))
+  let Point(x:, y:) = origin()
+  let Wrapper(inner) = wrap(1)
+  let any_circle = shape is Shape.Circle(..)
+  let rect = shape is Shape.Rect(width: w, height:)
+  let wide = shape is Shape.Rect(width: 10, ..)
+  let some = opt is Some(_)
+  let nested = res is Ok(Some(_))
+  let none = opt is None
+  let point = shape is Shape.Point
+  let other = shape is geo.Shape.Point
+  let split = shape is Shape.Rect(
+    width:,
+    height:,
+  )
+  let pairs = res is Ok(Some(1),)
+  let either = opt is Some(1) | Some(2) | None
+  let saved = save() is Ok(())
+  let () = log("done")
+  let (one) = pair //~ E0016
+  let (a,) = pair //~ E0016
+  let Shape.Rect() = shape //~ E0016
+  let Shape.Rect(width:, .., height:) = shape //~ E0016
+  let Shape.Rect(w, height:) = shape //~ E0016
+  let Shape.Rect(width:, h) = shape //~ E0016
+  let Shape.Rect(.., w) = shape //~ E0016
+  let Shape. = shape //~ E0016
+  let = 3 //~ E0016
+  let bad = opt is + 1 //~ E0016
+  let sum = opt is Some(1) + 2 //~ E0016
+}

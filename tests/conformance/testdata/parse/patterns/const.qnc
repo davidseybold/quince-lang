@@ -1,0 +1,10 @@
+// rule: pat.const
+// mode: parse
+// A constant is a pattern: a `NAME`, or a type constant such as `Status.OK`, by itself or as
+// one of the alternatives or fields of a pattern.
+fn f(code: Int, status: Status, res: Result<Status, Int>) {
+  let failed = code is MINZ_BUF_ERROR
+  let ok = status is Status.OK
+  let either = code is MINZ_OK | MINZ_STREAM_END
+  let inner = res is Ok(Status.OK) | Err(MINZ_BUF_ERROR)
+}

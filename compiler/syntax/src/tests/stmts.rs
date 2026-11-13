@@ -175,8 +175,9 @@ fn if_and_else() {
         stmts("let x = if a { 1 } else { 2 }"),
         r#"LetStmt
   LetKw "let"
-  Name
-    Ident "x"
+  BindPat
+    Name
+      Ident "x"
   Eq "="
   IfExpr
     IfKw "if"

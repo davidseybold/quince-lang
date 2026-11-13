@@ -1,0 +1,19 @@
+// rule: pat.no-interp
+// mode: parse
+// A string pattern is a constant, so it can't interpolate: a built string is compared with
+// `==`. Strings with no interpolation are patterns, raw, bytes and multi-line ones included.
+fn f(s: String, data: Bytes, id: Int) {
+  let get = s is "GET"
+  let path = s is r"C:\path"
+  let bytes = data is b"GET"
+  let text = s is """
+    two
+    lines
+    """
+  let route = s == "user/{id}"
+  let built = s is "user/{id}" //~ E0016
+  let twice = s is "{id}/{id}" //~ E0016
+  let lines = s is """
+    user/{id}
+    """ //~^ E0016
+}

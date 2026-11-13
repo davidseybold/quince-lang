@@ -49,5 +49,15 @@ fn f(
   })
   let wrong = g(if a > b { a }
     else { b }) //~^ E0018
+  let (first,
+    second
+  ) = (a, b)
+  let Pair(
+    left:,
+    right: Some(_)
+    , ..
+  ) = pair_of(a, b)
+  let (c, d
+    (e, g)) = (a, (b, a)) //~ E0016
   map
 }

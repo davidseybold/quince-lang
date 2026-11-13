@@ -302,7 +302,7 @@ fn a_break_too_early() {
     );
     assert_eq!(
         messages("fn f() {\n  let\n  x = 1\n}"),
-        ["expected a name, found a line break"]
+        ["expected a pattern, found a line break"]
     );
 }
 
@@ -445,7 +445,7 @@ fn a_keyword_where_a_name_goes() {
         [
             "expected a function name, found the keyword `match`",
             "expected a parameter, found the keyword `while`",
-            "expected a name, found the keyword `for`",
+            "expected a pattern, found the keyword `for`",
             "expected a field or method name, found the keyword `fn`",
         ]
     );

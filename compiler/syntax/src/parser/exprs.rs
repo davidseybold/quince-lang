@@ -1,8 +1,9 @@
 //! Blocks, statements and expressions: `let`, `var`, `while`, assignment, `if`, literals,
-//! names, collections, operators and postfix forms. Later layers of the parser add the rest.
+//! names, collections, operators, `is` and postfix forms. Later layers of the parser add the
+//! rest.
 
 use super::input::Break;
-use super::{Completed, Holds, Parser, Sync, items, types};
+use super::{Completed, Holds, Parser, Sync, items, patterns, types};
 use crate::SyntaxKind::{self, *};
 use crate::{SyntaxError, codes};
 use quince_diagnostics::Applicability;
@@ -104,23 +105,40 @@ fn is_place(p: &Parser, first: usize) -> bool {
     }
 }
 
-/// `let` name [ `:` type ] `=` expr. Layer 5 of the parser takes a pattern after `let`.
+/// `let` pattern [ `:` type ] `=` expr (`grammar.stmt`).
 fn let_stmt(p: &mut Parser) {
-    binding(p, LetStmt);
+    let marker = p.start();
+    p.bump();
+    if leading_pattern(p) {
+        let_rest(p);
+    }
+    p.complete(marker, LetStmt);
+}
+
+/// The pattern after `let`. False when there is none. One missing from its line is taken from
+/// the next line, after the error, as a missing condition is, so that line isn't a second
+/// error. Then what is missing after it is part of that slip.
+fn leading_pattern(p: &mut Parser) -> bool {
+    let missing = p.at_break();
+    if missing {
+        p.expected("a pattern");
+        if p.frame_closes_here() || !patterns::starts_pattern(p.kind()) {
+            return false;
+        }
+    }
+    let found = patterns::pattern(p).is_some();
+    p.recovering |= missing;
+    found
 }
 
 /// `var` name [ `:` type ] `=` expr. A `var` takes a name, never a pattern.
 fn var_stmt(p: &mut Parser) {
-    binding(p, VarStmt);
-}
-
-fn binding(p: &mut Parser, kind: SyntaxKind) {
     let marker = p.start();
     p.bump();
     if items::name(p, "a name") {
         let_rest(p);
     }
-    p.complete(marker, kind);
+    p.complete(marker, VarStmt);
 }
 
 /// `while` expr block (`grammar.stmt`).
@@ -246,7 +264,7 @@ fn binary(p: &mut Parser, min_power: u8) -> Option<Operand> {
         chain: None,
         broken: p.slips != slips,
     };
-    while let Some((op, power)) = binary_op(p)
+    while let Some((op, power)) = binary_op(p, lhs.op == Some(IsKw))
         && power > min_power
     {
         let marker = p.precede(lhs.done);
@@ -257,9 +275,13 @@ fn binary(p: &mut Parser, min_power: u8) -> Option<Operand> {
         }
         p.after_operator = true;
         let op_range = p.input.tokens[at].range.start..p.input.tokens[p.pos - 1].range.end;
-        let rhs = binary(p, power);
+        let rhs = match op {
+            IsKw => pattern_operand(p),
+            _ => binary(p, power),
+        };
         let kind = match op {
             DotDot | DotDotEq => SyntaxKind::Range,
+            IsKw => IsExpr,
             _ => Binary,
         };
         let done = p.complete(marker, kind);
@@ -282,16 +304,38 @@ fn binary(p: &mut Parser, min_power: u8) -> Option<Operand> {
     Some(lhs)
 }
 
+/// The pattern after `is`, as the right operand of a comparison
+/// (`compare = arith [ cmp_op arith | "is" pattern ]`). A pattern holds no operator the checks
+/// look at, and `|` in it is alternation (`r[lex.grammar-rules]`).
+fn pattern_operand(p: &mut Parser) -> Option<Operand> {
+    let (first, slips) = (p.pos, p.slips);
+    let done = patterns::pattern(p)?;
+    Some(Operand {
+        done,
+        op: None,
+        tokens: (first, p.pos - 1),
+        right: (first, p.pos - 1),
+        right_op: None,
+        chain: None,
+        broken: p.slips != slips,
+    })
+}
+
+/// How tightly a comparison or `is` binds.
+const COMPARISON_POWER: u8 = 3;
+
 /// The binary operator at the current token, joined with the token after it when it is `>`,
 /// and how tightly it binds: higher binds tighter. The order is decision 6's usual reading. A
 /// line that starts with one continues the line above, an E0018, unless it is `-`, which can
-/// start an expression (`r[lex.line-end]`).
-fn binary_op(p: &mut Parser) -> Option<(SyntaxKind, u8)> {
+/// start an expression (`r[lex.line-end]`). After the pattern of an `is`, an operator that
+/// binds tighter than a comparison is an E0016, since a pattern is no operand
+/// (`compare = arith [ cmp_op arith | "is" pattern ]`). It stops every operator around it.
+fn binary_op(p: &mut Parser, after_pattern: bool) -> Option<(SyntaxKind, u8)> {
     let op = p.joined_gt().unwrap_or(p.kind());
     let power = match op {
         PipePipe => 1,
         AmpAmp => 2,
-        EqEq | BangEq | Lt | LtEq | Gt | GtEq => 3,
+        EqEq | BangEq | Lt | LtEq | Gt | GtEq | IsKw => COMPARISON_POWER,
         DotDot | DotDotEq => 4,
         Pipe => 5,
         Caret => 6,
@@ -301,10 +345,15 @@ fn binary_op(p: &mut Parser) -> Option<(SyntaxKind, u8)> {
         Star | Slash | Percent => 10,
         _ => return None,
     };
+    if p.at_break() && (op == Minus || !p.can_join()) {
+        return None;
+    }
+    if after_pattern && power > COMPARISON_POWER {
+        let error = p.unexpected("`&&`, `||` or the end of the expression", false);
+        p.report(error);
+        return None;
+    }
     if p.at_break() {
-        if op == Minus || !p.can_join() {
-            return None;
-        }
         p.join_line();
     }
     Some((op, power))
@@ -412,6 +461,14 @@ fn text_range(p: &Parser, (first, last): (usize, usize)) -> Range<usize> {
     p.input.tokens[first].range.start..p.input.tokens[last].range.end
 }
 
+/// A binary operator's text, for messages.
+fn operator_text(op: SyntaxKind) -> &'static str {
+    match op {
+        IsKw => "is",
+        _ => super::punctuation(op),
+    }
+}
+
 /// Reports an E0019 when `operand`, the left one when `left`, needs parentheses as an operand
 /// of `op`, with the fix that adds them.
 fn needs_parens(p: &mut Parser, operand: &Operand, op: SyntaxKind, left: bool) {
@@ -435,7 +492,7 @@ fn needs_parens(p: &mut Parser, operand: &Operand, op: SyntaxKind, left: bool) {
     if !needed {
         return;
     }
-    let (inner, outer) = (super::punctuation(inner), super::punctuation(op));
+    let (inner, outer) = (operator_text(inner), operator_text(op));
     let message = format!("`{inner}` needs parentheses as an operand of `{outer}`");
     let range = text_range(p, operand.tokens);
     let edits = vec![
@@ -453,8 +510,9 @@ fn needs_parens(p: &mut Parser, operand: &Operand, op: SyntaxKind, left: bool) {
 /// The chain that `lhs`, a comparison or a range, and `op` after it make
 /// (`r[expr.op.compare.no-chain]`, `r[expr.op.range.no-chain]`). A comparison chain's fix
 /// repeats each middle operand, so `a < b < c` becomes `a < b && b < c`. There is none when a
-/// middle operand holds a comment or a line break, which repeating it would copy, or needs
-/// parentheses itself, whose E0019 has its own fix.
+/// middle operand holds a comment or a line break, which repeating it would copy, needs
+/// parentheses itself, whose E0019 has its own fix, or is the pattern of an `is`, which isn't
+/// an expression.
 fn extend_chain(p: &Parser, lhs: &mut Operand, op: SyntaxKind, op_range: Range<usize>) -> Chain {
     let mut chain = lhs.chain.take().unwrap_or_else(|| match group(op) {
         Group::Compare => Chain {
@@ -476,7 +534,7 @@ fn extend_chain(p: &Parser, lhs: &mut Operand, op: SyntaxKind, op_range: Range<u
         let bare = lhs
             .right_op
             .is_none_or(|op| !matches!(group(op), Group::Bit | Group::Shift | Group::Range));
-        if plain && bare {
+        if plain && bare && lhs.op != Some(IsKw) {
             let middle = &p.text[first.range.start..last.range.end];
             let end = last.range.end;
             edits.push((end..end, format!(" && {middle}")));

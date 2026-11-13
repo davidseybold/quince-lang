@@ -318,8 +318,9 @@ fn a_closing_angle_is_never_joined() {
         stmts("  let x: Option<Int>= y"),
         r#"LetStmt
   LetKw "let"
-  Name
-    Ident "x"
+  BindPat
+    Name
+      Ident "x"
   Colon ":"
   TypePath
     Ident "Option"

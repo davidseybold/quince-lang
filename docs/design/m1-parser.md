@@ -123,7 +123,7 @@ A hard break never joins. `a;` followed by a line `.b()` is an E0002 plus an E00
 ### 5. Tokens the parser joins
 
 - **`>>` and `>=`** are formed from a `>` and the next token when no trivia sits between them (lexer decision 5). The parser checks adjacency, and the builder writes the pair to the tree as one token, `GtGt` or `GtEq`, holding both texts. They are CST-only kinds: the lexer never produces them, which keeps `r[lex.no-shift-token]`. `a > = b` is an "expected expression" error, as `a = = b` is.
-- **A negative literal** (`r[lex.lit.int.neg]`, spec question 5) is a `-` in prefix position followed, with no trivia between, by an `Int` or `Float` that no postfix operator follows. The builder puts both tokens in one `Literal` node, so `-9_223_372_036_854_775_808` is one literal the type checker can range-check. `- 1` is a prefix minus applied to `1`. `-2.pow(2)` is `-(2.pow(2))`, as `r[expr.op.levels]` reads `-x.abs()`. In patterns, `[ "-" ] literal` follows the same adjacency rule.
+- **A negative literal** (`r[lex.lit.int.neg]`, spec question 5) is a `-` in prefix position followed, with no trivia between, by an `Int` or `Float` that no postfix operator follows. The builder puts both tokens in one `Literal` node, so `-9_223_372_036_854_775_808` is one literal the type checker can range-check. `- 1` is a prefix minus applied to `1`. `-2.pow(2)` is `-(2.pow(2))`, as `r[expr.op.levels]` reads `-x.abs()`. In patterns, `[ "-" ] literal` is one `Literal` whatever lies between the `-` and the number, since a pattern has no prefix minus, so `- 5` is `-5`, as in Rust (decided by David, 2026-11-12). The formatter writes `-5`, and unformatted code compiles (`r[tool.fmt.check]`).
 
 ### 6. Expressions
 
@@ -248,6 +248,9 @@ Doc comments and attributes aren't member starts: they belong to the declaration
 | `let x = {` then lines `g()`, `let y = 1` and `}` | E0016 at `{` |
 | `let m = {"a": 1` then a line `let y = 1` | E0017 at `{` |
 | `g({` then lines `let y = 1` and `})` | E0016 at `{` |
+| `let` followed by a line `(a, b) = p` | E0016 at the line break (layer 5a) |
+| `x is A + 1` | E0016 at `+` (layer 5a) |
+| `let Shape. \| + = v` | E0016 at `\|` (layer 5a) |
 
 ### 10. Diagnostics
 
@@ -342,7 +345,7 @@ The layers:
 2. `m1/parser-types` (2a): the rest of types, generics, bounds and effect lists. `m1/parser-decls` (2b): struct, enum, newtype, alias and import declarations; attributes and doc comments; E0024.
 3. `m1/parser-exprs`: every operator and level, E0019 and E0020; the joined `>>` and `>=`; type arguments in expressions; negative literals; tuples, maps and E0025; `..base`.
 4. `m1/parser-stmts`: statements, assignment and E0026; list contexts; E0018; `if` and `else`.
-5. `m1/parser-patterns`: patterns, `match`, `is` and `for`.
+5. `m1/parser-patterns` (5a): patterns, `let` patterns and `is`. `m1/parser-match` (5b): `match`, guards and `for`.
 6. `m1/parser-keyword-forms`: closures, `concurrent`, `background`, `select`, `with`, `spawn` and contracts.
 7. `m1/parser-items`: the rest of `impl`, `interface`, `effect` and `foreign`; members' doc comments and attributes; E0023.
 8. `m1/parser-names`: `validate`, the case check and E0021.
@@ -542,11 +545,19 @@ Layer 4 is three PRs (decided by David, 2026-11-12), since together they would r
 **Layer 4d: `m1/spec-wording`**
 - [x] Spec (decided by David, 2026-11-12), and a bump (v0.18): `r[expr.block.cond-brace]` moves before `r[expr.block.brace-map]`, so "Anywhere else" follows the exception, and `r[item.struct.literal-visibility]` writes `Type(..x, field: v)`. No meaning or ID changes.
 
-**Layer 5: `m1/parser-patterns`**
-- [ ] Spec (decided by David, 2026-11-12): extend `r[expr.block.cond-brace]` to a `match` subject and a `for` loop's `in` expression, whose `{` has the same problem (found in layer 4a's review). Wording: "In the condition of an `if` or `while`, the subject of a `match`, and the iterable of a `for`, `{` always starts the block. A map literal there is written in parentheses." It lands in the same PR as the `match` and `for` parsing, with a spec bump. [`expr.block.cond-brace`]
-- [ ] Spec: `variant_pat` and `pfields` take an optional trailing `,` (layer 2a's trailing-comma decision).
-- [ ] Extend `parse/lexical/lists.qnc` with line breaks in match arms and patterns, which `r[lex.continue.lists]` covers (layer 4b).
-- [ ] Patterns, `match`, guards, `is`, `for`. [`grammar.pattern`, `grammar.match_expr`, `expr.match.arm-syntax`, `expr.match.arm-comma`, `pat.negative`, `pat.const`, `expr.range.pattern`, `lex.grammar-rules`]
+Layer 5 is two PRs (decided by David, 2026-11-12), since patterns with `match` and `for` would run past 1,000 lines. `let` and `is` give patterns a place to appear before `match` exists.
+
+**Layer 5a: `m1/parser-patterns`**
+- [x] Spec, and a bump (v0.19): a variant pattern's parentheses take an optional trailing `,` (layer 2a's trailing-comma decision). One `[ "," ]` in `variant_pat` covers fields by position and `pfields`, so `Shape.Rect(width:, ..,)` takes one too.
+- [x] Spec (decided by David, 2026-11-12), in the same bump: `()` is a pattern, the unit value, so `Ok(())` matches what `Ok(())` builds. `tuple_pat` gains `"(" ")"`, as `tuple` has it.
+- [x] Spec (decided by David, 2026-11-12), in the same bump: `r[pat.no-interp]` "A string pattern can't interpolate: it is a constant. To compare with a built string, use a guard: `s if s == "user/{id}" => ...`." An interpolation would read as binding a name, as a route pattern does, so it is an E0016. Raw, bytes and multi-line strings stay patterns. [`pat.no-interp`]
+- [x] Extend `parse/lexical/lists.qnc` with line breaks in patterns, which `r[lex.continue.lists]` covers (layer 4b).
+- [x] Patterns, `let` patterns and `is`. A pattern's `-` and its number are one literal, whatever lies between them (decision 5). A pattern missing from the line of its `let` is taken from the next line, as a missing condition is. An operator that binds tighter than a comparison can't follow the pattern of an `is` (`grammar.compare`): it is an E0016 (found in review). [`grammar.pattern`, `grammar.alt`, `grammar.tuple_pat`, `grammar.variant_pat`, `grammar.pfields`, `grammar.pfield`, `pat.negative`, `pat.const`, `expr.range.pattern`, `lex.grammar-rules`]
+
+**Layer 5b: `m1/parser-match`**
+- [ ] Spec (decided by David, 2026-11-12): extend `r[expr.block.cond-brace]` to a `match` subject and a `for` loop's `in` expression, whose `{` has the same problem (found in layer 4a's review). Wording: "In the condition of an `if` or `while`, the subject of a `match`, and the iterable of a `for`, `{` always starts the block. A map literal there is written in parentheses." It lands in the same PR as the `match` and `for` parsing, with a spec bump (v0.20). [`expr.block.cond-brace`]
+- [ ] Extend `parse/lexical/lists.qnc` with line breaks in match arms, which `r[lex.continue.lists]` covers (layer 4b).
+- [ ] `match`, guards, `for`. [`grammar.match_expr`, `grammar.arm`, `expr.match.arm-syntax`, `expr.match.arm-comma`]
 
 **Layer 6: `m1/parser-keyword-forms`**
 - [ ] Spec: question 7, and a bump. `concurrent`'s arguments take an optional trailing `,` (layer 2a's trailing-comma decision).

@@ -201,8 +201,9 @@ fn literals_and_list_literals() {
         stmts("let a: Map<String, Int> = [1, 2.5, 'c', true, false,]\n[]"),
         r#"LetStmt
   LetKw "let"
-  Name
-    Ident "a"
+  BindPat
+    Name
+      Ident "a"
   Colon ":"
   TypePath
     Ident "Map"
