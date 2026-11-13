@@ -677,4 +677,4 @@ Layer 9 is three PRs (decided by David, 2026-11-13), since together they would r
 
 **Layer 9c: `m1/parser-fuzz`**
 - [x] `fuzz::check_parse` and its unit test over every fixture; the fuzz crate and its thin target; the command in `AGENTS.md`. `check_lossless` and the parser's `check_error_ranges` moved from the tests into the `fuzz` module, which the tests now use, and the check also covers fix edits, `Fix::check`'s rules for them, and the tree's depth. `libfuzzer-sys` is pinned at `=0.4.13`. `fuzz/testdata/` adds inputs that nest near the limit to the fixtures as seeds, since mutating small fixtures rarely builds a hundred balanced levels (found in review: a 30-minute run without them missed the hang 9b's review found).
-- [ ] Before M1 closes: run the fuzz target, and fix every crash it finds, each with a regression test.
+- [x] Before M1 closes: run the fuzz target, and fix every crash it finds, each with a regression test. Two 30-minute runs on 2026-11-13, the second with the seeds and review's fixes (1,026,547 runs), found no crash.
