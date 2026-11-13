@@ -120,7 +120,7 @@ concurrent   = "concurrent" [ "(" arg { "," arg } [ "," ] ")" ]
                ( "{" spawn { "," spawn } [ "," ] "}" | "for" pattern "in" expr block )
 spawn        = "spawn" expr
 
-background   = "background" "(" name ":" "TaskScope" [ "," arg ] ")" block
+background   = "background" "(" name ":" "TaskScope" [ "," arg ] [ "," ] ")" block
 
 select       = "select" "{" { pattern "=" expr "=>" ( block | expr ) "," } "}"
 

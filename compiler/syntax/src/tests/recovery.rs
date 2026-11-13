@@ -656,6 +656,27 @@ fn slips_in_concurrency_forms() {
         .descendants()
         .any(|node| node.kind() == SyntaxKind::Block && node.text() == "{ run() }");
     assert!(block);
+    // Handlers missing from the line of `with` are taken from the next line, so the block is
+    // still the block.
+    let text = "fn f() {\n  with\n  Db = x { run() }\n}\n";
+    assert_eq!(errors(text), ["E0016 15..16"]);
+    let block = checked(text)
+        .syntax()
+        .descendants()
+        .any(|node| node.kind() == SyntaxKind::Block && node.text() == "{ run() }");
+    assert!(block);
+    assert_eq!(errors("fn f() {\n  with\n}\n"), ["E0016 15..16"]);
+    // `spawn in` takes its scope from its own line.
+    assert_eq!(
+        errors("fn f() {\n  spawn in\n  bg()\n}\n"),
+        ["E0016 19..20"]
+    );
+    // After a slip in the scope, the expression to spawn isn't parsed, so it isn't a second
+    // error.
+    assert_eq!(
+        errors("fn f() {\n  spawn in bg.(x) work()\n}\n"),
+        ["E0016 23..24"]
+    );
 }
 
 /// `fn` and `(` is a closure, never a member start (decision 9): a closure on a line of its

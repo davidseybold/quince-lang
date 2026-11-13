@@ -275,6 +275,9 @@ Doc comments and attributes aren't member starts: they belong to the declaration
 | `concurrent`, `select`, `with Db = db` or `background(bg: TaskScope)` followed by a line `{` | E0018 (layer 6b) |
 | `let x = concurrent {` then lines `spawn a()` and `let y = 1`, with the `}` missing | E0017 at `{` (layer 6b) |
 | `with = db { run() }` | E0016 at `=`, and the block is parsed (layer 6b) |
+| `with` followed by a line `Db = x { run() }` | E0016 at the line break, and the block is parsed (layer 6b, found in review) |
+| `with Db = {` then lines `serve()` and `}` | E0016 at `{`, and the block is parsed (layer 6b) |
+| `background() {}` | E0016 at `)` (layer 6b, found in review: it left an empty node) |
 
 ### 10. Diagnostics
 
@@ -598,8 +601,9 @@ Layer 6 is two PRs (decided by David, 2026-11-12), since its eight constructs wo
 
 **Layer 6b: `m1/parser-concurrency`**
 - [x] Spec, and a bump (v0.22): `concurrent`'s arguments take an optional trailing `,` (layer 2a's trailing-comma decision).
+- [x] Spec (decided by David, 2026-11-12), in the same bump: `background`'s parentheses take an optional trailing `,`, since `r[tool.fmt.trailing-comma]` adds one when the formatter breaks them across lines. `r[expr.block.cond-brace]` covers a `with` handler's value, and says the braces of a closure, `concurrent`, `select`, `with` or `background` are that construct's own. [`expr.block.cond-brace`]
 - [x] `select` arms (`pattern = expr => ...`) push `Holds::Arms`, as a `match`'s do. Otherwise in `match s { 0 => select { x = c.recv() => 1, }, }` the `select` arm's `=>` would find the outer `match`'s frame and close the `select`'s braces (found in layer 5b's review). The arms reuse `arms.rs`'s list, unclosed-literal handling included, and its `=>` and body.
-- [x] `concurrent`, `background`, `select`, `with` and `spawn`, `spawn in` included. A fan-out's `for` is a `ForStmt` in the `ConcurrentExpr`. [`grammar.concurrent`, `grammar.spawn`, `grammar.background`, `grammar.select`, `grammar.with_expr`, `grammar.handler`, `grammar.jump`, `conc.block`, `conc.settle`, `conc.fanout.limit`, `conc.background.spawn-in`, `conc.background.scope-value`, `conc.select.wait`, `conc.select.arm`, `effect.with.install`]
+- [x] `concurrent`, `background`, `select`, `with` and `spawn`, `spawn in` included. A fan-out's `for` is a `ForStmt` in the `ConcurrentExpr`. Handlers missing from the line of `with` are taken from the next line, as a condition is (found in review). Rules about runtime or types, such as `conc.block` and `effect.with.install`, aren't cited (decision 11). [`grammar.concurrent`, `grammar.spawn`, `grammar.background`, `grammar.select`, `grammar.with_expr`, `grammar.handler`, `grammar.jump`, `conc.background.spawn-in`, `conc.background.scope-value`, `conc.select.arm`]
 
 **Layer 7: `m1/parser-items`**
 - [ ] Spec: questions 4, 9 and 10, and a bump.

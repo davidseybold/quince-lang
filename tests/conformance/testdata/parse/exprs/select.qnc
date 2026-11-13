@@ -1,5 +1,4 @@
 // rule: grammar.select
-// rule: conc.select.wait
 // rule: conc.select.arm
 // mode: parse
 // `select` and its arms in braces. Each arm is a pattern, `=`, the operation, `=>`, and an

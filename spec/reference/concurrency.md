@@ -100,7 +100,7 @@ r[conc.fanout.one-spawn]
 ## Long-lived work (fire and forget)
 
 ```ebnf
-background   = "background" "(" name ":" "TaskScope" [ "," arg ] ")" block
+background   = "background" "(" name ":" "TaskScope" [ "," arg ] [ "," ] ")" block
 ```
 
 Work that must outlive the current function is spawned into a longer-lived scope passed in as a `TaskScope` value:

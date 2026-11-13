@@ -3,7 +3,7 @@
 //! `with` (`grammar.with_expr`).
 
 use super::{Completed, Holds, Parser, Sync, arms, exprs, items, patterns, types};
-use crate::SyntaxKind::*;
+use crate::SyntaxKind::{self, *};
 
 /// `concurrent` [ `(` arg { `,` arg } [ `,` ] `)` ], then `spawn`s in braces or `for` pattern
 /// `in` expr block. The braces go on the line of what comes before them, as a body's do, so on
@@ -79,8 +79,9 @@ fn operand(p: &mut Parser) {
     }
 }
 
-/// `background` `(` name `:` `TaskScope` [ `,` arg ] `)` block (`grammar.background`). The
-/// parentheses are a list of one or two items, with no trailing `,`.
+/// `background` `(` name `:` `TaskScope` [ `,` arg ] [ `,` ] `)` block (`grammar.background`).
+/// The parentheses are a list of one or two items, with a trailing `,` if present. As in a
+/// list, a `,` after a slip in the scope goes on to the argument.
 pub(super) fn background(p: &mut Parser) -> Completed {
     let marker = p.start();
     p.bump();
@@ -92,16 +93,18 @@ pub(super) fn background(p: &mut Parser) -> Completed {
     p.push_frame(Holds::Items, Some(RParen));
     if p.stop().is_none() && !p.unmatched_closer() {
         scope_param(p);
-        if !p.recovering {
-            match p.kind() {
-                Comma => {
-                    p.bump();
+        match p.kind() {
+            Comma => {
+                p.bump();
+                if p.kind() != RParen {
                     exprs::arg(p);
+                    if p.kind() == Comma {
+                        p.bump();
+                    }
                 }
-                RParen => {}
-                _ if p.stop().is_some() => {}
-                _ => p.expected("`,` or `)`"),
             }
+            RParen => {}
+            _ => p.expected("`,` or `)`"),
         }
     }
     p.end_list(RParen);
@@ -115,6 +118,9 @@ pub(super) fn background(p: &mut Parser) -> Completed {
 
 /// name `:` `TaskScope`, as a `Param`: the scope's name and type, which is always `TaskScope`.
 fn scope_param(p: &mut Parser) {
+    if !p.at(Ident) {
+        return p.expected("a name");
+    }
     let marker = p.start();
     if items::name(p, "a name") {
         if !p.at(Colon) {
@@ -168,15 +174,25 @@ fn select_arm_parts(p: &mut Parser) {
 }
 
 /// `with` handler { `,` handler } block (`grammar.with_expr`). The handlers aren't in brackets,
-/// so a trailing `,` is an error, and a line break after a `,` is spacing. After a slip in a
+/// so a trailing `,` is an error, and a line break after a `,` is spacing. Handlers missing
+/// from the line of `with` are taken from the next line, after the error, as a missing
+/// condition is, and a block missing after them is part of that slip. After a slip in a
 /// handler, the rest of the line up to its `{` is skipped, so the block is still the block, as
-/// after a slip in a condition.
+/// after a slip in a condition. A `,` right after a slip goes on to the next handler, as in a
+/// list.
 pub(super) fn with_expr(p: &mut Parser) -> Completed {
     let marker = p.start();
     p.bump();
+    let missing = p.at_break();
+    if missing {
+        p.expected("an effect");
+        if p.frame_closes_here() || !starts_handler(p.kind()) {
+            return p.complete(marker, WithExpr);
+        }
+    }
     loop {
         handler(p);
-        if p.recovering || !p.at(Comma) {
+        if !p.at(Comma) {
             break;
         }
         p.bump();
@@ -187,22 +203,30 @@ pub(super) fn with_expr(p: &mut Parser) -> Completed {
     if p.at_or_join(LBrace) {
         exprs::block(p);
     } else {
+        p.recovering |= missing;
         p.expected("`,` or `{`");
     }
     p.complete(marker, WithExpr)
 }
 
+fn starts_handler(kind: SyntaxKind) -> bool {
+    matches!(kind, Ident | SelfTypeKw)
+}
+
 /// type_path `=` expr (`grammar.handler`): an effect's path, with no type arguments, and the
-/// value that handles it.
+/// value that handles it. The value is a condition in the sense of `r[expr.block.cond-brace]`,
+/// so `{` where it starts is the `with`'s block.
 fn handler(p: &mut Parser) {
-    if p.at_break() || !matches!(p.kind(), Ident | SelfTypeKw) {
+    if !starts_handler(p.kind()) {
         return p.expected("an effect");
     }
     let marker = p.start();
     if types::bare_path(p) {
         if p.at_or_join(Eq) {
             p.bump();
+            let outer = p.condition_frames.replace(p.frames.len());
             exprs::expr(p);
+            p.condition_frames = outer;
         } else {
             p.expected("`=`");
         }

@@ -1,8 +1,9 @@
 // rule: expr.block.cond-brace
 // mode: parse
-// In the condition of an `if` or `while`, the subject of a `match`, the iterable of a `for`
-// and the condition of a contract, `{` where an expression starts always starts the block, so
-// a map literal there is written in parentheses. The braces of a closure are its own.
+// In the condition of an `if` or `while`, the subject of a `match`, the iterable of a `for`,
+// the condition of a contract and the value of a `with` handler, `{` where an expression
+// starts always starts the block, so a map literal there is written in parentheses. The braces
+// of a closure, `concurrent`, `select`, `with` or `background` are that construct's own.
 fn f(m: Map<String, Int>, var n: Int) {
   if m == ({:}) {
     log("empty")
@@ -37,6 +38,27 @@ fn f(m: Map<String, Int>, var n: Int) {
   }
   if fn(x: Int) { x > 0 }(n) {
     log("positive")
+  }
+  let pair = match concurrent { spawn a(), spawn b() } {
+    (x, y) => x + y,
+  }
+  if select { x = c.receive() => x.is_some(), } {
+    log("ready")
+  }
+  while with Clock = clock { done() } {
+    n += 1
+  }
+  if background(bg: TaskScope) { serve(bg) }.is_ok() {
+    log("served")
+  }
+  with Config = ({"port": 80}) {
+    serve()
+  }
+  with Config = {"port": 80} { //~ E0016
+    serve()
+  }
+  with Db = { //~ E0016
+    serve()
   }
 }
 

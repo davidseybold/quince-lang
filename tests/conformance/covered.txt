@@ -1,14 +1,9 @@
 conc.background.scope-value
 conc.background.spawn-in
-conc.block
-conc.fanout.limit
 conc.select.arm
-conc.select.wait
-conc.settle
 contract.ensures-binder
 contract.ensures-name
 effect.uses-list
-effect.with.install
 expr.block.brace-map
 expr.block.cond-brace
 expr.block.last-newline

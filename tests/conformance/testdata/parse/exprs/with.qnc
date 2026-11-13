@@ -1,6 +1,5 @@
 // rule: grammar.with_expr
 // rule: grammar.handler
-// rule: effect.with.install
 // mode: parse
 // `with`, one or more handlers separated by commas, and a block. A handler is an effect's
 // path, `=` and an expression. The handlers aren't in brackets, so a trailing `,` is an error.

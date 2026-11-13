@@ -14,14 +14,14 @@ pub(super) fn match_expr(p: &mut Parser) -> Completed {
     p.complete(marker, MatchExpr)
 }
 
-/// The arms in braces, each parsed by `arm`, as a `list` node: a comma-separated list
+/// The arms in braces, each parsed by `arm`, as a `list_kind` node: a comma-separated list
 /// (`r[lex.continue.lists]`) whose frame holds arms, so an arm's `=>` closes the brackets
 /// opened in it (decision 9). Every arm ends with a `,`, the last one included
 /// (`r[expr.match.arm-comma]`, `grammar.select`), so a `}` right after an arm is an E0016 whose
 /// fix inserts it. After an arm whose line an unclosed string or char ends, the missing `,` is
 /// part of that slip, and may be inside the literal, so it isn't reported, before the `}` or
 /// before an arm on the next line. Every arm starts with a pattern.
-pub(super) fn arms(p: &mut Parser, what_arm: &str, arm: fn(&mut Parser), list: SyntaxKind) {
+pub(super) fn arms(p: &mut Parser, what_arm: &str, arm: fn(&mut Parser), list_kind: SyntaxKind) {
     let what = format!("{what_arm} or `}}`");
     let marker = p.start();
     p.bump();
@@ -74,7 +74,7 @@ pub(super) fn arms(p: &mut Parser, what_arm: &str, arm: fn(&mut Parser), list: S
             }
         }
     }
-    p.complete(marker, list);
+    p.complete(marker, list_kind);
 }
 
 /// pattern [ `if` expr ] `=>` ( block | expr ) (`r[expr.match.arm-syntax]`). In an arm, `{`

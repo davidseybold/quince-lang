@@ -1,8 +1,5 @@
 // rule: grammar.concurrent
 // rule: grammar.spawn
-// rule: conc.block
-// rule: conc.settle
-// rule: conc.fanout.limit
 // mode: parse
 // `concurrent`, optional arguments in parentheses, then `spawn`s in braces, separated by
 // commas, or `for`, a pattern, `in`, an expression and a block. The arguments and the spawns
