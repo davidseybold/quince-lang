@@ -64,12 +64,15 @@ fn the_lex_fixtures_parse() {
     }
 }
 
-/// Every conformance fixture, `lex/` and `parse/` alike, passes the fuzz target's check, so CI
-/// keeps the check compiling and passing, and only the fuzz crate's few lines can break unseen
-/// (decision 11).
+/// Every conformance fixture, `lex/` and `parse/` alike, and every fuzz seed passes the fuzz
+/// target's check, so CI keeps the check compiling and passing, and only the fuzz crate's few
+/// lines can break unseen (decision 11).
 #[test]
 fn every_fixture_passes_the_fuzz_check() {
-    let mut dirs = vec![repo_root().join("tests/conformance/testdata")];
+    let mut dirs = vec![
+        repo_root().join("tests/conformance/testdata"),
+        repo_root().join("compiler/syntax/fuzz/seeds"),
+    ];
     let mut checked = 0;
     while let Some(dir) = dirs.pop() {
         for entry in std::fs::read_dir(&dir).unwrap() {
@@ -84,7 +87,7 @@ fn every_fixture_passes_the_fuzz_check() {
             }
         }
     }
-    assert!(checked >= 100, "found only {checked} fixtures");
+    assert!(checked >= 110, "found only {checked} fixtures and seeds");
 }
 
 #[test]

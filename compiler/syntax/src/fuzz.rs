@@ -15,7 +15,8 @@ pub const NESTING_SLACK_LEVELS: usize = 4;
 /// Decodes `bytes`, parses them, and panics unless every invariant holds:
 /// - the parser neither panics nor loops, which debug builds turn into a panic;
 /// - the tree's text is the decoded text, and its tokens are the lexer's, in order;
-/// - every error's range and every fix's edit lies inside the text, on character boundaries;
+/// - every error's range and every fix's edit lies inside the text, on character boundaries,
+///   and a fix's edits neither overlap nor insert twice at one place;
 /// - the tree is no deeper than the nesting limit allows.
 ///
 /// Bytes past what a source file may hold are an I/O error, not an input, so they pass.
@@ -28,6 +29,13 @@ pub fn check_parse(bytes: &[u8]) {
     let root = parse.syntax();
     check_lossless(&decoded.text, &lexed, &root);
     check_error_ranges(&decoded.text, parse.errors());
+    for diagnostic in parse.diagnostics(&decoded.text, "fuzz.qnc") {
+        for fix in &diagnostic.fixes {
+            if let Err(problem) = fix.check("fuzz.qnc") {
+                panic!("{problem}: {diagnostic:?}");
+            }
+        }
+    }
     let depth = tree_depth(&root);
     assert!(
         depth <= NESTING_LIMIT as usize + NESTING_SLACK_LEVELS,
