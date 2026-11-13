@@ -43,6 +43,7 @@ pub mod codes {
     pub const PARENTHESES_NEEDED: &str = "E0019";
     pub const CHAINED_OPERATOR: &str = "E0020";
     pub const NAME_CASE: &str = "E0021";
+    pub const TOO_DEEP: &str = "E0022";
     pub const STRAY_DOC_COMMENT: &str = "E0023";
     pub const EMPTY_STRUCT_BRACES: &str = "E0024";
     pub const EMPTY_BRACES: &str = "E0025";
@@ -74,6 +75,7 @@ pub mod codes {
         PARENTHESES_NEEDED,
         CHAINED_OPERATOR,
         NAME_CASE,
+        TOO_DEEP,
         STRAY_DOC_COMMENT,
         EMPTY_STRUCT_BRACES,
         EMPTY_BRACES,

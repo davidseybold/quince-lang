@@ -25,6 +25,9 @@ pub(super) fn return_type(p: &mut Parser) -> bool {
 }
 
 fn type_with(p: &mut Parser, uses: Uses) -> bool {
+    if p.nests_too_deep(None) {
+        return false;
+    }
     if p.at_break() {
         p.expected("a type");
         return false;

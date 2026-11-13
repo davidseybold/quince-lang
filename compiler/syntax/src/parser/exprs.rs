@@ -14,6 +14,9 @@ use std::ops::Range;
 /// before the `}` (`r[expr.block.last-newline]`). A block is a line context of its own, so a
 /// `fn` header around it, as around a block in a contract, doesn't reach its lines.
 pub(super) fn block(p: &mut Parser) {
+    if p.nests_too_deep(None) {
+        return;
+    }
     let marker = p.start();
     let header = std::mem::replace(&mut p.in_fn_header, false);
     p.bump();
@@ -183,7 +186,9 @@ fn if_expr(p: &mut Parser) -> Completed {
         p.bump();
         match p.kind() {
             IfKw if !p.at_break() => {
-                if_expr(p);
+                if !p.nests_too_deep(None) {
+                    if_expr(p);
+                }
             }
             LBrace if p.at_or_join(LBrace) => block(p),
             _ => p.expected("`if` or `{`"),
@@ -275,6 +280,9 @@ pub(super) fn expr(p: &mut Parser) {
 /// `continue` and `spawn` are expressions but no operands (`grammar.expr`), so only here, at
 /// the top.
 fn expr_node(p: &mut Parser) -> Option<Completed> {
+    if p.nests_too_deep(None) {
+        return None;
+    }
     match p.kind() {
         ReturnKw | BreakKw | ContinueKw => return Some(closures::jump(p)),
         SpawnKw => return Some(concurrency::spawn(p)),
@@ -301,6 +309,9 @@ fn binary(p: &mut Parser, min_power: u8) -> Option<Operand> {
     while let Some((op, power)) = binary_op(p, lhs.op == Some(IsKw))
         && power > min_power
     {
+        if p.nests_too_deep(Some(lhs.done)) {
+            break;
+        }
         let marker = p.precede(lhs.done);
         let at = p.pos;
         match op {
@@ -611,6 +622,9 @@ fn report_chain(
 /// after `-` is spacing, since `-` can be binary (`r[lex.line-end]`), but one after `!` or `~`
 /// ends the statement.
 fn prefix(p: &mut Parser) -> Option<Completed> {
+    if p.nests_too_deep(None) {
+        return None;
+    }
     if !matches!(p.kind(), Minus | Bang | Tilde) {
         return postfix(p);
     }
@@ -697,10 +711,16 @@ pub(super) fn postfix(p: &mut Parser) -> Option<Completed> {
     let mut done = primary(p)?;
     loop {
         if p.at(LParen) {
+            if p.nests_too_deep(Some(done)) {
+                break;
+            }
             let marker = p.precede(done);
             arg_list(p);
             done = p.complete(marker, Call);
         } else if p.at(Dot) {
+            if p.nests_too_deep(Some(done)) {
+                break;
+            }
             let marker = p.precede(done);
             p.bump();
             match p.kind() {
@@ -715,11 +735,17 @@ pub(super) fn postfix(p: &mut Parser) -> Option<Completed> {
                 break;
             }
         } else if p.at(LBracket) {
+            if p.nests_too_deep(Some(done)) {
+                break;
+            }
             let marker = p.precede(done);
             p.bump();
             in_brackets(p, RBracket);
             done = p.complete(marker, Index);
         } else if p.at_or_join(Question) {
+            if p.nests_too_deep(Some(done)) {
+                break;
+            }
             let marker = p.precede(done);
             p.bump();
             done = p.complete(marker, Try);

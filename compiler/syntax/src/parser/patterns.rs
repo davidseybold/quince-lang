@@ -9,6 +9,9 @@ use crate::{SyntaxError, codes};
 /// A pattern: one or more alternatives joined by `|`. Inside a pattern `|` is always
 /// alternation (`r[lex.grammar-rules]`). `None` when there is no pattern, after reporting it.
 pub(super) fn pattern(p: &mut Parser) -> Option<Completed> {
+    if p.nests_too_deep(None) {
+        return None;
+    }
     let first = alt(p)?;
     if p.recovering || !p.at_or_join(Pipe) {
         return Some(first);

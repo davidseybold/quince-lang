@@ -100,6 +100,14 @@ const EOF: SyntaxKind = File;
 /// or completing a node. More means it is stuck in a loop. Debug and fuzz builds check it.
 const LOOKAHEAD_LIMIT: u32 = 256;
 
+/// How deep a node may start, in levels of the tree with the file at level 1, at the parser's
+/// recursive entries: an expression, a prefix operator's operand, an `else if`, a block, a
+/// type and a pattern. Each step of a left-associative chain counts the levels of the node it
+/// wraps too. Past it is an E0022 (decision 10), so the parser's recursion and the tree's depth
+/// are both bounded. The few nodes a construct opens before its next entry, such as a
+/// parameter's name, may go a little deeper. The README has the measurements behind it.
+pub(crate) const NESTING_LIMIT: u32 = 256;
+
 /// One step of the parser's output. Like [`Event`], except that a node can be opened around
 /// nodes already completed, through `forward_parent`, as rust-analyzer's parser does. One pass
 /// over the steps, [`into_events`], gives the builder's events.
@@ -163,9 +171,13 @@ fn into_events(mut steps: Vec<Step>) -> Vec<Event> {
 #[must_use]
 struct Marker(usize);
 
-/// A completed node, which [`Parser::precede`] can wrap in another.
+/// A completed node, which [`Parser::precede`] can wrap in another, and its height: the
+/// levels of the tree it spans, 1 for a node that holds only tokens.
 #[derive(Clone, Copy)]
-struct Completed(usize);
+struct Completed {
+    at: usize,
+    height: u32,
+}
 
 /// What the members of a line context can be (decision 9's member starts).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -232,6 +244,9 @@ enum Sync {
     /// that starts with a contract or `{` isn't a break, so a slip in one contract stops at the
     /// next one, never at a `{` inside it.
     Contract,
+    /// At the end of the innermost construct: the closing bracket of a list, or the next break
+    /// in a line context. After an E0022, so the levels past the limit are one slip.
+    Construct,
 }
 
 struct Parser<'t> {
@@ -281,6 +296,9 @@ struct Parser<'t> {
     /// significant tokens: no entry came before it, so the braces were a block, which can't go
     /// where an expression goes (`r[expr.block.no-bare]`). The map skips to its `}`.
     block_at: Option<usize>,
+    /// For each open node, outermost first, the height of the tallest node completed in it, or
+    /// that it wraps. Its length is the depth of the next node to open, less one.
+    open: Vec<u32>,
     /// The parser is parsing ahead to see whether a `<` in an expression starts type
     /// arguments (decision 6).
     speculating: bool,
@@ -303,6 +321,8 @@ struct Checkpoint {
     steps: usize,
     taken: usize,
     frames: usize,
+    /// How many nodes are open, and the height of the tallest node completed in the innermost.
+    open: (usize, Option<u32>),
     slips: u32,
     recovering: bool,
     closed_early: bool,
@@ -333,6 +353,7 @@ impl<'t> Parser<'t> {
             docs_done: None,
             lookahead: Cell::new(0),
             block_at: None,
+            open: Vec::new(),
             speculating: false,
             speculation_failed: false,
             type_args_end: HashMap::new(),
@@ -635,6 +656,7 @@ impl<'t> Parser<'t> {
 
     fn start(&mut self) -> Marker {
         self.steps.push(TOMBSTONE);
+        self.open.push(0);
         Marker(self.steps.len() - 1)
     }
 
@@ -645,7 +667,14 @@ impl<'t> Parser<'t> {
         *slot = Some(kind);
         self.steps.push(Step::Finish);
         self.lookahead.set(0);
-        Completed(marker.0)
+        let height = self.open.pop().expect("an open node") + 1;
+        if let Some(top) = self.open.last_mut() {
+            *top = (*top).max(height);
+        }
+        Completed {
+            at: marker.0,
+            height,
+        }
     }
 
     /// Drops a node that turned out to hold nothing. It must still be the last step.
@@ -656,16 +685,39 @@ impl<'t> Parser<'t> {
             "abandoned a node that holds steps"
         );
         self.steps.pop();
+        self.open.pop();
     }
 
     /// Opens a node around `completed`.
     fn precede(&mut self, completed: Completed) -> Marker {
         let marker = self.start();
-        let Step::Start { forward_parent, .. } = &mut self.steps[completed.0] else {
+        *self.open.last_mut().expect("the node just opened") = completed.height;
+        let Step::Start { forward_parent, .. } = &mut self.steps[completed.at] else {
             unreachable!("a completed marker is a Start");
         };
-        *forward_parent = Some(marker.0 - completed.0);
+        *forward_parent = Some(marker.0 - completed.at);
         marker
+    }
+
+    /// True when a node opened now, around `wrapped` if there is one, would reach past
+    /// [`NESTING_LIMIT`]. Then this also reports an E0022 at the current token and skips to the end
+    /// of the innermost construct: its closing bracket in a list, or the line's end. While
+    /// parsing ahead it is a slip, as every error is there.
+    fn nests_too_deep(&mut self, wrapped: Option<Completed>) -> bool {
+        let below = wrapped.map_or(0, |c| c.height);
+        if self.open.len() as u32 + 1 + below <= NESTING_LIMIT {
+            return false;
+        }
+        let range = self
+            .current()
+            .map_or(self.text.len()..self.text.len(), |t| t.range.clone());
+        let message = format!(
+            "this nests deeper than the limit of {NESTING_LIMIT} levels: move the inner part \
+             into a binding or a function"
+        );
+        self.report(SyntaxError::new(range, codes::TOO_DEEP, message));
+        self.recover(Sync::Construct, false);
+        true
     }
 
     /// Takes `kind` as a node of one token.
@@ -1075,6 +1127,7 @@ impl<'t> Parser<'t> {
             steps: self.steps.len(),
             taken: self.taken.len(),
             frames: self.frames.len(),
+            open: (self.open.len(), self.open.last().copied()),
             slips: self.slips,
             recovering: self.recovering,
             closed_early: self.closed_early,
@@ -1091,6 +1144,14 @@ impl<'t> Parser<'t> {
             checkpoint.frames,
             "parsing ahead left a frame"
         );
+        debug_assert_eq!(
+            self.open.len(),
+            checkpoint.open.0,
+            "parsing ahead left a node open"
+        );
+        if let (Some(top), Some(height)) = (self.open.last_mut(), checkpoint.open.1) {
+            *top = height;
+        }
         self.pos = checkpoint.pos;
         self.steps.truncate(checkpoint.steps);
         self.taken.truncate(checkpoint.taken);
@@ -1110,7 +1171,8 @@ impl<'t> Parser<'t> {
     /// `sync`, its closing bracket, or a [`Stop`]. With `force`, the current token is skipped
     /// even where it is a sync point. A bracket the skip opens is skipped up to its closing
     /// bracket, and so is a `<` in a list, unless a frame's closing bracket, a member start of
-    /// the file or an `impl` body, or an arm's `=>` comes first.
+    /// the file or an `impl` body, or an arm's `=>` comes first. After an E0022 a `=>` in
+    /// brackets the skip opened is a nested arm's, past the limit, so the skip goes on.
     fn recover(&mut self, sync: Sync, force: bool) {
         let marker = self.start();
         let mut skipped = false;
@@ -1121,7 +1183,13 @@ impl<'t> Parser<'t> {
             if let Some(line_start) = token.closes_line_from {
                 groups.retain(|&(_, opened)| opened < line_start);
             }
-            if let Some(at) = groups.iter().rposition(|&(closer, _)| closer == kind) {
+            // Only a closing bracket can match a group, so an opener costs no search.
+            let matched = if is_closer(kind) || kind == Gt {
+                groups.iter().rposition(|&(closer, _)| closer == kind)
+            } else {
+                None
+            };
+            if let Some(at) = matched {
                 groups.truncate(at);
             } else if groups.is_empty() {
                 let at_sync = match sync {
@@ -1131,13 +1199,14 @@ impl<'t> Parser<'t> {
                     Sync::Contract => {
                         matches!(kind, LBrace | RequiresKw | EnsuresKw) || self.at_break()
                     }
+                    Sync::Construct => !self.top().holds.is_list() && self.at_break(),
                 };
                 let closes = Some(kind) == self.own_closer() || self.stop().is_some();
                 if closes || (at_sync && !(force && !skipped)) {
                     break;
                 }
             } else if self.frame_closed_by(kind).is_some()
-                || (kind == FatArrow && self.arms_frame().is_some())
+                || (kind == FatArrow && sync != Sync::Construct && self.arms_frame().is_some())
                 || self
                     .member_holder()
                     .is_some_and(|at| matches!(self.frames[at].holds, Holds::File | Holds::Body))

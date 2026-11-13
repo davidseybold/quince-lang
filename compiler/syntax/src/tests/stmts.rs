@@ -665,8 +665,9 @@ fn nested_blocks_close_at_a_declaration() {
 /// Each open block is a frame, and the member-start check at each line runs over the open
 /// frames. It peeks at the line's first tokens once, so the looks it takes between two tokens
 /// don't grow with the depth. More open frames than `LOOKAHEAD_LIMIT` allows looks would trip
-/// the loop guard if they did, so the depth is past it. The thread has room for the recursion
-/// in a debug build.
+/// the loop guard if they did, so the depth is past it. That is past the nesting limit too, so
+/// the one error is its E0022, and the parser still checks the member start of every line it
+/// skips. The thread has the stack of a Rust test thread, as in `tests::nesting`.
 #[test]
 fn deeply_nested_blocks() {
     const DEPTH: usize = 300;
@@ -675,11 +676,14 @@ fn deeply_nested_blocks() {
         "if a {\n".repeat(DEPTH),
         "}\n".repeat(DEPTH)
     );
-    let errors = std::thread::Builder::new()
-        .stack_size(64 << 20)
-        .spawn(move || checked(&text).errors().len())
+    let codes = std::thread::Builder::new()
+        .stack_size(2 << 20)
+        .spawn(move || {
+            let parse = checked(&text);
+            parse.errors().iter().map(|e| e.code).collect::<Vec<_>>()
+        })
         .expect("a thread")
         .join()
         .expect("no panic");
-    assert_eq!(errors, 0);
+    assert_eq!(codes, [crate::codes::TOO_DEEP]);
 }

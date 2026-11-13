@@ -337,7 +337,8 @@ The operators Quince leaves out (`r[expr.op.excluded]`) get no code or hint of t
 Past the limit, E0022 is reported at the token that goes past it, and the parser skips to the end of the innermost construct. Since the limit bounds the tree, consumers may recurse over it.
 - Layer 9 sets the limit by measuring a debug build on a 2 MiB thread, the default for Rust test threads, with room to spare. It's at least 256.
 - The deep-nesting tests run on spawned threads with that stack size.
-- It's an implementation limit, so it goes in the README, not the spec.
+- It's an implementation limit, so it goes in the README, not the spec. So no rule states it for a fixture to cite, and E0022 is tested by unit tests: its registry row is marked `implementation_limit`, which exempts it from `cargo xtask diagnostics`'s fixture check (decided by David, 2026-11-13, over a spec rule, which would need levels counted in the language's terms rather than the tree's).
+- A counter that drops back after each chain step would undercount: `((x.a.a...).a.a...)` wraps chains around completed chains, so the tree goes as deep as the product of the parentheses and the steps. Each completed node records its height, and a chain step checks the depth plus the height of the node it wraps (found in layer 9b).
 
 ### 11. Testing
 
@@ -345,7 +346,7 @@ Past the limit, E0022 is reported at the token that goes past it, and the parser
   - A dump has one line per node or token, indented by depth: the kind, plus the text for a token. It has no byte ranges, since text order gives positions and the lossless invariant is checked separately.
   - A dump without trivia keeps precedence and grouping tests short. The full dump is for tests about trivia.
   - Unit tests check the trees that `parse` fixtures can't see: precedence, where a line ends, where trivia sits, the joined tokens and negative literals.
-- **Conformance fixtures** go in `tests/conformance/testdata/parse/`, a folder per grammar area, in `parse` mode. At least one fixture cites each grammar production (`grammar.<production>`, the repo plan's "one conformance test per grammar production"). Every code has one, and so does each rule in Tasks.
+- **Conformance fixtures** go in `tests/conformance/testdata/parse/`, a folder per grammar area, in `parse` mode. At least one fixture cites each grammar production (`grammar.<production>`, the repo plan's "one conformance test per grammar production"). Every code has one but E0022, an implementation limit (decision 10), and so does each rule in Tasks.
 - **Coverage honesty.** A fixture cites a rule only when a parser that broke the rule would fail the fixture, as the lexer doc requires. A `parse` fixture sees only diagnostics, not the tree. So:
   - rules that forbid something are cited by fixtures that expect the error;
   - accepted forms are cited by fixtures that a parser rejecting them would fail;
@@ -668,8 +669,10 @@ Layer 9 is three PRs (decided by David, 2026-11-13), since together they would r
 - [x] Every grammar production cited by a passing fixture: 81 of 81. [`grammar.assign_op`, `grammar.const_decl`, `grammar.decl`, `grammar.item`, `grammar.param`]
 
 **Layer 9b: `m1/parser-depth`**
-- [ ] Parsing ahead (layer 3b) nests type arguments as deep as the `<`s it meets, so `g(a < b, a < b, ...)` nests far deeper than its tree. The depth counter must cover parsing ahead, and an E0022 while parsing ahead is a slip, not an error (found in layer 3b's review).
-- [ ] The nesting limit, measured; E0022; the deep-nesting tests on spawned threads. `tests::stmts::deeply_nested_blocks` (layer 4c) nests 300 blocks, past the 256 looks `LOOKAHEAD_LIMIT` allows: if the limit rejects that depth, the test expects the one E0022 and still checks that no look trips the guard.
+- [x] Parsing ahead (layer 3b) nests type arguments as deep as the `<`s it meets, so `g(a < b, a < b, ...)` nests far deeper than its tree. The depth counter must cover parsing ahead, and an E0022 while parsing ahead is a slip, not an error (found in layer 3b's review).
+- [x] The nesting limit, measured; E0022; the deep-nesting tests on spawned threads. `tests::stmts::deeply_nested_blocks` (layer 4c) nests 300 blocks, past the 256 looks `LOOKAHEAD_LIMIT` allows: if the limit rejects that depth, the test expects the one E0022 and still checks that no look trips the guard. Measured before the limit, on a 2 MiB debug thread: nested lists took the most stack, about 3.2 KB a level, so the limit is 256, which uses at most about 830 KB. The README has the measurements. Every construct nested 10,000 deep is one E0022 and a tree within 4 levels of the limit (`tests::nesting`), and `deeply_nested_blocks` is the one E0022.
+- [x] E0022's registry row is marked `implementation_limit`, so it needs no fixture (decision 10, decided by David, 2026-11-13).
+- [x] The skip after an error searched its open brackets at every opener, which took quadratic time over thousands of them; it searches only at a closer. After an E0022 it goes past a nested arm's `=>`, so a deep `match` or `select` is one error (both found while measuring).
 
 **Layer 9c: `m1/parser-fuzz`**
 - [ ] `fuzz::check_parse` and its unit test over every fixture; the fuzz crate and its thin target; the command in `AGENTS.md`.
