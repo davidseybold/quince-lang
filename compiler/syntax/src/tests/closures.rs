@@ -91,6 +91,30 @@ fn a_closure_header_on_several_lines() {
     );
 }
 
+/// A closure takes no contracts, so after its parameters only `->`, `uses` or `{` can come.
+#[test]
+fn a_closure_missing_its_body() {
+    let parse = checked("fn f() {\n  let g = fn(x)\n}\n");
+    let messages: Vec<_> = parse.errors().iter().map(|e| e.message.as_str()).collect();
+    assert_eq!(
+        messages,
+        ["expected `->`, `uses` or `{`, found a line break"]
+    );
+}
+
+/// At the top of a condition, `{` is the block (`r[expr.block.cond-brace]`), so `return` before
+/// it is bare.
+#[test]
+fn a_bare_return_before_a_block() {
+    for body in [
+        "if return { a }",
+        "match return { _ => 1, }",
+        "for x in return { a }",
+    ] {
+        stmts(body);
+    }
+}
+
 /// `return` takes everything to its right (`r[expr.op.keyword-forms]`), on its line: `return`
 /// on a line of its own is bare, and the next line is a statement of its own. `break` and
 /// `continue` take nothing (`grammar.jump`).

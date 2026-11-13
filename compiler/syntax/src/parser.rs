@@ -222,6 +222,10 @@ enum Sync {
     List,
     /// At the `{` on the line, or the next break: in a condition, before its block.
     Block,
+    /// At the next contract, the body's `{`, or a break: in a contract. In a `fn` header a line
+    /// that starts with a contract or `{` isn't a break, so a slip in one contract stops at the
+    /// next one, never at a `{` inside it.
+    Contract,
 }
 
 struct Parser<'t> {
@@ -1000,6 +1004,9 @@ impl<'t> Parser<'t> {
                     Sync::Line => self.at_break(),
                     Sync::List => kind == Comma,
                     Sync::Block => kind == LBrace || self.at_break(),
+                    Sync::Contract => {
+                        matches!(kind, LBrace | RequiresKw | EnsuresKw) || self.at_break()
+                    }
                 };
                 let closes = Some(kind) == self.own_closer() || self.stop().is_some();
                 if closes || (at_sync && !(force && !skipped)) {

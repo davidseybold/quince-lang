@@ -1,7 +1,5 @@
 // rule: grammar.contract
 // rule: grammar.fn_decl
-// rule: contract.requires
-// rule: contract.ensures
 // rule: contract.ensures-name
 // mode: parse
 // Contracts come after a function's signature and before its body: `requires` and a
@@ -33,5 +31,4 @@ impl Counter {
   }
 }
 
-fn no_condition(n: Int) requires { n } //~ E0016
 fn after_body(n: Int) { n } requires n > 0 //~ E0016

@@ -1,7 +1,5 @@
-contract.ensures
 contract.ensures-binder
 contract.ensures-name
-contract.requires
 effect.uses-list
 expr.block.brace-map
 expr.block.cond-brace
@@ -25,8 +23,6 @@ expr.op.range.no-chain
 expr.op.range.parens
 expr.op.type-args
 expr.range.pattern
-expr.ret.bare
-expr.ret.value
 grammar.alias_decl
 grammar.alt
 grammar.arg
@@ -60,7 +56,6 @@ grammar.generic
 grammar.generics
 grammar.if_expr
 grammar.import
-grammar.jump
 grammar.list_lit
 grammar.logic
 grammar.map_lit

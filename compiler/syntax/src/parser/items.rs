@@ -173,7 +173,7 @@ fn fn_decl(p: &mut Parser) {
 /// [ `uses` effects ], its contracts when `contracts`, and its block. The caller has set
 /// `in_fn_header`.
 pub(super) fn fn_rest(p: &mut Parser, contracts: bool) {
-    const NEXT: [&str; 4] = ["`->`", "`uses`", "`requires`", "`ensures`"];
+    const HEADER_PARTS: [&str; 4] = ["`->`", "`uses`", "`requires`", "`ensures`"];
     let mut from = 0;
     if p.at(Arrow) {
         let marker = p.start();
@@ -191,14 +191,17 @@ pub(super) fn fn_rest(p: &mut Parser, contracts: bool) {
         }
         from = 2;
     }
-    let to = if contracts { NEXT.len() } else { 2 };
+    let to = if contracts { HEADER_PARTS.len() } else { 2 };
+    if contracts && (p.at(RequiresKw) || p.at(EnsuresKw)) {
+        from = 2;
+    }
     // A body missing after a contract that held a slip is part of that slip.
     let slipped = contracts && self::contracts(p);
     if p.at(LBrace) {
         exprs::block(p);
     } else {
         p.recovering |= slipped;
-        p.expected(&one_of(&NEXT[from.min(to)..to], "`{`"));
+        p.expected(&one_of(&HEADER_PARTS[from.min(to)..to], "`{`"));
     }
 }
 
@@ -215,8 +218,10 @@ fn one_of(items: &[&str], last: &str) -> String {
 /// parentheses always names the return value (`r[contract.ensures-binder]`), so in
 /// `ensures (x) - 1 > 0` the condition is `-1 > 0`. The expression starts on its contract's
 /// line: a line that starts with `{` or another contract continues the header, not the
-/// contract. After a slip in a contract, the rest of the header is skipped up to the body's
-/// `{`, so the body is still parsed as the body. True when a contract held a slip.
+/// contract. The condition is a condition (`r[expr.block.cond-brace]`), so `{` where an
+/// expression starts is the body. After a slip in a contract, the parser skips to the next
+/// contract or the body's `{`, so the next contract and the body are still parsed as such.
+/// True when a contract held a slip.
 fn contracts(p: &mut Parser) -> bool {
     let slips = p.slips;
     while p.at(RequiresKw) || p.at(EnsuresKw) {
@@ -235,12 +240,17 @@ fn contracts(p: &mut Parser) -> bool {
         } else if p.at_break() || !exprs::starts_expr(p.kind()) {
             p.expected("an expression");
         } else {
+            let outer = p.condition_frames.replace(p.frames.len());
             exprs::expr(p);
+            p.condition_frames = outer;
         }
         p.complete(marker, Contract);
+        let next = p.at(RequiresKw) || p.at(EnsuresKw) || p.at(LBrace);
+        if !p.recovering && !next && !p.at_break() && p.current().is_some() {
+            p.expected("`requires`, `ensures` or `{`");
+        }
         if p.recovering {
-            p.recover(Sync::Block, false);
-            break;
+            p.recover(Sync::Contract, false);
         }
     }
     p.slips != slips

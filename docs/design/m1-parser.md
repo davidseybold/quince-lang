@@ -264,7 +264,9 @@ Doc comments and attributes aren't member starts: they belong to the declaration
 | `match s {` then lines `0 => {`, `a` and `1 => 2,`, with the block's `}` missing | E0016 at the second `=>`, E0016 at the function's `}`, E0017 at the function's `{` (layer 5b) |
 | `fn f()` then lines `requires` and `{`, with the body after it | E0016 at the line break after `requires`, and the body is parsed (layer 6a) |
 | `fn f()` then lines `requires x >`, `ensures r > 0` and `{` | E0016 at `ensures`, and the body is parsed (layer 6a) |
-| `fn f(n: Int) requires { n }` | E0016 at `{`, which found a block (layer 6a) |
+| `fn f(n: Int) requires { n }` | E0016 at `{`, which expected an expression, and the body is parsed (layer 6a) |
+| `fn withdraw(a: Account) -> Int` then lines `requires  > 0`, `ensures(r) match r {`, its arms, `}`, then the body | E0016 at `>`, and the body is parsed (layer 6a, found in review) |
+| `fn f(a: Int) requires a b {` | E0016 at `b`, and the body is parsed (layer 6a, found in review) |
 | `g(a,` then lines `fn(x) { x }` and `}` | E0017 at `(` (layer 6a) |
 | `g(1,` then lines `@attr(`, `fn(x: Int) { x },` and `)`, then `fn h() {}` | E0017 at the function's `{` and at `(`, none at `@` (layer 6a) |
 
@@ -583,9 +585,10 @@ Layer 6 is two PRs (decided by David, 2026-11-12), since its eight constructs wo
 
 **Layer 6a: `m1/parser-closures`**
 - [x] Spec: question 7, and a bump (v0.21): `r[contract.ensures-binder]`. [`contract.ensures-binder`]
+- [x] Spec (decided by David, 2026-11-12), in the same bump: `r[expr.block.cond-brace]` covers a contract's condition, and says a closure's braces are its own. So `requires { n }` is the condition missing before the body, and a map at the top of a contract is written in parentheses. 6b extends it to `with` handlers and the concurrency forms. [`expr.block.cond-brace`]
 - [x] Extend `parse/lexical/fn_header.qnc` with closure headers and `requires`/`ensures` lines, which `r[lex.continue.fn-header]` covers (layer 4b).
 - [x] Extend `parse/stmts/for.qnc` with `break 1 //~ E0016`: it cites `r[stmt.loop.stmt]`, which also says `break` takes no value (layer 5b).
-- [x] Closures, `return`, `break`, `continue`, and contracts after a declaration's signature. `return`, `break` and `continue` are never operands. A block clears the `fn` header flag, so a block in a contract or a closure is a line context of its own. The scans that stop at a member start take `fn` as one only before a name, as the member-start check does (decision 9), so a closure in an attribute's arguments doesn't stop the look-past. Layer 7 parses an interface's contracts with the same function. [`grammar.closure`, `grammar.cparam`, `grammar.jump`, `grammar.contract`, `expr.closure.syntax`, `expr.closure.underscore`, `expr.ret.value`, `expr.ret.bare`, `expr.jump.expr`, `expr.op.keyword-forms`, `contract.requires`, `contract.ensures`, `contract.ensures-name`]
+- [x] Closures, `return`, `break`, `continue`, and contracts after a declaration's signature. `return`, `break` and `continue` are never operands. A block clears the `fn` header flag, so a block in a contract or a closure is a line context of its own. The scans that stop at a member start take `fn` as one only before a name, as the member-start check does (decision 9), so a closure in an attribute's arguments doesn't stop the look-past. Layer 7 parses an interface's contracts with the same function. After a slip in a contract the parser syncs at the next contract or the body's `{` (found in review: syncing at any `{` took one inside a later `ensures` for the body). `grammar.jump` is cited from 6b, which parses its `spawn` alternative. Rules about runtime or types, such as `contract.requires` and `expr.ret.bare`, aren't cited, since no parser could break them (decision 11). [`grammar.closure`, `grammar.cparam`, `grammar.contract`, `expr.closure.syntax`, `expr.closure.underscore`, `expr.jump.expr`, `expr.op.keyword-forms`, `contract.ensures-name`]
 
 **Layer 6b: `m1/parser-concurrency`**
 - [ ] Spec, and a bump (v0.22): `concurrent`'s arguments take an optional trailing `,` (layer 2a's trailing-comma decision).

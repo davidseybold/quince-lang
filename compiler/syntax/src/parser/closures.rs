@@ -44,15 +44,17 @@ fn starts_cparam(kind: SyntaxKind) -> bool {
 /// `return` [ expr ], `break` or `continue` (`grammar.jump`), at the current keyword. They are
 /// keyword forms, not operators, so `return` takes everything to its right
 /// (`r[expr.op.keyword-forms]`), and it takes an expression only on its own line: `return` on a
-/// line of its own is a bare `return`. `break` takes no value (`r[stmt.loop.stmt]`), so an
-/// expression after it is an error where the construct around it ends.
+/// line of its own is a bare `return`, and so is `return` before the `{` of a condition's block
+/// (`r[expr.block.cond-brace]`). `break` takes no value (`r[stmt.loop.stmt]`), so an expression
+/// after it is an error where the construct around it ends.
 pub(super) fn jump(p: &mut Parser) -> Completed {
     let marker = p.start();
     let keyword = p.kind();
     p.bump();
     let kind = match keyword {
         ReturnKw => {
-            if !p.at_break() && exprs::starts_expr(p.kind()) {
+            let block = p.kind() == LBrace && p.condition_frames == Some(p.frames.len());
+            if !p.at_break() && !block && exprs::starts_expr(p.kind()) {
                 exprs::expr(p);
             }
             ReturnExpr

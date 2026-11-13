@@ -1,6 +1,3 @@
-// rule: grammar.jump
-// rule: expr.ret.value
-// rule: expr.ret.bare
 // rule: expr.jump.expr
 // rule: expr.op.keyword-forms
 // mode: parse

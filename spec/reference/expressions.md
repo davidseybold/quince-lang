@@ -43,7 +43,7 @@ r[expr.block.no-bare]
 - There are no bare blocks.
 
 r[expr.block.cond-brace]
-- In the condition of an `if` or `while`, the subject of a `match`, and the iterable of a `for`, `{` always starts the block. A map literal there is written in parentheses.
+- In the condition of an `if` or `while`, the subject of a `match`, the iterable of a `for` and the condition of a contract, `{` where an expression starts always starts the block. A map literal there is written in parentheses. The braces of a closure are its own.
 
 r[expr.block.brace-map]
 - Anywhere else, `{` where an expression is expected starts a map literal.

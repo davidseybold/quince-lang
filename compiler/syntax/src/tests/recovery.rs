@@ -522,7 +522,8 @@ fn no_fixes_in_a_lossy_text() {
 
 /// A contract's expression starts on its line, so a line that starts with `{` or another
 /// contract after `requires` is the expression missing, at the line break. After a slip in a
-/// contract the header is skipped up to the body's `{`, so the body is still the body.
+/// contract the parser skips to the next contract or the body's `{`, never to a `{` inside a
+/// later contract, so the body is still the body.
 #[test]
 fn a_slip_in_a_contract() {
     let has_body = |text: &str| {
@@ -542,9 +543,34 @@ fn a_slip_in_a_contract() {
         );
         assert!(has_body(text), "{text:?}");
     }
-    let text = "fn f()\n  requires x >\n  ensures r > 0\n{\n  x\n}\n";
-    assert_eq!(errors(text), ["E0016 24..31"]);
-    assert!(has_body(text));
+    for (text, error) in [
+        (
+            "fn f()\n  requires x >\n  ensures r > 0\n{\n  x\n}\n",
+            "E0016 24..31",
+        ),
+        (
+            "fn withdraw(a: Account) -> Int\n  requires  > 0\n  ensures(r) match r {\n    Ok(a) => true,\n    Err(_) => true,\n  }\n{\n  pay(a)\n}\n",
+            "E0016 43..44",
+        ),
+        (
+            "fn f(x: Int) -> Int\n  requires x >\n  ensures(r) if r > 0 { true } else { false }\n{\n  x\n}\n",
+            "E0016 37..44",
+        ),
+        // Something after a whole condition, on its line.
+        ("fn f(a: Int) requires a b {\n  a\n}\n", "E0016 24..25"),
+    ] {
+        assert_eq!(errors(text), [error], "{text:?}");
+        assert!(has_body(text), "{text:?}");
+    }
+    // After a contract, only another contract or the body can come.
+    assert_eq!(
+        messages("fn f() requires x Int {}\n"),
+        ["expected `requires`, `ensures` or `{`, found the name `Int`"]
+    );
+    assert_eq!(
+        messages("fn f()\n  requires a\n  requires b\nx\n"),
+        ["expected `requires`, `ensures` or `{`, found a line break"]
+    );
     // Braces right after `requires` are an expression, a block that can't go there. The body
     // missing after it is part of that slip.
     assert_eq!(errors("fn f(n: Int) requires { n }\n"), ["E0016 22..23"]);
