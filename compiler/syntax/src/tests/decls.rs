@@ -271,6 +271,9 @@ fn a_doc_comment_after_code() {
 fn a_doc_comment_in_a_skip() {
     assert_eq!(codes("fn f() {\n  let x = ) /// a\n  y\n}\n"), ["E0016"]);
     assert_eq!(codes("fn f() {\n  g(1 2 /// a\n  3)\n}\n"), ["E0016"]);
+    // After code on its line, before a declaration that starts while the parser skips.
+    assert_eq!(codes("const A: Int = ) /// a\nfn g() {}\n"), ["E0016"]);
+    assert_eq!(codes("const A: Int = 1 /// a\nfn g() {}\n"), ["E0023"]);
 }
 
 /// An `impl`'s members take doc comments and attributes, as declarations do

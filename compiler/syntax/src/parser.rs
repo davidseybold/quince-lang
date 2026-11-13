@@ -527,7 +527,8 @@ impl<'t> Parser<'t> {
 
     /// Takes the doc comments right before the current token into a `DocComments` node, if
     /// there are any. One after code on its line documents nothing (`r[lex.comment.doc]`), so
-    /// it is an E0023 and stays trivia.
+    /// it is an E0023 and stays trivia, unless the parser is skipping after an error, whose slip
+    /// it is part of.
     fn doc_comments(&mut self) {
         if self.docs_done == Some(self.pos) {
             return;
@@ -536,7 +537,9 @@ impl<'t> Parser<'t> {
         let (mut docs, after_code) = self.docs_before(self.pos);
         if after_code {
             let first = docs.remove(0);
-            self.report_stray_docs(&[first]);
+            if !self.recovering {
+                self.report_stray_docs(&[first]);
+            }
         }
         if docs.is_empty() {
             return;
