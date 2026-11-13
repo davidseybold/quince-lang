@@ -221,7 +221,8 @@ fn one_of(items: &[&str], last: &str) -> String {
 /// contract. The condition is a condition (`r[expr.block.cond-brace]`), so `{` where an
 /// expression starts is the body. After a slip in a contract, the parser skips to the next
 /// contract or the body's `{`, so the next contract and the body are still parsed as such.
-/// True when a contract held a slip.
+/// Something after a whole condition, on its line, is left to the caller, as after a return
+/// type: which `{` after it is the body isn't known. True when a contract held a slip.
 fn contracts(p: &mut Parser) -> bool {
     let slips = p.slips;
     while p.at(RequiresKw) || p.at(EnsuresKw) {
@@ -245,10 +246,6 @@ fn contracts(p: &mut Parser) -> bool {
             p.condition_frames = outer;
         }
         p.complete(marker, Contract);
-        let next = p.at(RequiresKw) || p.at(EnsuresKw) || p.at(LBrace);
-        if !p.recovering && !next && !p.at_break() && p.current().is_some() {
-            p.expected("`requires`, `ensures` or `{`");
-        }
         if p.recovering {
             p.recover(Sync::Contract, false);
         }

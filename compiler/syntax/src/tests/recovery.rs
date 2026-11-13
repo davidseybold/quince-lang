@@ -556,11 +556,25 @@ fn a_slip_in_a_contract() {
             "fn f(x: Int) -> Int\n  requires x >\n  ensures(r) if r > 0 { true } else { false }\n{\n  x\n}\n",
             "E0016 37..44",
         ),
-        // Something after a whole condition, on its line.
-        ("fn f(a: Int) requires a b {\n  a\n}\n", "E0016 24..25"),
     ] {
         assert_eq!(errors(text), [error], "{text:?}");
         assert!(has_body(text), "{text:?}");
+    }
+    // Something after a whole condition, on its line, is one error, and the rest of the
+    // declaration is skipped, as after a return type: the first `{` after it may not be the
+    // body's.
+    for (text, error) in [
+        ("fn f(a: Int) requires a b {\n  a\n}\n", "E0016 24..25"),
+        (
+            "fn f() requires a b if c { d } else { e }\n{\n  x\n}\n",
+            "E0016 18..19",
+        ),
+        (
+            "fn f() -> Int\n  ensures() match r {\n    Ok(a) => true,\n  }\n{\n  x\n}\n",
+            "E0016 26..31",
+        ),
+    ] {
+        assert_eq!(errors(text), [error], "{text:?}");
     }
     // After a contract, only another contract or the body can come.
     assert_eq!(
