@@ -218,7 +218,8 @@ fn parsing_ahead_past_the_limit_records_nothing() {
 }
 
 /// An E0022 whose skip starts a block's line still takes a token, so the block's loop over its
-/// lines moves on (found in review: a release build looped forever).
+/// lines moves on, and the lines after it are part of that slip (found in review: a release
+/// build looped forever).
 #[test]
 fn a_block_line_at_the_limit_moves_on() {
     let text = format!(
@@ -227,7 +228,7 @@ fn a_block_line_at_the_limit_moves_on() {
         "}\n".repeat(126)
     );
     let (codes, _) = parse_on_test_stack(text);
-    assert_eq!(codes.first(), Some(&codes::TOO_DEEP));
+    assert_eq!(codes, [codes::TOO_DEEP]);
 }
 
 /// A chain step around a node that holds an E0022, or a sibling at the limit beside one, is
