@@ -1,0 +1,22 @@
+// rule: lex.name.foreign-exempt
+// rule: lex.name.declared
+// mode: parse
+// Names declared inside a foreign block are exempt and keep their exact C spelling. A name
+// declared in a foreign block can be used anywhere a name can, in its C spelling.
+foreign "SDL2" {
+  type SDL_Window
+  type sqlite3
+  fn SDL_Init(Flags: CUInt) -> CInt
+  fn SDL_CreateWindow(title: CString, w: CInt, h: CInt) -> Ptr<SDL_Window>
+  fn _private_helper(x__y: CInt)
+}
+
+fn start() -> Ptr<SDL_Window> {
+  let status = SDL_Init(0)
+  match status {
+    SDL_INIT_OK => SDL_CreateWindow("app", 640, 480),
+    _ => SDL_CreateWindow("fallback", 320, 240),
+  }
+}
+
+fn SDL_Quit() {} //~ E0021

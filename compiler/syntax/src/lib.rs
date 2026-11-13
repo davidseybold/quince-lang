@@ -9,6 +9,7 @@ mod lexer;
 pub mod literal;
 mod parser;
 mod source;
+mod validate;
 
 pub use cst::{QuinceLanguage, SyntaxElement, SyntaxNode, SyntaxToken};
 pub use kind::SyntaxKind;
@@ -41,6 +42,7 @@ pub mod codes {
     pub const EARLY_LINE_BREAK: &str = "E0018";
     pub const PARENTHESES_NEEDED: &str = "E0019";
     pub const CHAINED_OPERATOR: &str = "E0020";
+    pub const NAME_CASE: &str = "E0021";
     pub const STRAY_DOC_COMMENT: &str = "E0023";
     pub const EMPTY_STRUCT_BRACES: &str = "E0024";
     pub const EMPTY_BRACES: &str = "E0025";
@@ -64,13 +66,14 @@ pub mod codes {
         INVALID_UTF8,
         CONTROL_CHARACTER,
     ];
-    /// The codes the parser reports.
+    /// The codes the parser and the checks on its tree report.
     pub const PARSER: &[&str] = &[
         UNEXPECTED_TOKEN,
         UNCLOSED_BRACKET,
         EARLY_LINE_BREAK,
         PARENTHESES_NEEDED,
         CHAINED_OPERATOR,
+        NAME_CASE,
         STRAY_DOC_COMMENT,
         EMPTY_STRUCT_BRACES,
         EMPTY_BRACES,

@@ -14,6 +14,7 @@ mod exprs;
 mod members;
 mod multiline;
 mod mutations;
+mod names;
 mod numbers;
 mod parser;
 mod patterns;

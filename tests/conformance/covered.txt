@@ -120,6 +120,7 @@ lex.continue.lists
 lex.continue.more
 lex.else-same-line
 lex.grammar-rules
+lex.ident-classes
 lex.ident-not-keyword
 lex.indentation
 lex.keyword-not-name
@@ -154,6 +155,13 @@ lex.lit.string.unicode-escape
 lex.lit.tagged
 lex.lit.tagged.raw
 lex.lit.underscore
+lex.name.case
+lex.name.declared
+lex.name.enforced
+lex.name.foreign-exempt
+lex.name.pascal
+lex.name.screaming
+lex.name.snake
 lex.no-contextual
 lex.no-shift-token
 lex.source.ascii

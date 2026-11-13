@@ -179,6 +179,18 @@ r[lex.name.enforced]
 r[lex.name.foreign-exempt]
 - Names declared inside a foreign block are exempt and keep their exact C spelling, so they match the library's documentation ([Interop with C](interop.md)).
 
+r[lex.name.snake]
+- A `snake_case` name is lowercase letters, digits and single underscores between them, and starts with a letter: `x2`, `utf8_len`. `_unused`, `trailing_` and `a__b` aren't `snake_case`.
+
+r[lex.name.pascal]
+- A `PascalCase` name starts with an uppercase letter and has no underscores. A single uppercase letter, such as `T`, is `PascalCase`. Capitals may follow each other, as in `HTTPServer`, but a name of two or more letters with no lowercase letter is `SCREAMING_SNAKE_CASE`, so a type is `Url`, not `URL`.
+
+r[lex.name.screaming]
+- A `SCREAMING_SNAKE_CASE` name is uppercase letters, digits and single underscores between them, starts with a letter, and has at least two letters: `MAX_RETRIES`, `HTTP2`.
+
+r[lex.name.declared]
+- The case is checked where a name is declared. A name that fits no class, such as `_unused` or `Sdl_init`, can't be declared outside a foreign block. A name declared in a foreign block can be used anywhere a name can, in its C spelling.
+
 ## Comments
 
 r[lex.comment.line]

@@ -12,7 +12,7 @@ mod patterns;
 mod types;
 
 use crate::cst::{self, Event};
-use crate::{Decoded, Lexed, SyntaxError, SyntaxKind, SyntaxNode, codes, lex, lex_str};
+use crate::{Decoded, Lexed, SyntaxError, SyntaxKind, SyntaxNode, codes, lex, lex_str, validate};
 use SyntaxKind::*;
 use input::{Break, Input, Sig};
 use quince_diagnostics::{Applicability, Diagnostic, LineIndex};
@@ -78,6 +78,7 @@ fn parse_lexed(text: &str, lexed: Lexed) -> Parse {
     let (green, parser_errors) = cst::build(text, &lexed.tokens, &parser.taken, events);
     let mut errors = lexed.errors;
     errors.extend(parser_errors);
+    errors.extend(validate::validate(&SyntaxNode::new_root(green.clone())));
     // Stable, so the lexer's errors come first where both start at one offset.
     errors.sort_by_key(|error| error.range.start);
     Parse { green, errors }

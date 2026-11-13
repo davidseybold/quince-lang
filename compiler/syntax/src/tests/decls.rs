@@ -254,10 +254,10 @@ fn doc_comments_together_are_one_error() {
 /// ones on the lines below it still document the declaration after them.
 #[test]
 fn a_doc_comment_after_code() {
-    let text = "const A: Int = 1 /// a\n/// b\nfn g() {}\n";
+    let text = "const AB: Int = 1 /// a\n/// b\nfn g() {}\n";
     assert_eq!(
         errors(text),
-        [r#"E0023 17..22 => "const A: Int = 1 // a\n/// b\nfn g() {}\n""#]
+        [r#"E0023 18..23 => "const AB: Int = 1 // a\n/// b\nfn g() {}\n""#]
     );
     let g = checked(text).syntax().children().nth(1).expect("`g`");
     assert_eq!(g.text().to_string(), "/// b\nfn g() {}");
@@ -272,8 +272,8 @@ fn a_doc_comment_in_a_skip() {
     assert_eq!(codes("fn f() {\n  let x = ) /// a\n  y\n}\n"), ["E0016"]);
     assert_eq!(codes("fn f() {\n  g(1 2 /// a\n  3)\n}\n"), ["E0016"]);
     // After code on its line, before a declaration that starts while the parser skips.
-    assert_eq!(codes("const A: Int = ) /// a\nfn g() {}\n"), ["E0016"]);
-    assert_eq!(codes("const A: Int = 1 /// a\nfn g() {}\n"), ["E0023"]);
+    assert_eq!(codes("const AB: Int = ) /// a\nfn g() {}\n"), ["E0016"]);
+    assert_eq!(codes("const AB: Int = 1 /// a\nfn g() {}\n"), ["E0023"]);
 }
 
 /// An `impl`'s members take doc comments and attributes, as declarations do

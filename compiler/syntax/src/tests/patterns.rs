@@ -50,7 +50,7 @@ fn errors(pattern: &str) -> Vec<String> {
 #[test]
 fn names_and_paths() {
     assert_eq!(tree("n"), "BindPat\n  Name\n    Ident \"n\"\n");
-    assert_eq!(tree("_rest"), "BindPat\n  Name\n    Ident \"_rest\"\n");
+    assert_eq!(tree("rest"), "BindPat\n  Name\n    Ident \"rest\"\n");
     assert_eq!(tree("MAX"), "PathPat\n  TypePath\n    Ident \"MAX\"\n");
     assert_eq!(tree("None"), "PathPat\n  TypePath\n    Ident \"None\"\n");
     assert_eq!(

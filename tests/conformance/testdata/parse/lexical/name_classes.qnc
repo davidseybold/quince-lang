@@ -1,0 +1,38 @@
+// rule: lex.name.snake
+// rule: lex.name.pascal
+// rule: lex.name.screaming
+// mode: parse
+// snake_case is lowercase letters, digits and single underscores between them, starting with
+// a letter. PascalCase starts with an uppercase letter and has no underscores; a single
+// uppercase letter is PascalCase, and so is a run of capitals, but a name of two or more
+// letters with no lowercase letter is SCREAMING_SNAKE_CASE, which is uppercase letters,
+// digits and single underscores between them, starting with a letter, with at least two
+// letters.
+fn x2() {}
+fn utf8_len() {}
+fn a1_b2_c3() {}
+fn _unused() {} //~ E0021
+fn trailing_() {} //~ E0021
+fn a__b() {} //~ E0021
+fn camelCase() {} //~ E0021
+fn snake_Case() {} //~ E0021
+
+struct T
+struct HTTPServer
+struct Utf8Reader
+struct V2
+struct Url
+struct URL //~ E0021
+struct IO //~ E0021
+struct Http_server //~ E0021
+struct Http_ //~ E0021
+
+const MAX_RETRIES: Int = 3
+const HTTP2: Int = 2
+const ID: Int = 1
+const N: Int = 8 //~ E0021
+const X2: Int = 2 //~ E0021
+const MAX__RETRIES: Int = 3 //~ E0021
+const MAX_RETRIES_: Int = 3 //~ E0021
+const _MAX: Int = 3 //~ E0021
+const MAX_retries: Int = 3 //~ E0021
