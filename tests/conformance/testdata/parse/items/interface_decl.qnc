@@ -1,0 +1,38 @@
+// rule: grammar.interface_decl
+// rule: item.const.assoc.no-interface
+// rule: item.iface.no-default
+// mode: parse
+// An interface takes generics, and its members are associated types and method signatures
+// with their contracts, each with its doc comments and attributes. A method has no body, an
+// associated type no `=`, and a member no `pub`. Interfaces can't declare constants in v1.
+pub interface Display {
+  fn display(self) -> String
+}
+
+pub interface Iterator<uses E> {
+  type Item
+  fn next(var self) -> Option<Self.Item> uses E
+}
+
+interface From<T> { fn from(value: T) -> Self }
+
+interface Account {
+  /// The balance after a withdrawal.
+  @verify
+  fn withdraw(var self, amount: Int) -> Int
+    requires amount > 0
+    ensures(r) r >= 0
+
+  /// What it holds.
+  type Unit
+}
+
+interface Limits {
+  const MAX: Int = 8 //~ E0016
+}
+
+interface Shown {
+  fn show(self) -> String { "x" } //~ E0016
+  type Text = String //~ E0016
+  pub fn len(self) -> Int //~ E0016
+}
