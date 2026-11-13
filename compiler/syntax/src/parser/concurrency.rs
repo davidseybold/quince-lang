@@ -98,7 +98,8 @@ pub(super) fn background(p: &mut Parser) -> Completed {
                 p.bump();
                 if p.kind() != RParen {
                     exprs::arg(p);
-                    if p.kind() == Comma {
+                    // After a slip in the argument, the list's end skips to the `)`.
+                    if p.kind() == Comma && !p.recovering {
                         p.bump();
                     }
                 }
@@ -176,17 +177,22 @@ fn select_arm_parts(p: &mut Parser) {
 /// `with` handler { `,` handler } block (`grammar.with_expr`). The handlers aren't in brackets,
 /// so a trailing `,` is an error, and a line break after a `,` is spacing. Handlers missing
 /// from the line of `with` are taken from the next line, after the error, as a missing
-/// condition is, and a block missing after them is part of that slip. After a slip in a
-/// handler, the rest of the line up to its `{` is skipped, so the block is still the block, as
-/// after a slip in a condition. A `,` right after a slip goes on to the next handler, as in a
-/// list.
+/// condition is, when that line starts with an effect's path and `=`, and a block missing
+/// after them is part of that slip. A next line that starts with `{` is the block. After a
+/// slip in a handler, the rest of the line up to its `{` is skipped, so the block is still the
+/// block, as after a slip in a condition. A `,` right after a slip goes on to the next
+/// handler, as in a list.
 pub(super) fn with_expr(p: &mut Parser) -> Completed {
     let marker = p.start();
     p.bump();
     let missing = p.at_break();
     if missing {
         p.expected("an effect");
-        if p.frame_closes_here() || !starts_handler(p.kind()) {
+        if p.kind() == LBrace {
+            exprs::block(p);
+            return p.complete(marker, WithExpr);
+        }
+        if !follows_handler(p) {
             return p.complete(marker, WithExpr);
         }
     }
@@ -211,6 +217,21 @@ pub(super) fn with_expr(p: &mut Parser) -> Completed {
 
 fn starts_handler(kind: SyntaxKind) -> bool {
     matches!(kind, Ident | SelfTypeKw)
+}
+
+/// The tokens at the current one are an effect's path and `=`, as a handler starts.
+fn follows_handler(p: &Parser) -> bool {
+    let mut n = 0;
+    loop {
+        if !starts_handler(p.nth_kind(n)) {
+            return false;
+        }
+        match p.nth_kind(n + 1) {
+            Dot => n += 2,
+            Eq => return true,
+            _ => return false,
+        }
+    }
 }
 
 /// type_path `=` expr (`grammar.handler`): an effect's path, with no type arguments, and the

@@ -276,6 +276,8 @@ Doc comments and attributes aren't member starts: they belong to the declaration
 | `let x = concurrent {` then lines `spawn a()` and `let y = 1`, with the `}` missing | E0017 at `{` (layer 6b) |
 | `with = db { run() }` | E0016 at `=`, and the block is parsed (layer 6b) |
 | `with` followed by a line `Db = x { run() }` | E0016 at the line break, and the block is parsed (layer 6b, found in review) |
+| `with` followed by a line `log(x)` or `{ run() }` | E0016 at the line break, and the line is a statement or the block (layer 6b, found in review: taking any next line as handlers gave a second error) |
+| `background(bg: TaskScope,, on_error: p) {}` | E0016 at the second `,` (layer 6b, found in review) |
 | `with Db = {` then lines `serve()` and `}` | E0016 at `{`, and the block is parsed (layer 6b) |
 | `background() {}` | E0016 at `)` (layer 6b, found in review: it left an empty node) |
 

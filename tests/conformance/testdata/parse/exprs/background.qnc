@@ -4,8 +4,8 @@
 // rule: conc.background.scope-value
 // mode: parse
 // `background`, then in parentheses a name, `:`, `TaskScope`, an optional argument and an
-// optional trailing `,`, then a block. `spawn in`, a scope value and an expression starts a task in that scope; the scope
-// can be any `TaskScope` value, such as `self.bg`.
+// optional trailing `,`, then a block. `spawn in`, a scope value and an expression starts a
+// task in that scope; the scope can be any `TaskScope` value, such as `self.bg`.
 fn main() -> Result<Unit, AppError> uses * {
   let served = background (bg: TaskScope, on_error: FailurePolicy.LogAndContinue) {
     http.serve(8080, handler: fn(req) { handle(req, bg:) })

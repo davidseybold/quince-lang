@@ -666,6 +666,25 @@ fn slips_in_concurrency_forms() {
         .any(|node| node.kind() == SyntaxKind::Block && node.text() == "{ run() }");
     assert!(block);
     assert_eq!(errors("fn f() {\n  with\n}\n"), ["E0016 15..16"]);
+    // A block missing after handlers taken from the next line is part of that slip.
+    assert_eq!(errors("fn f() {\n  with\n  Db = x\n}\n"), ["E0016 15..16"]);
+    // A next line that isn't a handler is a statement of its own, and one that starts with
+    // `{` is the block.
+    for text in [
+        "fn f() {\n  with\n  log(x)\n}\n",
+        "fn f() {\n  with\n  a.b()\n}\n",
+        "fn f() {\n  with\n  let y = 1\n}\n",
+        "fn f() {\n  with\n  { run() }\n}\n",
+    ] {
+        assert_eq!(errors(text), ["E0016 15..16"], "{text:?}");
+    }
+    let text = "fn f() {\n  with\n  app.Db = x { run() }\n}\n";
+    assert_eq!(errors(text), ["E0016 15..16"]);
+    // After a slip in a `background`'s argument, its `,` and the rest skip to the `)`.
+    assert_eq!(
+        errors("fn f() {\n  background(bg: TaskScope,, on_error: p) {}\n}\n"),
+        ["E0016 36..37"]
+    );
     // `spawn in` takes its scope from its own line.
     assert_eq!(
         errors("fn f() {\n  spawn in\n  bg()\n}\n"),
