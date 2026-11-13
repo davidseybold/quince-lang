@@ -1,20 +1,24 @@
 //! Blocks, statements and expressions: `let`, `var`, `while`, `for`, assignment, `if`,
-//! literals, names, collections, operators, `is` and postfix forms. `match` is in `arms`.
-//! Later layers of the parser add the rest.
+//! literals, names, collections, operators, `is` and postfix forms. `match` is in `arms`, and
+//! closures and `return`, `break` and `continue` are in `closures`. Later layers of the parser
+//! add the rest.
 
 use super::input::Break;
-use super::{Completed, Holds, Parser, Sync, arms, items, patterns, types};
+use super::{Completed, Holds, Parser, Sync, arms, closures, items, patterns, types};
 use crate::SyntaxKind::{self, *};
 use crate::{SyntaxError, codes};
 use quince_diagnostics::Applicability;
 use std::ops::Range;
 
 /// `{` { stmt NEWLINE } [ stmt ] `}` (`grammar.block`). The last statement needs no line break
-/// before the `}` (`r[expr.block.last-newline]`).
+/// before the `}` (`r[expr.block.last-newline]`). A block is a line context of its own, so a
+/// `fn` header around it, as around a block in a contract, doesn't reach its lines.
 pub(super) fn block(p: &mut Parser) {
     let marker = p.start();
+    let header = std::mem::replace(&mut p.in_fn_header, false);
     p.bump();
     p.lines(Holds::Block, Some(RBrace), stmt);
+    p.in_fn_header = header;
     p.complete(marker, Block);
 }
 
@@ -267,8 +271,12 @@ pub(super) fn expr(p: &mut Parser) {
     expr_node(p);
 }
 
-/// [`expr`], and the node it completed, if there is an expression.
+/// [`expr`], and the node it completed, if there is an expression. `return`, `break` and
+/// `continue` are expressions but no operands (`grammar.expr`), so only here, at the top.
 fn expr_node(p: &mut Parser) -> Option<Completed> {
+    if matches!(p.kind(), ReturnKw | BreakKw | ContinueKw) {
+        return Some(closures::jump(p));
+    }
     let operand = binary(p, 0)?;
     report_chain(p, operand.chain, operand.tokens, None);
     Some(operand.done)
@@ -720,9 +728,9 @@ fn postfix(p: &mut Parser) -> Option<Completed> {
 }
 
 /// A literal, a name, `self`, `Self`, a list or map literal, a tuple, an expression in
-/// parentheses, an `if` or a `match` (`grammar.primary`). A statement starts after a break, so this doesn't check
-/// for one: each caller has taken a token that continues the line, or is at the start of a
-/// statement.
+/// parentheses, an `if`, a `match` or a closure (`grammar.primary`). A statement starts after
+/// a break, so this doesn't check for one: each caller has taken a token that continues the
+/// line, or is at the start of a statement.
 fn primary(p: &mut Parser) -> Option<Completed> {
     let marker = p.start();
     let kind = match p.kind() {
@@ -758,6 +766,10 @@ fn primary(p: &mut Parser) -> Option<Completed> {
         MatchKw => {
             p.abandon(marker);
             return Some(arms::match_expr(p));
+        }
+        FnKw => {
+            p.abandon(marker);
+            return Some(closures::closure(p));
         }
         // At the top of a condition, `{` is the block or a `match`'s arms, so there is no
         // expression (`r[expr.block.cond-brace]`). Inside brackets in it, `{` starts a map.
@@ -821,7 +833,7 @@ fn map_close(p: &Parser) -> Option<usize> {
     let mut open = 0usize;
     let mut entry = false;
     for (i, token) in p.input.tokens.iter().enumerate().skip(p.pos) {
-        if i > p.pos && token.brk != Break::None && super::starts_member(token.kind) {
+        if i > p.pos && token.brk != Break::None && super::starts_member(&p.input.tokens, i) {
             return None;
         }
         if super::closer_of(token.kind).is_some() {
@@ -979,7 +991,7 @@ fn entry(p: &mut Parser) {
 }
 
 /// The tokens that can start an expression.
-fn starts_expr(kind: SyntaxKind) -> bool {
+pub(super) fn starts_expr(kind: SyntaxKind) -> bool {
     matches!(
         kind,
         Int | Float
@@ -995,6 +1007,10 @@ fn starts_expr(kind: SyntaxKind) -> bool {
             | LBrace
             | IfKw
             | MatchKw
+            | FnKw
+            | ReturnKw
+            | BreakKw
+            | ContinueKw
             | Minus
             | Bang
             | Tilde

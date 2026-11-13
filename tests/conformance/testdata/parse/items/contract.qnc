@@ -1,0 +1,34 @@
+// rule: grammar.contract
+// rule: grammar.fn_decl
+// rule: contract.ensures-name
+// mode: parse
+// Contracts come after a function's signature and before its body: `requires` and a
+// condition, or `ensures`, an optional name for the return value in parentheses, and a
+// condition. A function may have any number of them.
+fn halve(n: Int) -> Int requires n % 2 == 0 { n / 2 }
+
+pub fn withdraw(account: Account, amount: Money) -> Result<Account, WithdrawError>
+  requires amount > Money.ZERO
+  ensures(r) match r {
+    Ok(a) => a.balance == account.balance - amount,
+    Err(_) => true,
+  }
+{
+  pay(account, amount)
+}
+
+fn clamp(x: Int, lo: Int, hi: Int) -> Int
+  requires lo <= hi
+  ensures (out) lo <= out && out <= hi
+  ensures(out) out == x || out == lo || out == hi
+{
+  x
+}
+
+impl Counter {
+  fn add(var self, n: Int) requires n > 0 ensures self.count > 0 {
+    self.count += n
+  }
+}
+
+fn after_body(n: Int) { n } requires n > 0 //~ E0016

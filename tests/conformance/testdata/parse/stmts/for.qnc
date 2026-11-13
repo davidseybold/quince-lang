@@ -19,4 +19,5 @@ fn f(xs: List<Int>, pairs: Map<String, Int>, var total: Int) {
   for x xs { total += x } //~ E0016
   for in xs { total += 1 } //~ E0016
   for x in { total += 1 } //~ E0016
+  for x in xs { break 1 } //~ E0016
 }

@@ -519,3 +519,88 @@ fn no_fixes_in_a_lossy_text() {
     let text = std::str::from_utf8(&bytes[..bytes.len() - 2]).unwrap();
     assert_eq!(checked(text).errors()[0].fixes.len(), 1);
 }
+
+/// A contract's expression starts on its line, so a line that starts with `{` or another
+/// contract after `requires` is the expression missing, at the line break. After a slip in a
+/// contract the parser skips to the next contract or the body's `{`, never to a `{` inside a
+/// later contract, so the body is still the body.
+#[test]
+fn a_slip_in_a_contract() {
+    let has_body = |text: &str| {
+        checked(text)
+            .syntax()
+            .descendants()
+            .any(|node| node.kind() == SyntaxKind::Block)
+    };
+    for text in [
+        "fn f()\n  requires\n{\n  x\n}\n",
+        "fn f()\n  requires\n  ensures r > 0\n{\n  x\n}\n",
+    ] {
+        assert_eq!(errors(text), ["E0016 17..18"], "{text:?}");
+        assert_eq!(
+            messages(text),
+            ["expected an expression, found a line break"]
+        );
+        assert!(has_body(text), "{text:?}");
+    }
+    for (text, error) in [
+        (
+            "fn f()\n  requires x >\n  ensures r > 0\n{\n  x\n}\n",
+            "E0016 24..31",
+        ),
+        (
+            "fn withdraw(a: Account) -> Int\n  requires  > 0\n  ensures(r) match r {\n    Ok(a) => true,\n    Err(_) => true,\n  }\n{\n  pay(a)\n}\n",
+            "E0016 43..44",
+        ),
+        (
+            "fn f(x: Int) -> Int\n  requires x >\n  ensures(r) if r > 0 { true } else { false }\n{\n  x\n}\n",
+            "E0016 37..44",
+        ),
+    ] {
+        assert_eq!(errors(text), [error], "{text:?}");
+        assert!(has_body(text), "{text:?}");
+    }
+    // Something after a whole condition, on its line, is one error, and the rest of the
+    // declaration is skipped, as after a return type: the first `{` after it may not be the
+    // body's.
+    for (text, error) in [
+        ("fn f(a: Int) requires a b {\n  a\n}\n", "E0016 24..25"),
+        (
+            "fn f() requires a b if c { d } else { e }\n{\n  x\n}\n",
+            "E0016 18..19",
+        ),
+        (
+            "fn f() -> Int\n  ensures() match r {\n    Ok(a) => true,\n  }\n{\n  x\n}\n",
+            "E0016 26..31",
+        ),
+    ] {
+        assert_eq!(errors(text), [error], "{text:?}");
+    }
+    // After a contract, only another contract or the body can come.
+    assert_eq!(
+        messages("fn f() requires x Int {}\n"),
+        ["expected `requires`, `ensures` or `{`, found the name `Int`"]
+    );
+    assert_eq!(
+        messages("fn f()\n  requires a\n  requires b\nx\n"),
+        ["expected `requires`, `ensures` or `{`, found a line break"]
+    );
+    // Braces right after `requires` are an expression, a block that can't go there. The body
+    // missing after it is part of that slip.
+    assert_eq!(errors("fn f(n: Int) requires { n }\n"), ["E0016 22..23"]);
+}
+
+/// `fn` and `(` is a closure, never a member start (decision 9): a closure on a line of its
+/// own closes nothing, and the attribute look-past reads past one in an attribute's
+/// arguments.
+#[test]
+fn a_closure_line_closes_nothing() {
+    assert_eq!(
+        errors("fn f() {\n  g(a,\n  fn(x) { x }\n}\n"),
+        ["E0017 12..13"]
+    );
+    assert_eq!(
+        errors("fn f() {\n  g(1,\n  @attr(\n    fn(x: Int) { x },\n  )\nfn h() {}\n"),
+        ["E0017 7..8", "E0017 12..13"]
+    );
+}

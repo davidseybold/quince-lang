@@ -1,7 +1,7 @@
 // rule: lex.continue.fn-header
 // mode: parse
-// In any `fn` header, a declaration's signature or a function type, a line that starts with
-// `->`, `uses` or `{` continues the header.
+// In any `fn` header, a declaration's signature, a closure's or a function type, a line that
+// starts with `->`, `uses`, `requires`, `ensures` or `{` continues the header.
 fn load(path: String)
   -> String
   uses Fs
@@ -22,4 +22,33 @@ fn run() {
   let handler: fn(String)
     uses Io = log
   handler("ready")
+  let parse = fn(text: String)
+    -> Int
+    uses Fs
+  {
+    text.len()
+  }
+  run(fn(x)
+    -> Int { x })
+}
+
+fn withdraw(amount: Int) -> Int
+  requires amount > 0
+  ensures(r) r >= 0
+{
+  amount
+}
+
+fn after_requires(n: Int)
+  requires n > 0 {
+  n
+}
+
+fn block_in_contract(n: Int) -> Int
+  ensures(r) if r > 0 {
+    log(r)
+    true
+  } else { false }
+{
+  n
 }
