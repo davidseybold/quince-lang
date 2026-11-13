@@ -268,6 +268,10 @@ fn a_lists_comma_after_an_unclosed_literal() {
         codes("fn f() {\n  g(\n    ..base,\n    x: \"abc\n    y,\n  )\n}\n"),
         ["E0004"]
     );
+    assert_eq!(
+        codes("fn f() {\n  let Shape.Rect(\n    width: \"abc\n    height,\n  ) = s\n}\n"),
+        ["E0004"]
+    );
     let text = "fn f() {\n  g(\n    \"abc\n    b,\n  )\n}\n";
     let args = checked(text)
         .syntax()

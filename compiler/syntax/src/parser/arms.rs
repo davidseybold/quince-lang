@@ -42,7 +42,7 @@ fn arms(p: &mut Parser) {
             p.expected("a match arm or `}`");
         }
         let end = p.input.tokens[p.pos - 1].range.end;
-        let after_unclosed_line = p.input.on_unclosed_line(end);
+        let after_unclosed_line = p.after_unclosed_line();
         match p.kind() {
             Comma => p.bump(),
             RBrace => {
