@@ -26,13 +26,14 @@ pub fn check(root: &Path) -> Result<(), String> {
     }
 }
 
-/// Codes registered, explained and tested, compared. Retired codes need no test, since
-/// nothing emits them.
+/// Codes registered, explained and tested, compared. Retired codes need no fixture, since
+/// nothing emits them, and nor do implementation limits, which no rule for a fixture to cite
+/// states: unit tests test them.
 fn problems(explain_files: &BTreeSet<String>, expected_codes: &BTreeSet<String>) -> Vec<String> {
     let rows = REGISTRY.iter().map(|info| Row {
         code: info.code,
         explain: info.explain,
-        retired: info.retired,
+        needs_fixture: !info.retired && !info.implementation_limit,
     });
     problems_for(rows, explain_files, expected_codes)
 }
@@ -40,7 +41,7 @@ fn problems(explain_files: &BTreeSet<String>, expected_codes: &BTreeSet<String>)
 struct Row {
     code: &'static str,
     explain: &'static str,
-    retired: bool,
+    needs_fixture: bool,
 }
 
 fn problems_for(
@@ -58,7 +59,7 @@ fn problems_for(
                 row.code, row.code
             ));
         }
-        if !row.retired && !expected_codes.contains(row.code) {
+        if row.needs_fixture && !expected_codes.contains(row.code) {
             problems.push(format!(
                 "{}: no conformance fixture expects it; add one under {FIXTURE_DIR} with `//~ {}`",
                 row.code, row.code
@@ -112,17 +113,17 @@ mod tests {
         items.iter().map(|s| s.to_string()).collect()
     }
 
-    fn row(code: &'static str, explain: &'static str, retired: bool) -> Row {
+    fn row(code: &'static str, explain: &'static str, needs_fixture: bool) -> Row {
         Row {
             code,
             explain,
-            retired,
+            needs_fixture,
         }
     }
 
     #[test]
     fn complete_code_passes() {
-        let rows = [row("E0412", "text", false)].into_iter();
+        let rows = [row("E0412", "text", true)].into_iter();
         assert_eq!(
             problems_for(rows, &set(&["E0412"]), &set(&["E0412"])),
             Vec::<String>::new()
@@ -131,21 +132,36 @@ mod tests {
 
     #[test]
     fn code_without_a_test() {
-        let rows = [row("E0412", "text", false)].into_iter();
+        let rows = [row("E0412", "text", true)].into_iter();
         let found = problems_for(rows, &set(&["E0412"]), &set(&[]));
         assert_eq!(found.len(), 1);
         assert!(found[0].starts_with("E0412: no conformance fixture expects it"));
     }
 
     #[test]
-    fn retired_code_needs_no_test() {
-        let rows = [row("E0007", "text", true)].into_iter();
+    fn code_that_needs_no_fixture() {
+        let rows = [row("E0007", "text", false)].into_iter();
         assert!(problems_for(rows, &set(&["E0007"]), &set(&[])).is_empty());
+    }
+
+    /// Retired codes and implementation limits need no fixture, and every other code does.
+    #[test]
+    fn which_codes_need_a_fixture() {
+        for info in REGISTRY {
+            let row = problems(&set(&[info.code]), &set(&[]));
+            let needs = row.iter().any(|p| p.starts_with(info.code));
+            assert_eq!(
+                needs,
+                !info.retired && !info.implementation_limit,
+                "{}",
+                info.code
+            );
+        }
     }
 
     #[test]
     fn code_without_explain_text() {
-        let rows = [row("E0412", "  \n", false)].into_iter();
+        let rows = [row("E0412", "  \n", true)].into_iter();
         let found = problems_for(rows, &set(&["E0412"]), &set(&["E0412"]));
         assert_eq!(
             found,

@@ -3,7 +3,9 @@
 //! To add a code: write `compiler/diagnostics/explain/<CODE>.md`, add a row below that loads it
 //! with `include_str!`, and add a conformance fixture that expects the code with `//~ <CODE>`.
 //! `cargo xtask diagnostics` checks all three. A code is never reused: to retire one, set
-//! `retired: true` and keep its row and explain text.
+//! `retired: true` and keep its row and explain text. A code for an implementation limit, which
+//! no spec rule states, has no fixture, since a fixture must cite a rule: set
+//! `implementation_limit: true`, and test it with unit tests in the crate that reports it.
 
 use crate::{Code, Severity};
 
@@ -15,6 +17,9 @@ pub struct CodeInfo {
     /// The full text `quince explain` prints, with examples.
     pub explain: &'static str,
     pub retired: bool,
+    /// The code reports going past one of the toolchain's own limits, which no spec rule
+    /// states, such as the parser's nesting limit. Its tests are unit tests, not fixtures.
+    pub implementation_limit: bool,
 }
 
 /// `E0412` is reserved for a non-exhaustive match, so the spec's example diagnostic stays true.
@@ -120,6 +125,11 @@ pub const REGISTRY: &[CodeInfo] = &[
         "a name of the wrong case where it's declared",
         include_str!("../explain/E0021.md"),
     ),
+    limit_error(
+        "E0022",
+        "code that nests deeper than the parser's limit",
+        include_str!("../explain/E0022.md"),
+    ),
     error(
         "E0023",
         "a doc comment that documents nothing",
@@ -149,6 +159,15 @@ const fn error(code: &'static str, title: &'static str, explain: &'static str) -
         title,
         explain,
         retired: false,
+        implementation_limit: false,
+    }
+}
+
+/// An error for going past one of the toolchain's own limits (`implementation_limit`).
+const fn limit_error(code: &'static str, title: &'static str, explain: &'static str) -> CodeInfo {
+    CodeInfo {
+        implementation_limit: true,
+        ..error(code, title, explain)
     }
 }
 

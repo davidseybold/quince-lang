@@ -46,7 +46,7 @@ The error-code registry, the JSON diagnostic types and their schema, and fix che
 
 `cargo xtask diagnostics` fails unless:
 - every registry code has non-empty explain text in `explain/<CODE>.md`;
-- every code that isn't retired appears in at least one conformance fixture's expectation (a retired code is never emitted, so it needs no fixture);
+- every code that isn't retired appears in at least one conformance fixture's expectation (a retired code is never emitted, so it needs no fixture). A code marked `implementation_limit` is exempt too: it reports going past one of the toolchain's own limits, such as the parser's nesting limit (E0022), which no spec rule states, and a fixture must cite a rule. Unit tests in the crate that reports it test it instead;
 - every explain file belongs to a registry row.
 
 Expectations are the `//~` comments in `.qnc` fixtures. M2's project fixtures add a form for files that can't hold `//~`, such as `quince.toml`, and those expectations will count too.

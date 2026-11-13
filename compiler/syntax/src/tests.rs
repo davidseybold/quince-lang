@@ -15,6 +15,7 @@ mod members;
 mod multiline;
 mod mutations;
 mod names;
+mod nesting;
 mod numbers;
 mod parser;
 mod patterns;
