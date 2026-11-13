@@ -2,7 +2,7 @@
 //! (`r[lex.name.case]`, `r[lex.name.enforced]`): the README's "Naming case" section has the
 //! contract.
 
-use crate::{SyntaxError, SyntaxKind, SyntaxNode, codes};
+use crate::{SyntaxError, SyntaxKind, SyntaxNode, SyntaxToken, codes};
 use SyntaxKind::*;
 
 /// The errors the checks find in `root`, in source order.
@@ -127,9 +127,17 @@ pub(crate) fn class_of(name: &SyntaxNode) -> Option<(Case, &'static str)> {
     Some(class)
 }
 
-/// E0021 for a `Name` that isn't of the class its position takes.
+/// E0021 for a `Name` that isn't of the class its position takes. None for a name glued to
+/// one of the lexer's `Error` tokens, as `bauche` in `Ébauche` is: the lexer split one
+/// identifier, and its error covers that slip.
 fn case_error(name: &SyntaxNode) -> Option<SyntaxError> {
     let (case, what) = class_of(name)?;
+    let error = |token: Option<SyntaxToken>| token.is_some_and(|t| t.kind() == Error);
+    if error(name.first_token().and_then(|t| t.prev_token()))
+        || error(name.last_token().and_then(|t| t.next_token()))
+    {
+        return None;
+    }
     let text = name.text().to_string();
     if case.fits(&text) {
         return None;

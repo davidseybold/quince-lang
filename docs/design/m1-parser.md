@@ -173,6 +173,8 @@ That keeps case out of the parser, and lets code use a foreign name such as `SQL
 **The case check** (`r[lex.name.case]`, `r[lex.name.enforced]`) runs in `validate` over the finished tree. It checks a name only where it's declared: functions, parameters, bindings in `let`, `var`, `for` and patterns, fields, types, variants, generics, effects, constants, import aliases and the `ensures` binder. A use can't be wrong unless its declaration is, and the declaration gets the error.
 - A name that isn't of the class its position takes, including a name that fits no class, is E0021. The message names the class and gives the name converted to it. There's no fix in M1 (see Non-goals).
 - Names declared in a `foreign` block are skipped (`r[lex.name.foreign-exempt]`).
+- A name glued to one of the lexer's `Error` tokens isn't checked: the lexer split one identifier, and its error covers the slip (found in layer 8's review).
+- `r[lex.name.case]` also gives files and packages `snake_case`. The parser sees neither a file's name nor the manifest, so M2, which reads them, checks those.
 - Spec question 1 defines the classes.
 
 A keyword where a name goes is an E0016 that names the keyword (`r[lex.keyword-not-name]`, `r[lex.ident-not-keyword]`). The lexer gives every keyword its own kind and none is contextual (`r[lex.no-contextual]`), so the parser never has to guess. A C function whose name is a keyword is spec question 4.

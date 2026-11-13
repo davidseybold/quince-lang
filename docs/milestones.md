@@ -53,6 +53,7 @@ Phase 1 ends when `quince check` parses and resolves a multi-file project, and `
 - The project model: library, `cmd/<name>/` programs, test packages under `tests/`, `testdata/` exclusion, the nested-manifest error.
 - Strict `quince.toml` parsing with errors that name the line, and `fmt` for `quince.toml`.
 - Imports, visibility, the one-import-path rule, circular-dependency errors, unused imports.
+- The naming case of file names and the manifest's package name (`r[lex.name.case]`), which the parser's case check can't see.
 - *Exit:* a fixture project with a library, two programs and tests resolves every name; `quince query signature` returns a definition's file and line.
 
 ## Phase 2: The checker and agent tooling

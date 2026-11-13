@@ -2,6 +2,7 @@
 //! which declared names it checks.
 
 use super::parser::checked;
+use super::repo_root;
 use crate::SyntaxKind;
 use crate::validate::{Case, class_of};
 
@@ -109,6 +110,27 @@ fn the_messages() {
     );
 }
 
+/// A name glued to a character the lexer rejects is part of one identifier the lexer split,
+/// so its E0001 is the one error.
+#[test]
+fn a_name_split_by_the_lexer() {
+    for text in [
+        "struct \u{c9}bauche\n",
+        "struct foo\u{e9}\n",
+        "fn f(\u{e9}a: Int) {}\n",
+    ] {
+        assert_eq!(
+            checked(text)
+                .errors()
+                .iter()
+                .map(|e| e.code)
+                .collect::<Vec<_>>(),
+            ["E0001"],
+            "{text:?}"
+        );
+    }
+}
+
 /// Every `Name` outside a foreign block has a class, and none inside one does
 /// (`r[lex.name.foreign-exempt]`).
 #[test]
@@ -153,4 +175,40 @@ fn run<uses E>(n: Int) uses E {
             .filter(|node| node.kind() == SyntaxKind::Name)
             .all(|name| class_of(&name).is_none())
     );
+}
+
+/// Every `Name` outside a foreign block in the parse fixtures has a class, so a new place that
+/// declares a name can't slip past the check.
+#[test]
+fn every_fixture_name_has_a_class() {
+    let mut dirs = vec![repo_root().join("tests/conformance/testdata/parse")];
+    let mut seen = 0;
+    while let Some(dir) = dirs.pop() {
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                dirs.push(path);
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).unwrap();
+            for name in checked(&text)
+                .syntax()
+                .descendants()
+                .filter(|node| node.kind() == SyntaxKind::Name)
+            {
+                let foreign = name
+                    .ancestors()
+                    .any(|node| node.kind() == SyntaxKind::ForeignDecl);
+                assert_eq!(
+                    class_of(&name).is_some(),
+                    !foreign,
+                    "{name:?} in {:?}, {}",
+                    name.parent(),
+                    path.display()
+                );
+                seen += 1;
+            }
+        }
+    }
+    assert!(seen > 0, "no names in the parse fixtures");
 }

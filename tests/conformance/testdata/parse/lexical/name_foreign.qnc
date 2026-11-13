@@ -13,10 +13,7 @@ foreign "SDL2" {
 
 fn start() -> Ptr<SDL_Window> {
   let status = SDL_Init(0)
-  match status {
-    SDL_INIT_OK => SDL_CreateWindow("app", 640, 480),
-    _ => SDL_CreateWindow("fallback", 320, 240),
-  }
+  SDL_CreateWindow("app", 640, 480)
 }
 
 fn SDL_Quit() {} //~ E0021

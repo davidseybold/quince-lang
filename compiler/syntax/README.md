@@ -245,9 +245,9 @@ The parser reads the significant tokens: every token but the trivia and the doc 
 
 ## Naming case
 
-`parse` runs the `validate` module over the finished tree, whatever errors it holds, and adds its errors to the parser's. It checks the naming case (the spec's Naming section) and nothing else so far.
+`parse` runs the `validate` module over the finished tree, whatever errors it holds, and adds its errors to the parser's. It checks the naming case of the names declared in source (the spec's Naming section) and nothing else so far. The case of file names and of the manifest's package name is checked by the stage that reads them (M2).
 
-- **Where.** Only a `Name`, a name being declared, is checked. A `NameRef` is a use, and a use is wrong only when its declaration is, which gets the error. So `width:` alone in a variant pattern, which binds `width`, isn't checked: it names a field, a `NameRef`. A name the parser skipped while recovering is in no `Name`, so it isn't checked either.
+- **Where.** Only a `Name`, a name being declared, is checked. A `NameRef` is a use, and a use is wrong only when its declaration is, which gets the error. So `width:` alone in a variant pattern, which binds `width`, isn't checked: it names a field, a `NameRef`. A name the parser skipped while recovering is in no `Name`, so it isn't checked either. Nor is a name glued to one of the lexer's `Error` tokens, as `bauche` is in `Ébauche`: the lexer split one identifier, and its E0001 covers that slip, as the parser drops an error right after an `Error` token.
 - **Which class.** The node around the `Name` decides:
   - `snake_case`: a function, including an interface's method and an effect's operation; a parameter, including a closure's and a `background` scope's; a `let` or pattern binding (`BindPat`); a `var`; an `ensures` binder; a field, of a struct or a variant; a package's name after `as` in an import.
   - `PascalCase`: a struct, newtype, enum, alias, interface, effect, associated type, variant, type parameter and effect variable (`uses E` in generics).
