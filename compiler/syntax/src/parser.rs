@@ -178,12 +178,18 @@ enum Holds {
     Block,
     /// A map literal's entries: a list, which a block's statements may close.
     Map,
+    /// A `match`'s arms: a list. An arm's `=>` closes every bracket opened inside the arm
+    /// outside a block (decision 9).
+    Arms,
 }
 
 impl Holds {
     /// A list context, where a line break is spacing.
     fn is_list(self) -> bool {
-        matches!(self, Holds::Items | Holds::Fields | Holds::Map)
+        matches!(
+            self,
+            Holds::Items | Holds::Fields | Holds::Map | Holds::Arms
+        )
     }
 }
 
@@ -674,10 +680,25 @@ impl<'t> Parser<'t> {
         {
             return Some(Stop::Outer);
         }
+        // `=>` goes only between an arm's pattern or guard and its body, never inside a
+        // bracket, so it closes what the arm left open.
+        if token.kind == FatArrow && self.arms_frame().is_some_and(|at| at < top) {
+            return Some(Stop::Outer);
+        }
         match self.member_holder() {
             Some(at) if at < top => Some(Stop::Outer),
             _ => None,
         }
+    }
+
+    /// The innermost frame that holds a `match`'s arms, when no block lies inside it: a block
+    /// is a line context again, whose lines the arms' rules don't reach.
+    fn arms_frame(&self) -> Option<usize> {
+        let at = self
+            .frames
+            .iter()
+            .rposition(|frame| matches!(frame.holds, Holds::Arms | Holds::Block))?;
+        (self.frames[at].holds == Holds::Arms).then_some(at)
     }
 
     /// The innermost frame whose closing bracket is `kind`.
@@ -720,7 +741,7 @@ impl<'t> Parser<'t> {
         let field = public && kind == Ident;
         let statement = matches!(first, LetKw | VarKw | WhileKw);
         self.frames.iter().rposition(|frame| match frame.holds {
-            Holds::Items | Holds::Map => false,
+            Holds::Items | Holds::Map | Holds::Arms => false,
             Holds::File => item,
             Holds::Body => member,
             Holds::Fields => field,
@@ -944,8 +965,8 @@ impl<'t> Parser<'t> {
     /// Skips tokens into a `Skipped` node up to the next sync point of the innermost frame:
     /// `sync`, its closing bracket, or a [`Stop`]. With `force`, the current token is skipped
     /// even where it is a sync point. A bracket the skip opens is skipped up to its closing
-    /// bracket, and so is a `<` in a list, unless a frame's closing bracket or a member start of
-    /// the file or an `impl` body comes first.
+    /// bracket, and so is a `<` in a list, unless a frame's closing bracket, a member start of
+    /// the file or an `impl` body, or an arm's `=>` comes first.
     fn recover(&mut self, sync: Sync, force: bool) {
         let marker = self.start();
         let mut skipped = false;
@@ -969,6 +990,7 @@ impl<'t> Parser<'t> {
                     break;
                 }
             } else if self.frame_closed_by(kind).is_some()
+                || (kind == FatArrow && self.arms_frame().is_some())
                 || self
                     .member_holder()
                     .is_some_and(|at| matches!(self.frames[at].holds, Holds::File | Holds::Body))

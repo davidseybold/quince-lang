@@ -570,6 +570,61 @@ fn match_and_for_slips() {
     assert_eq!(errors("  let\n    (a, b) = p"), ["E0016 5..6"]);
 }
 
+/// An arm's `=>` closes the brackets the arm left open, so the next arms parse and the slip is
+/// one E0017 at the open bracket. A block in the arm is statement lines again, so a `=>` in it
+/// is an ordinary slip, and a missing `}` before the next arm cascades.
+#[test]
+fn an_arms_fat_arrow_closes_its_brackets() {
+    assert_eq!(
+        errors("  match s {\n    A(x => 1,\n    B(y) => 2,\n    C(z) => 3,\n    _ => 4,\n  }"),
+        ["E0017 17..18"]
+    );
+    assert_eq!(
+        errors("  match s {\n    A(x) if g(x => 1,\n    _ => 4,\n  }"),
+        ["E0017 25..26"]
+    );
+    assert_eq!(
+        errors("  match s {\n    Shape.Circle(radius: => 1,\n    _ => 4,\n  }"),
+        ["E0017 28..29"]
+    );
+    assert_eq!(
+        errors("  match s {\n    A(f(x => 1,\n    _ => 4,\n  }"),
+        ["E0017 17..18", "E0017 19..20"]
+    );
+    // In the body the next arm is the slip, and its `=>` closes the `(` silently.
+    assert_eq!(
+        errors("  match s {\n    0 => f(a,\n    _ => 4,\n  }"),
+        ["E0016 30..31"]
+    );
+    // The innermost match's arm closes its own brackets, and the outer arms go on.
+    assert_eq!(
+        errors("  match s {\n    0 => match t { A(x => 1, _ => 2, },\n    _ => 3,\n  }"),
+        ["E0017 32..33"]
+    );
+    assert_eq!(
+        errors("  match s {\n    0 => f(match t { 1 => 2, }),\n    _ => 3,\n  }"),
+        Vec::<String>::new()
+    );
+    // A `=>` after the arm's body has closed is an ordinary missing `,`.
+    assert_eq!(
+        errors("  match s {\n    0 => a b(c => 1,\n    _ => 3,\n  }"),
+        ["E0016 23..24"]
+    );
+    assert_eq!(
+        errors("  match s {\n    [a => 1,\n    _ => 3,\n  }"),
+        ["E0016 16..17"]
+    );
+    assert_eq!(
+        errors("  match s {\n    0 => {\n      x => 1\n    },\n    _ => 3,\n  }"),
+        ["E0016 31..33"]
+    );
+    // A missing `}` in a block arm: the block runs on over the next arms (decision 9).
+    let text =
+        format!("{PREFIX}  match s {{\n    0 => {{\n      a\n    1 => 2,\n    _ => 3,\n  }}\n}}\n");
+    let found: Vec<_> = checked(&text).errors().iter().map(|e| e.code).collect();
+    assert_eq!(found, ["E0017", "E0016", "E0016"]);
+}
+
 /// Blocks nest, and a missing `}` is one E0017 at the `{` the next declaration closes.
 #[test]
 fn nested_blocks_close_at_a_declaration() {

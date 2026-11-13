@@ -20,7 +20,7 @@ pub(super) fn match_expr(p: &mut Parser) -> Completed {
 fn arms(p: &mut Parser) {
     let marker = p.start();
     p.bump();
-    p.push_frame(Holds::Items, Some(RBrace));
+    p.push_frame(Holds::Arms, Some(RBrace));
     loop {
         if p.kind() == RBrace {
             p.pop_frame();

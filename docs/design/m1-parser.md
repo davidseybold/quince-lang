@@ -212,6 +212,8 @@ Doc comments and attributes aren't member starts: they belong to the declaration
 - A closing bracket that matches no open bracket closes the innermost one in its place, with one E0016 that names the bracket expected. `f(a, b]` is one E0016.
 - A closing bracket with nothing open is skipped, as an E0016.
 
+**An arm's `=>`** (layer 5b, decided by David, 2026-11-12) closes the brackets opened in its arm, in the pattern, the guard or the body, with an E0017 at each opener. So `A(x => 1,` is one E0017 at the `(`, and the arms after it parse, where the `(` would otherwise hold the rest of the `match`. A bracket left open in the body, as in `0 => f(a,`, first meets the next arm's pattern, which is the E0016, and that arm's `=>` closes the bracket silently, since the parser is skipping. A `=>` inside a nested `match`'s arms closes only that arm's brackets. A block in the arm stops the rule: its lines are statement lines again, and a `=>` in them is an ordinary E0016. The cost is a missing `}` in a block arm. The block runs on over the next arms, so the next arm's `=>` is an E0016, the `match`'s `}` closes the block, the function's `}` is an E0016 that expects `,` and closes the `match`, and the end of the file gives an E0017 at the function's `{`. Three errors for one slip is accepted, with no heuristic for it.
+
 **E0016** is the general syntax error: "expected X, found Y", where X lists what may go there in Quince terms ("an expression", "`,` or `)`", "a line break").
 - When a list item is followed, on the next line, by something that starts another item, its fix inserts the missing `,` (`needs-review`).
 - Two expressions on one line, such as adjacent literals (`"press "b" now"`, from the lexer doc), are an E0016 that expects a line break, with no hint for that shape (lexer decision 9).
@@ -254,6 +256,8 @@ Doc comments and attributes aren't member starts: they belong to the declaration
 | `match x { 0 => a }` | E0016 at `}`, with a fix that inserts `,` (layer 5b) |
 | `match x {` then a line `0 => "abc` and a line `}` | E0004 (layer 5b) |
 | `for x xs { a }` | E0016 at `xs` (layer 5b) |
+| `match s {` then lines `A(x => 1,` and `_ => 2,` | E0017 at `(` (layer 5b) |
+| `match s {` then lines `0 => {`, `a` and `_ => 3,`, with the block's `}` missing | E0016 at the second `=>`, E0016 at the function's `}`, E0017 at the function's `{` (layer 5b) |
 
 ### 10. Diagnostics
 
@@ -561,6 +565,7 @@ Layer 5 is two PRs (decided by David, 2026-11-12), since patterns with `match` a
 - [x] Spec (decided by David, 2026-11-12): extend `r[expr.block.cond-brace]` to a `match` subject and a `for` loop's `in` expression, whose `{` has the same problem (found in layer 4a's review). Wording: "In the condition of an `if` or `while`, the subject of a `match`, and the iterable of a `for`, `{` always starts the block. A map literal there is written in parentheses." It lands in the same PR as the `match` and `for` parsing, with a spec bump (v0.20). [`expr.block.cond-brace`]
 - [x] Extend `parse/lexical/lists.qnc` with line breaks in match arms, which `r[lex.continue.lists]` covers (layer 4b).
 - [x] `match`, guards, `for`. Every arm ends with a `,`, so a `}` right after an arm is an E0016 whose fix inserts it (`safe`). The `{` after a `match` subject or a `for` iterable uses the condition's machinery, `condition_frames` and `map_close`, so all four places share one test. A pattern missing from the line of its `for` is taken from the next line, as for `let` (layer 5a). After an arm whose line an unclosed string or char ends, a missing `,` is part of that slip (found in review). [`grammar.match_expr`, `grammar.arm`, `expr.match.arm-syntax`, `expr.match.arm-block`, `expr.match.arm-comma`, `expr.match.guard`, `stmt.loop.stmt`]
+- [x] An arm's `=>` closes the brackets opened in the arm, outside a block, so a bracket left open in a pattern or guard is an E0017 and the next arms parse. A missing `}` in a block arm cascades, as accepted (decision 9, decided by David, 2026-11-12).
 
 **Layer 6: `m1/parser-keyword-forms`**
 - [ ] Spec: question 7, and a bump. `concurrent`'s arguments take an optional trailing `,` (layer 2a's trailing-comma decision).

@@ -44,5 +44,9 @@ fn f(shape: Shape, n: Int) -> Int {
   let pattern = match n { => 1, } //~ E0016
   let body = match n { 0 =>, } //~ E0016
   let braces = match n { 0 => { "a": 1 }, } //~ E0016
+  let unclosed = match shape {
+    Shape.Circle(radius: => 1, //~ E0017
+    _ => 2,
+  }
   area
 }
