@@ -1,10 +1,10 @@
 //! Blocks, statements and expressions: `let`, `var`, `while`, `for`, assignment, `if`,
-//! literals, names, collections, operators, `is` and postfix forms. `match` is in `arms`, and
-//! closures and `return`, `break` and `continue` are in `closures`. Later layers of the parser
-//! add the rest.
+//! literals, names, collections, operators, `is` and postfix forms. `match` is in `arms`,
+//! closures and `return`, `break` and `continue` are in `closures`, and `concurrent`, `spawn`,
+//! `background`, `select` and `with` are in `concurrency`.
 
 use super::input::Break;
-use super::{Completed, Holds, Parser, Sync, arms, closures, items, patterns, types};
+use super::{Completed, Holds, Parser, Sync, arms, closures, concurrency, items, patterns, types};
 use crate::SyntaxKind::{self, *};
 use crate::{SyntaxError, codes};
 use quince_diagnostics::Applicability;
@@ -146,9 +146,9 @@ fn var_stmt(p: &mut Parser) {
     p.complete(marker, VarStmt);
 }
 
-/// `for` pattern `in` expr block (`grammar.stmt`). A slip before the `in` is skipped up to
-/// the `{` on its line, so the block is still the block.
-fn for_stmt(p: &mut Parser) {
+/// `for` pattern `in` expr block (`grammar.stmt`), or a `concurrent`'s fan-out. A slip before
+/// the `in` is skipped up to the `{` on its line, so the block is still the block.
+pub(super) fn for_stmt(p: &mut Parser) {
     let marker = p.start();
     p.bump();
     let pattern = leading_pattern(p);
@@ -271,11 +271,14 @@ pub(super) fn expr(p: &mut Parser) {
     expr_node(p);
 }
 
-/// [`expr`], and the node it completed, if there is an expression. `return`, `break` and
-/// `continue` are expressions but no operands (`grammar.expr`), so only here, at the top.
+/// [`expr`], and the node it completed, if there is an expression. `return`, `break`,
+/// `continue` and `spawn` are expressions but no operands (`grammar.expr`), so only here, at
+/// the top.
 fn expr_node(p: &mut Parser) -> Option<Completed> {
-    if matches!(p.kind(), ReturnKw | BreakKw | ContinueKw) {
-        return Some(closures::jump(p));
+    match p.kind() {
+        ReturnKw | BreakKw | ContinueKw => return Some(closures::jump(p)),
+        SpawnKw => return Some(concurrency::spawn(p)),
+        _ => {}
     }
     let operand = binary(p, 0)?;
     report_chain(p, operand.chain, operand.tokens, None);
@@ -690,7 +693,7 @@ fn follows_type_args(p: &Parser, end: usize) -> bool {
 
 /// A primary expression and its postfix forms (`grammar.postfix`): calls, fields and method
 /// calls, indexes and `?`. `None` when there is no expression, after reporting it.
-fn postfix(p: &mut Parser) -> Option<Completed> {
+pub(super) fn postfix(p: &mut Parser) -> Option<Completed> {
     let mut done = primary(p)?;
     loop {
         if p.at(LParen) {
@@ -728,9 +731,10 @@ fn postfix(p: &mut Parser) -> Option<Completed> {
 }
 
 /// A literal, a name, `self`, `Self`, a list or map literal, a tuple, an expression in
-/// parentheses, an `if`, a `match` or a closure (`grammar.primary`). A statement starts after
-/// a break, so this doesn't check for one: each caller has taken a token that continues the
-/// line, or is at the start of a statement.
+/// parentheses, an `if`, a `match`, a closure, or a `concurrent`, `background`, `select` or
+/// `with` (`grammar.primary`). A statement starts after a break, so this doesn't check for
+/// one: each caller has taken a token that continues the line, or is at the start of a
+/// statement.
 fn primary(p: &mut Parser) -> Option<Completed> {
     let marker = p.start();
     let kind = match p.kind() {
@@ -770,6 +774,16 @@ fn primary(p: &mut Parser) -> Option<Completed> {
         FnKw => {
             p.abandon(marker);
             return Some(closures::closure(p));
+        }
+        ConcurrentKw | BackgroundKw | SelectKw | WithKw => {
+            p.abandon(marker);
+            let parse = match p.kind() {
+                ConcurrentKw => concurrency::concurrent,
+                BackgroundKw => concurrency::background,
+                SelectKw => concurrency::select,
+                _ => concurrency::with_expr,
+            };
+            return Some(parse(p));
         }
         // At the top of a condition, `{` is the block or a `match`'s arms, so there is no
         // expression (`r[expr.block.cond-brace]`). Inside brackets in it, `{` starts a map.
@@ -1011,6 +1025,11 @@ pub(super) fn starts_expr(kind: SyntaxKind) -> bool {
             | ReturnKw
             | BreakKw
             | ContinueKw
+            | SpawnKw
+            | ConcurrentKw
+            | BackgroundKw
+            | SelectKw
+            | WithKw
             | Minus
             | Bang
             | Tilde
@@ -1046,9 +1065,9 @@ pub(super) fn literal(p: &mut Parser) -> Completed {
     p.complete(marker, Literal)
 }
 
-/// An attribute's arguments: `(` arg { `,` arg } [ `,` ] `)` (`grammar.attribute`), at least
-/// one.
-pub(super) fn attribute_args(p: &mut Parser) {
+/// An attribute's or a `concurrent`'s arguments: `(` arg { `,` arg } [ `,` ] `)`
+/// (`grammar.attribute`, `grammar.concurrent`), at least one.
+pub(super) fn nonempty_args(p: &mut Parser) {
     let marker = p.start();
     p.bump();
     if p.kind() == RParen {
@@ -1092,7 +1111,7 @@ fn arg_list(p: &mut Parser) {
 /// An expression, or a name, `:` and an expression if there is one (`grammar.arg`). `name:`
 /// alone, before a `,` or the `)`, passes the binding of that name. A line break in the list is
 /// spacing, after the `:` too.
-fn arg(p: &mut Parser) {
+pub(super) fn arg(p: &mut Parser) {
     if at_named(p) {
         return named_arg(p);
     }

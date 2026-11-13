@@ -5,6 +5,7 @@ use std::path::Path;
 
 mod chars;
 mod closures;
+mod concurrency;
 mod control;
 mod cst;
 mod decls;

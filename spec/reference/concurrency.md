@@ -9,7 +9,7 @@ There is no `async` or `await`; blocking calls look like ordinary calls, and the
 ## Concurrent blocks
 
 ```ebnf
-concurrent   = "concurrent" [ "(" arg { "," arg } ")" ]
+concurrent   = "concurrent" [ "(" arg { "," arg } [ "," ] ")" ]
                ( "{" spawn { "," spawn } [ "," ] "}" | "for" pattern "in" expr block )
 spawn        = "spawn" expr
 ```
@@ -100,7 +100,7 @@ r[conc.fanout.one-spawn]
 ## Long-lived work (fire and forget)
 
 ```ebnf
-background   = "background" "(" name ":" "TaskScope" [ "," arg ] ")" block
+background   = "background" "(" name ":" "TaskScope" [ "," arg ] [ "," ] ")" block
 ```
 
 Work that must outlive the current function is spawned into a longer-lived scope passed in as a `TaskScope` value:

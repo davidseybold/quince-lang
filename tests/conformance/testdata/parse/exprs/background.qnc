@@ -1,0 +1,46 @@
+// rule: grammar.background
+// rule: grammar.jump
+// rule: conc.background.spawn-in
+// rule: conc.background.scope-value
+// mode: parse
+// `background`, then in parentheses a name, `:`, `TaskScope`, an optional argument and an
+// optional trailing `,`, then a block. `spawn in`, a scope value and an expression starts a
+// task in that scope; the scope can be any `TaskScope` value, such as `self.bg`.
+fn main() -> Result<Unit, AppError> uses * {
+  let served = background (bg: TaskScope, on_error: FailurePolicy.LogAndContinue) {
+    http.serve(8080, handler: fn(req) { handle(req, bg:) })
+  }
+  let plain = background(bg: TaskScope,) {
+    spawn in bg tick()
+  }
+  let broken = background(
+    bg: TaskScope,
+    on_error: FailurePolicy.Restart(max: 3),
+  ) {
+    spawn in bg tick()
+  }
+  served.map_err(AppError.Scope)?.map_err(AppError.Serve)
+}
+
+fn handle(req: Request, bg: TaskScope) -> Response uses Net {
+  let response = build_response(req)
+  spawn in bg send_analytics(req.url, event: "page_view")
+  response
+}
+
+impl Server {
+  fn log(self, line: String) {
+    spawn in self.bg write(line)
+  }
+}
+
+fn wrong(bg: TaskScope) {
+  let a = background(bg: Scope) {} //~ E0016
+  let b = background(bg) {} //~ E0016
+  let c = background(bg: TaskScope, on_error: p, limit: 2) {} //~ E0016
+  let d = background(bg: TaskScope) //~ E0016
+  let e = background() {} //~ E0016
+  let f = background(1: TaskScope) {} //~ E0016
+  spawn in bg //~ E0016
+  let g = 1 + spawn in bg a() //~ E0016
+}

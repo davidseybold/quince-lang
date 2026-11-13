@@ -1,0 +1,28 @@
+// rule: grammar.select
+// rule: conc.select.arm
+// mode: parse
+// `select` and its arms in braces. Each arm is a pattern, `=`, the operation, `=>`, and an
+// expression or a block, and every arm ends with a `,`.
+fn worker(jobs: Channel<Job>, control: Channel<Command>) uses State, Net {
+  while true {
+    select {
+      job = jobs.receive() => match job {
+        Some(j) => process(j),
+        None => return,
+      },
+      cmd = control.receive() => match cmd {
+        Some(Command.Stop) => return,
+        Some(_) => (),
+        None => {
+          for j in jobs.iter() { process(j) }
+          return
+        },
+      },
+    }
+  }
+  let sent = select { _ = jobs.send(next()) => true, }
+  let empty = select {}
+  select { job => 1, } //~ E0016
+  select { job = jobs.receive() => 1 } //~ E0016
+  select { job = jobs.receive(), } //~ E0016
+}

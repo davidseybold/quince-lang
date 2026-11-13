@@ -97,7 +97,7 @@ fn attributes(p: &mut Parser) {
         if p.at(Ident) {
             p.bump_node(NameRef);
             if p.at(LParen) {
-                exprs::attribute_args(p);
+                exprs::nonempty_args(p);
             }
         } else if !p.at_break() && p.kind().is_keyword() {
             // A keyword can't name an attribute (`r[lex.keyword-not-name]`). Taken without
