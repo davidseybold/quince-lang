@@ -1,0 +1,33 @@
+// rule: grammar.item
+// mode: parse
+// A file holds functions, structs, newtypes, enums, aliases, interfaces, impls, effects,
+// constants, foreign blocks and tests. A statement or an expression can't stand at the top of
+// a file. Recovery skips to the next declaration, so each error here has its own line.
+fn start() {}
+struct Point { x: Int }
+struct UserId(Int)
+enum Kind { Small, Large }
+type Points = List<Point>
+interface Show {
+  fn show(self) -> String
+}
+impl Show for Point {
+  fn show(self) -> String { "point" }
+}
+effect Ticks {
+  fn tick() -> Int
+}
+const ORIGIN: Int = 0
+foreign "m" {
+  fn abs(n: Int) -> Int
+}
+test "starts" {
+  start()
+}
+let ready = true //~ E0016
+fn stop() {}
+var count = 0 //~ E0016
+fn pause() {}
+start() //~ E0016
+fn resume() {}
+count = 1 //~ E0016

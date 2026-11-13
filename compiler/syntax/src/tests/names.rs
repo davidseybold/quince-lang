@@ -102,6 +102,10 @@ fn the_messages() {
         errors("fn f<uses e>() {}\n"),
         ["E0021 10..11: `e` isn't PascalCase, the case of an effect variable's name: write `E`"]
     );
+    assert_eq!(
+        errors("test \"t\" forall (Seed: Int) {}\n"),
+        ["E0021 17..21: `Seed` isn't snake_case, the case of a parameter's name: write `seed`"]
+    );
     // A pattern binds a name that doesn't start with an uppercase letter, so `_rest` is a
     // binding, and fits no class.
     assert_eq!(
@@ -144,6 +148,7 @@ type Meters = Float
 interface Show { type Output\n fn show(self) -> String ensures (text) text != \"\" }
 impl<T: Show> Show for List<T> { type Output = String\n const LIMIT: Int = 1\n fn show(self) -> String { \"\" } }
 effect Clock { fn now() -> Instant }
+test \"runs\" forall (seed: Int) {}
 fn run<uses E>(n: Int) uses E {
   let (a, b) = (1, 2)
   var count = 0
@@ -160,7 +165,7 @@ fn run<uses E>(n: Int) uses E {
         .descendants()
         .filter(|node| node.kind() == SyntaxKind::Name)
         .collect();
-    assert_eq!(names.len(), 33);
+    assert_eq!(names.len(), 34);
     for name in &names {
         assert!(class_of(name).is_some(), "{name:?} in {:?}", name.parent());
     }

@@ -1,0 +1,15 @@
+// rule: grammar.const_decl
+// mode: parse
+// A constant is `const`, its name, `:` and a type, then `=` and an expression. The type and
+// the value can't be left out.
+const LIMIT: Int = 10
+pub const GREETING: String = "hello"
+const SIZES: List<Int> = [1, 2, 4]
+const NEXT: Int =
+  LIMIT + 1
+impl Counter {
+  const START: Int = 0
+}
+const UNTYPED = 1 //~ E0016
+const NO_VALUE: Int //~ E0016
+const : Int = 1 //~ E0016

@@ -460,3 +460,56 @@ fn errors_in_declarations() {
     // A skip in struct braces stays out of type arguments.
     assert_eq!(codes("struct S { a: Int b: Map<K, V> }"), ["E0016"]);
 }
+
+/// A test's `forall` parameters and `uses` effects come in that order, and `forall` takes one
+/// parameter or more (`grammar.test_decl`). A test's header isn't a `fn` header, so a line
+/// that starts with `forall`, `uses` or `{` continues it as an E0018 whose fix joins the lines.
+#[test]
+fn a_test_header_errors() {
+    assert_eq!(
+        errors("test \"t\" forall (seed: Int, var n: Int,) uses Net, Clock {}\n"),
+        Vec::<String>::new()
+    );
+    assert_eq!(
+        messages("test \"t\" forall () {}\n"),
+        ["expected a parameter, found `)`"]
+    );
+    assert_eq!(errors("test \"t\" forall () {}\n"), ["E0016 17..18"]);
+    assert_eq!(
+        messages("test \"t\" forall {}\n"),
+        ["expected `(`, found `{`"]
+    );
+    assert_eq!(
+        messages("test \"t\" uses {}\n"),
+        ["expected an effect, found `{`"]
+    );
+    assert_eq!(
+        messages("test \"t\" uses Net forall (n: Int) {}\n"),
+        ["expected `{`, found the keyword `forall`"]
+    );
+    assert_eq!(
+        messages("test \"t\" 1 {}\n"),
+        ["expected `forall`, `uses` or `{`, found the number `1`"]
+    );
+    assert_eq!(
+        messages("test \"t\" forall (n: Int) 1 {}\n"),
+        ["expected `uses` or `{`, found the number `1`"]
+    );
+    assert_eq!(
+        errors("test \"t\"\n  forall (n: Int) {}\n"),
+        [r#"E0018 8..9 => "test \"t\" forall (n: Int) {}\n""#]
+    );
+    assert_eq!(
+        errors("test \"t\" forall (n: Int)\n  uses Net {}\n"),
+        [r#"E0018 24..25 => "test \"t\" forall (n: Int) uses Net {}\n""#]
+    );
+    assert_eq!(
+        errors("test \"t\" uses Net\n{}\n"),
+        [r#"E0018 17..18 => "test \"t\" uses Net {}\n""#]
+    );
+    // An unclosed parameter list closes at the next declaration.
+    assert_eq!(
+        errors("test \"t\" forall (n: Int\nfn f() {}\n"),
+        ["E0017 16..17"]
+    );
+}

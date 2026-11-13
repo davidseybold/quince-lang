@@ -407,7 +407,7 @@ The layers:
 6. `m1/parser-closures` (6a): closures, `return`, `break`, `continue` and contracts. `m1/parser-concurrency` (6b): `concurrent`, `background`, `select`, `with` and `spawn`.
 7. `m1/parser-doc-placement` (7a): members' doc comments and attributes, and E0023. `m1/parser-impl-interface` (7b): the rest of `impl`, and `interface`. `m1/parser-effect-foreign` (7c): `effect` and `foreign`. `m1/parser-header-recovery` (7d): recovery when a header's `{` is missing, `uses` on the next line, and the block of a line that is no declaration.
 8. `m1/parser-names`: `validate`, the case check and E0021.
-9. `m1/parser-fuzz`: the fuzz crate, the nesting limit and E0022, and the deep-nesting tests.
+9. `m1/parser-test-decl` (9a): a `test`'s `forall` and `uses`, and the last grammar productions. `m1/parser-depth` (9b): the nesting limit and E0022, and the deep-nesting tests. `m1/parser-fuzz` (9c): the fuzz check and crate. A fourth PR fixes what a fuzz run finds, if it finds anything.
 
 Each spec question lands in the layer that enforces it, with a minor version bump (Tasks). Layers should come in at 500 to 900 changed lines. Layer 1 is the largest. If it runs past 1,000 lines, its expressions (lists, ranges, method calls) move to a layer 1b, and the `lex/` fixtures that need them wait for it. The wiring then moves to 1b too, since every fixture must parse once it lands.
 
@@ -661,10 +661,16 @@ Layer 7 is three PRs (split by size, 2026-11-12), since its four declarations an
 - [x] Spec: question 1, and a bump (v0.26). [`lex.name.snake`, `lex.name.pascal`, `lex.name.screaming`, `lex.name.declared`]
 - [x] `validate` and the case check; E0021. `parse` runs it over every tree, with errors or not. The node around a `Name` decides its class, and a `background` scope is a parameter. When the name written in its class fits no class or is a keyword, the message gives none, as for `const N`. Unit tests whose constants had one letter, or whose binding was `_rest`, got names that fit. [`lex.name.case`, `lex.name.enforced`, `lex.name.foreign-exempt`, `lex.ident-classes`]
 
-**Layer 9: `m1/parser-fuzz`**
-- [ ] A `test`'s `forall` parameters and `uses` effects (`grammar.test_decl`), which no layer parses yet: `test_decl` stops after the name (found in layer 8). Its parameters are `Param`s, so the case check covers them with no change.
+Layer 9 is three PRs (decided by David, 2026-11-13), since together they would run past 1,000 lines: the last grammar, then the nesting limit, then the fuzz check. The limit comes before the fuzz crate, since a fuzzer's first find without it is a stack overflow. A fourth PR fixes what a fuzz run finds, if it finds anything.
+
+**Layer 9a: `m1/parser-test-decl`**
+- [x] A `test`'s `forall` parameters and `uses` effects (`grammar.test_decl`), which no layer parses yet: `test_decl` stops after the name (found in layer 8). Its parameters are `Param`s, so the case check covers them with no change. `forall` takes one parameter or more. A test's header isn't a `fn` header, so a line that starts with `forall` or `uses` is an E0018, as one that starts with `{` is. [`grammar.test_decl`]
+- [x] Every grammar production cited by a passing fixture: 81 of 81. [`grammar.assign_op`, `grammar.const_decl`, `grammar.decl`, `grammar.item`, `grammar.param`]
+
+**Layer 9b: `m1/parser-depth`**
 - [ ] Parsing ahead (layer 3b) nests type arguments as deep as the `<`s it meets, so `g(a < b, a < b, ...)` nests far deeper than its tree. The depth counter must cover parsing ahead, and an E0022 while parsing ahead is a slip, not an error (found in layer 3b's review).
-- [ ] `fuzz::check_parse` and its unit test over every fixture; the fuzz crate and its thin target; the command in `AGENTS.md`.
 - [ ] The nesting limit, measured; E0022; the deep-nesting tests on spawned threads. `tests::stmts::deeply_nested_blocks` (layer 4c) nests 300 blocks, past the 256 looks `LOOKAHEAD_LIMIT` allows: if the limit rejects that depth, the test expects the one E0022 and still checks that no look trips the guard.
-- [ ] Every grammar production cited by a passing fixture.
+
+**Layer 9c: `m1/parser-fuzz`**
+- [ ] `fuzz::check_parse` and its unit test over every fixture; the fuzz crate and its thin target; the command in `AGENTS.md`.
 - [ ] Before M1 closes: run the fuzz target, and fix every crash it finds, each with a regression test.

@@ -1,0 +1,17 @@
+// rule: grammar.decl
+// mode: parse
+// A declaration is its doc comments, then its attributes, each on its own line, then `pub` if
+// it is public, then the item. `pub` comes once, after the attributes.
+/// Says hello.
+@deprecated("use greet")
+pub fn hello() {}
+
+/// A point.
+pub struct Point { x: Int }
+@opaque
+struct Id(Int)
+pub type Ids = List<Id>
+fn greet() {}
+pub pub fn twice() {} //~ E0016
+fn wave() {}
+pub @opaque struct Late { x: Int } //~ E0016
