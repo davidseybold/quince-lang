@@ -121,8 +121,8 @@ A node holds its tokens and child nodes in source order. A part the code leaves 
 | `TypePath` | Its names and the `.` tokens between them, whatever their case, then its `TypeArgs` if present. An effect in a `uses` list and a bound are `TypePath`s too. |
 | `TypeArgs` | `<`, types and their commas, and `>`. The last item may be `Effects`, and in a bound an item may be a `NamedTypeArg`. |
 | `NamedTypeArg` | A `NameRef`, `=` and a type: `Item = Int` in a bound. |
-| `TupleType` | `(`, two or more types and their commas, and `)`, or just `(` and `)` for the unit type. |
-| `ParenType` | `(`, one type and `)`. The type is a `FnType` unless the node holds an error. |
+| `TupleType` | `(`, two or more types and their commas, and `)`. The unit type is the type path `Unit`. |
+| `ParenType` | `(`, one type and `)`. The type is a `FnType` unless the node holds an error. `()`, an E0016, holds no type. |
 | `FnType` | `fn`, `(`, the parameter types and their commas, `)`, then a `RetType` and `Effects` if present. |
 | `Effects` | `uses`, then `*` or `TypePath`s and their commas. |
 | `Generics` | `<`, `GenericParam`s and their commas, and `>`. |

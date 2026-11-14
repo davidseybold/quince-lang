@@ -423,7 +423,7 @@ Rule IDs in brackets are what each task's fixtures cite.
 **Parser PRs, before layer 0**
 - [ ] `m1/neg-literal-spacing`: question 3, and a bump. The parser's unit tests for `- 1`. The doc comments that cite the retired IDs (`parser/exprs.rs` and `tests/exprs.rs`) cite the new one. [`lex.lit.neg-literal`]
 - [ ] `m1/test-header-lines`: question 4, and a bump. [`lex.continue.test-header`]
-- [ ] `m1/unit-type`: question 8, and a bump. [`type.unit`, `grammar.type`]
+- [x] `m1/unit-type`: question 8, and a bump. [`type.unit`, `grammar.type`]
 
 **Layer 0: `m1/fmt-engine`**
 - [ ] The document type and the iterative engine: groups, the three line kinds, `indent`, `if_break`, `line_suffix`, `choice`, shared documents; width in `char`s; unit tests at small widths.

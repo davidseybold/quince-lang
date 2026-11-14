@@ -40,9 +40,14 @@ fn messages(text: &str) -> Vec<String> {
     parse.errors().iter().map(|e| e.message.clone()).collect()
 }
 
+/// The unit type is `Unit`, and `()` is only its value (`r[type.unit]`), so `()` where a type
+/// goes is an E0016 at the `)`.
 #[test]
 fn unit_and_tuples() {
-    assert_eq!(ty("()"), "TupleType\n  LParen \"(\"\n  RParen \")\"\n");
+    assert_eq!(ty("Unit"), "TypePath\n  Ident \"Unit\"\n");
+    assert_eq!(errors("fn f(a: ()) {}"), ["E0016 9..10"]);
+    assert_eq!(messages("fn f() -> () {}"), ["expected a type, found `)`"]);
+    assert_eq!(errors("fn f(a: Result<(), E>) {}"), ["E0016 16..17"]);
     assert_eq!(
         ty("(Int, String,)"),
         r#"TupleType

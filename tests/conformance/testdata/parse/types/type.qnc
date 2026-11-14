@@ -1,15 +1,15 @@
 // rule: grammar.type
 // rule: grammar.type_path
 // mode: parse
-// A type is a type path with optional type arguments, the unit type `()`, a tuple of two or
-// more types, or a function type, bare or in parentheses. Dotted names, `Self` and C names
-// are all type paths: the parser doesn't look at case.
+// A type is a type path with optional type arguments, a tuple of two or more types, or a
+// function type, bare or in parentheses. Dotted names, `Self` and C names are all type paths:
+// the parser doesn't look at case.
 fn types(
   a: Int,
   b: http.Request,
   c: Self.Item,
   d: Ptr<sqlite3>,
-  e: (),
+  e: Unit,
   f: (Int, String),
   g: (Int, List<String>, (Bool, Float),),
   h: fn(Int) -> Int,

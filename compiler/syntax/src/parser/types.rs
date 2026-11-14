@@ -184,17 +184,13 @@ fn type_item(p: &mut Parser) {
     type_(p);
 }
 
-/// `()`, a tuple of two or more types, or one function type in parentheses, which ends it
-/// (`r[type.fn-parens]`). Any other type in parentheses is an E0016 whose fix removes them.
+/// A tuple of two or more types, or one function type in parentheses, which ends it
+/// (`r[type.fn-parens]`). Any other type in parentheses is an E0016 whose fix removes them,
+/// and `()` is an E0016 at the `)`: the unit type is `Unit` (`r[type.unit]`).
 fn paren_type(p: &mut Parser) -> bool {
     let marker = p.start();
     let open = p.pos;
     p.bump();
-    if p.kind() == RParen {
-        p.bump();
-        p.complete(marker, TupleType);
-        return true;
-    }
     p.push_frame(Holds::Items, Some(RParen));
     if let Some(stop) = p.stop() {
         p.close_frame(stop);
