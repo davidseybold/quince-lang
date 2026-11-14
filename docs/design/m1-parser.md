@@ -667,7 +667,7 @@ Layer 7 is three PRs (split by size, 2026-11-12), since its four declarations an
 Layer 9 is three PRs (decided by David, 2026-11-13), since together they would run past 1,000 lines: the last grammar, then the nesting limit, then the fuzz check. The limit comes before the fuzz crate, since a fuzzer's first find without it is a stack overflow. A fourth PR fixes what a fuzz run finds, if it finds anything.
 
 **Layer 9a: `m1/parser-test-decl`**
-- [x] A `test`'s `forall` parameters and `uses` effects (`grammar.test_decl`), which no layer parses yet: `test_decl` stops after the name (found in layer 8). Its parameters are `Param`s, so the case check covers them with no change. `forall` takes one parameter or more. A test's header isn't a `fn` header, so a line that starts with `forall` or `uses` is an E0018, as one that starts with `{` is. [`grammar.test_decl`]
+- [x] A `test`'s `forall` parameters and `uses` effects (`grammar.test_decl`), which no layer parses yet: `test_decl` stops after the name (found in layer 8). Its parameters are `Param`s, so the case check covers them with no change. `forall` takes one parameter or more. A test's header isn't a `fn` header, so a line that starts with `forall` or `uses` is an E0018, as one that starts with `{` is. (Revised by David, 2026-11-13, for the formatter: `r[lex.continue.test-header]` makes those three lines continue the header. See [`m1-fmt.md`](m1-fmt.md), question 4.) [`grammar.test_decl`]
 - [x] Every grammar production cited by a passing fixture: 81 of 81. [`grammar.assign_op`, `grammar.const_decl`, `grammar.decl`, `grammar.item`, `grammar.param`]
 
 **Layer 9b: `m1/parser-depth`**

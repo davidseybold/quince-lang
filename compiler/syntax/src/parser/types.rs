@@ -1,7 +1,7 @@
 //! Types (`grammar.type`): type paths with type arguments, tuples, function types bare or in
 //! parentheses, generic parameters with their bounds, and `uses` lists.
 
-use super::{Holds, Marker, Parser, Sync, items};
+use super::{Header, Holds, Marker, Parser, Sync, items};
 use crate::SyntaxKind::{self, *};
 use crate::{SyntaxError, codes};
 use quince_diagnostics::Applicability;
@@ -160,7 +160,7 @@ fn fn_type(p: &mut Parser, uses: Uses) -> bool {
     p.bump();
     // A function type's header continues on a line that starts with `->` or `uses`
     // (`r[lex.continue.fn-header]`).
-    let outer_header = std::mem::replace(&mut p.in_fn_header, true);
+    let outer_header = std::mem::replace(&mut p.header, Header::Fn);
     let mut ok = p.at(LParen);
     if ok {
         p.bump();
@@ -177,7 +177,7 @@ fn fn_type(p: &mut Parser, uses: Uses) -> bool {
     if ok && uses == Uses::Take && p.at(UsesKw) {
         ok = effects(p);
     }
-    p.in_fn_header = outer_header;
+    p.header = outer_header;
     p.complete(marker, FnType);
     ok
 }

@@ -188,6 +188,17 @@ struct Below {
     too_deep: bool,
 }
 
+/// The header the parser is in. The innermost one decides: a `fn` type in a test's
+/// parameters is a `fn` header, and a block is in none.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Header {
+    None,
+    /// A declaration's signature, a closure's or a function type.
+    Fn,
+    /// A `test`'s, from its name to its block.
+    Test,
+}
+
 /// What the members of a line context can be (decision 9's member starts).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Holds {
@@ -275,8 +286,8 @@ struct Parser<'t> {
     /// so what the constructs around it lack is part of that slip. Unlike `recovering`, it
     /// doesn't silence the E0017s of the frames around it.
     closed_early: bool,
-    /// The parser is in a `fn` header, where a line that starts with `->` or `{` continues.
-    in_fn_header: bool,
+    /// The header the parser is in, which decides the words that continue its lines.
+    header: Header,
     /// The parser is in the condition of an `if` or a `while`, the subject of a `match` or the
     /// iterable of a `for`, and this many frames are open at its top, where `{` always starts
     /// the block (`r[expr.block.cond-brace]`).
@@ -356,7 +367,7 @@ impl<'t> Parser<'t> {
             frames: Vec::new(),
             recovering: false,
             closed_early: false,
-            in_fn_header: false,
+            header: Header::None,
             condition_frames: None,
             after_attributes: false,
             after_operator: false,
@@ -436,10 +447,14 @@ impl<'t> Parser<'t> {
         }
     }
 
-    /// The parser is in a `fn` header, and a line that starts with `kind` continues it
-    /// (`r[lex.continue.fn-header]`).
+    /// The parser is in a header, and a line that starts with `kind` continues it
+    /// (`r[lex.continue.fn-header]`, `r[lex.continue.test-header]`).
     fn header_continues(&self, kind: SyntaxKind) -> bool {
-        self.in_fn_header && matches!(kind, Arrow | UsesKw | RequiresKw | EnsuresKw | LBrace)
+        match self.header {
+            Header::None => false,
+            Header::Fn => matches!(kind, Arrow | UsesKw | RequiresKw | EnsuresKw | LBrace),
+            Header::Test => matches!(kind, ForallKw | UsesKw | LBrace),
+        }
     }
 
     /// The current token comes after a line break that ends the construct the parser is in,

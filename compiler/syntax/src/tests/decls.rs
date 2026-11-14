@@ -462,8 +462,9 @@ fn errors_in_declarations() {
 }
 
 /// A test's `forall` parameters and `uses` effects come in that order, and `forall` takes one
-/// parameter or more (`grammar.test_decl`). A test's header isn't a `fn` header, so a line
-/// that starts with `forall`, `uses` or `{` continues it as an E0018 whose fix joins the lines.
+/// parameter or more (`grammar.test_decl`). A line that starts with `forall`, `uses` or `{`
+/// continues the header (`r[lex.continue.test-header]`), and one that starts with a word that
+/// continues only a `fn` header ends it.
 #[test]
 fn a_test_header_errors() {
     assert_eq!(
@@ -495,18 +496,21 @@ fn a_test_header_errors() {
         messages("test \"t\" forall (n: Int) 1 {}\n"),
         ["expected `uses` or `{`, found the number `1`"]
     );
+    let one_line = valid("test \"t\" forall (n: Int) uses Net {}\n");
+    for broken in [
+        "test \"t\"\n  forall (n: Int) uses Net {}\n",
+        "test \"t\" forall (n: Int)\n  uses Net {}\n",
+        "test \"t\" forall (n: Int) uses Net\n{}\n",
+        "test \"t\"\n  forall (n: Int)\n  uses Net\n{}\n",
+    ] {
+        assert_eq!(valid(broken), one_line, "{broken:?}");
+    }
     assert_eq!(
-        errors("test \"t\"\n  forall (n: Int) {}\n"),
-        [r#"E0018 8..9 => "test \"t\" forall (n: Int) {}\n""#]
+        messages("test \"t\"\n  requires true {}\n"),
+        ["expected `forall`, `uses` or `{`, found a line break"]
     );
-    assert_eq!(
-        errors("test \"t\" forall (n: Int)\n  uses Net {}\n"),
-        [r#"E0018 24..25 => "test \"t\" forall (n: Int) uses Net {}\n""#]
-    );
-    assert_eq!(
-        errors("test \"t\" uses Net\n{}\n"),
-        [r#"E0018 17..18 => "test \"t\" uses Net {}\n""#]
-    );
+    // A function type in the parameters has a `fn` header of its own.
+    valid("test \"t\" forall (f: fn(Int)\n  -> Int) {}\n");
     // An unclosed parameter list closes at the next declaration.
     assert_eq!(
         errors("test \"t\" forall (n: Int\nfn f() {}\n"),

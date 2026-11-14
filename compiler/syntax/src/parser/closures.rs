@@ -1,6 +1,6 @@
 //! Closures (`grammar.closure`), and `return`, `break` and `continue` (`grammar.jump`).
 
-use super::{Completed, Parser, exprs, items, types};
+use super::{Completed, Header, Parser, exprs, items, types};
 use crate::SyntaxKind::{self, *};
 
 /// `fn` `(` [ cparam { `,` cparam } [ `,` ] ] `)` [ `->` type ] [ `uses` effects ] block
@@ -10,11 +10,11 @@ use crate::SyntaxKind::{self, *};
 pub(super) fn closure(p: &mut Parser) -> Completed {
     let marker = p.start();
     p.bump();
-    let outer_header = std::mem::replace(&mut p.in_fn_header, true);
+    let outer_header = std::mem::replace(&mut p.header, Header::Fn);
     if items::param_list(p, cparam, starts_cparam) {
         items::fn_rest(p, false, true);
     }
-    p.in_fn_header = outer_header;
+    p.header = outer_header;
     p.complete(marker, Closure)
 }
 

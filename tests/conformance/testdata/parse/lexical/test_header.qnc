@@ -1,0 +1,37 @@
+// rule: lex.continue.test-header
+// mode: parse
+// Inside a `test` header, a line that starts with `forall`, `uses` or `{` continues the header.
+fn add(a: Int, b: Int) -> Int { a + b }
+
+test "adds any two"
+  forall (a: Int, b: Int)
+{
+  add(a, b)
+}
+
+test "fetches"
+  uses Net {}
+
+test "fetches any page with a long name"
+  forall (page: Int)
+  uses Net, Clock
+{
+  add(page, 1)
+}
+
+test "spread" forall (
+  first: Int,
+  second: Int,
+)
+  uses Net
+{
+}
+
+test "adds"
+{
+  add(1, 2)
+}
+
+// The words that continue a `fn` header don't continue a test's.
+test "returns"
+  -> Int {} //~^ E0016

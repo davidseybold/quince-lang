@@ -3,7 +3,7 @@
 //! attributes, and their parts.
 
 use super::input::Break;
-use super::{Holds, Parser, Step, Sync, exprs, types};
+use super::{Header, Holds, Parser, Step, Sync, exprs, types};
 use crate::SyntaxKind::{self, *};
 use crate::{SyntaxError, codes};
 use quince_diagnostics::Applicability;
@@ -290,14 +290,14 @@ fn fn_decl(p: &mut Parser, owner: Owner) {
     let body = matches!(owner, Owner::File | Owner::Impl);
     let contracts = owner != Owner::Effect;
     p.bump();
-    let outer_header = std::mem::replace(&mut p.in_fn_header, true);
+    let outer_header = std::mem::replace(&mut p.header, Header::Fn);
     if name(p, "a function name")
         && (!p.at(Lt) || types::generics(p))
         && param_list(p, param, starts_param)
     {
         fn_rest(p, contracts, body);
     }
-    p.in_fn_header = outer_header;
+    p.header = outer_header;
 }
 
 /// `fn` c_name `(` [ c_name `:` type { `,` c_name `:` type } [ `,` ] ] `)` [ `->` type ]
@@ -307,7 +307,7 @@ fn fn_decl(p: &mut Parser, owner: Owner) {
 /// (`r[lex.continue.fn-header]`).
 fn c_fn(p: &mut Parser) {
     p.bump();
-    let outer_header = std::mem::replace(&mut p.in_fn_header, true);
+    let outer_header = std::mem::replace(&mut p.header, Header::Fn);
     if name(p, "a function name") && param_list(p, c_param, starts_c_param) {
         // A `}` on the line closes the block the function is in.
         let ends = |p: &Parser| p.at_break() || p.kind() == RBrace;
@@ -325,7 +325,7 @@ fn c_fn(p: &mut Parser) {
             p.expected("`->` or a line break");
         }
     }
-    p.in_fn_header = outer_header;
+    p.header = outer_header;
 }
 
 /// A C function's parameter: a name, `:` and a type.
@@ -350,7 +350,7 @@ fn starts_c_param(kind: SyntaxKind) -> bool {
 
 /// What follows a function's parameters, in a declaration or a closure: [ `->` type ]
 /// [ `uses` effects ], its contracts when `contracts`, and its block when `body`. Without one
-/// the signature ends its line. The caller has set `in_fn_header`.
+/// the signature ends its line. The caller has set `header` to `Header::Fn`.
 pub(super) fn fn_rest(p: &mut Parser, contracts: bool, body: bool) {
     const HEADER_PARTS: [&str; 4] = ["`->`", "`uses`", "`requires`", "`ensures`"];
     let mut from = 0;
@@ -500,10 +500,17 @@ fn starts_param(kind: SyntaxKind) -> bool {
 }
 
 /// `test` string [ `forall` `(` params `)` ] [ `uses` effects ] block (`grammar.test_decl`).
-/// `forall` takes one parameter or more. A test's header isn't a `fn` header, so a line that
-/// starts with `forall` or `uses` continues it as an E0018 (decision 4), as `{` does.
+/// `forall` takes one parameter or more. A line that starts with `forall`, `uses` or `{`
+/// continues the header (`r[lex.continue.test-header]`).
 fn test_decl(p: &mut Parser) {
     p.bump();
+    let outer_header = std::mem::replace(&mut p.header, Header::Test);
+    test_header(p);
+    p.header = outer_header;
+}
+
+/// What follows `test` in a test declaration.
+fn test_header(p: &mut Parser) {
     if !p.at(StringStart) {
         return p.expected("the test's name, a string");
     }
