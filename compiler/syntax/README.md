@@ -122,7 +122,7 @@ A node holds its tokens and child nodes in source order. A part the code leaves 
 | `TypeArgs` | `<`, types and their commas, and `>`. The last item may be `Effects`, and in a bound an item may be a `NamedTypeArg`. |
 | `NamedTypeArg` | A `NameRef`, `=` and a type: `Item = Int` in a bound. |
 | `TupleType` | `(`, two or more types and their commas, and `)`. The unit type is the type path `Unit`. |
-| `ParenType` | `(`, one type and `)`. The type is a `FnType` unless the node holds an error. `()`, an E0016, holds no type. |
+| `ParenType` | `(`, one type and `)`. The type is a `FnType` unless the node holds an error. `()`, an E0027, holds no type. |
 | `FnType` | `fn`, `(`, the parameter types and their commas, `)`, then a `RetType` and `Effects` if present. |
 | `Effects` | `uses`, then `*` or `TypePath`s and their commas. |
 | `Generics` | `<`, `GenericParam`s and their commas, and `>`. |
@@ -249,6 +249,7 @@ The parser reads the significant tokens: every token but the trivia and the doc 
 | E0024 | A struct with no fields written with braces, at the braces | Remove them (`safe`), unless a `requires` follows or a comment lies before or between them |
 | E0025 | `{}` where an expression is expected, over the braces | Insert `:` after the `{` (`needs-review`) |
 | E0026 | An assignment whose left side isn't a place, over the left side. Not reported when the left side holds a syntax error | None |
+| E0027 | `()` where a type goes, over the parentheses | Write `Unit` (`needs-review`), unless a comment lies between them |
 
 ## Naming case
 

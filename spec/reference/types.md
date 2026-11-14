@@ -54,7 +54,7 @@ r[type.result]
 - `Result<T, E>`: `Ok(value)` or `Err(error)`
 
 r[type.unit]
-- `Unit`: The empty value, written `()`. The type is written `Unit`, and its one value `()`.
+- `Unit`: The type with exactly one value, `()`. The type is written `Unit`, never `()`.
 
 r[type.never]
 - `Never`: The type of an expression that never produces a value: return, break, continue, unreachable, todo and Process.exit. It has no values and fits wherever any type is expected (see [Inference rules](#inference-rules))

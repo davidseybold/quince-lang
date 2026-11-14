@@ -1,7 +1,7 @@
 // rule: type.unit
 // mode: parse
-// The unit type is written `Unit`, and its one value `()`. So `()` is a value, and where a
-// type goes it is an error.
+// `Unit` is the type with exactly one value, `()`. The type is written `Unit`, never `()`, so
+// `()` where a type goes is an error.
 fn done() -> Unit {
   ()
 }
@@ -10,7 +10,7 @@ fn save() -> Result<Unit, String> {
   Ok(())
 }
 
-fn returns_unit() -> () {} //~ E0016
-fn takes_unit(u: ()) {} //~ E0016
-const NOTHING: Result<(), String> = Ok(()) //~ E0016
-fn takes_callback(done: fn() -> ()) {} //~ E0016
+fn returns_unit() -> () {} //~ E0027
+fn takes_unit(u: ()) {} //~ E0027
+const NOTHING: Result<(), String> = Ok(()) //~ E0027
+fn takes_callback(done: fn() -> ()) {} //~ E0027

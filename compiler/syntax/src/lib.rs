@@ -50,6 +50,7 @@ pub mod codes {
     pub const EMPTY_STRUCT_BRACES: &str = "E0024";
     pub const EMPTY_BRACES: &str = "E0025";
     pub const NOT_A_PLACE: &str = "E0026";
+    pub const UNIT_TYPE: &str = "E0027";
     /// The codes the lexer and `decode_source` report. The lexer's mutation test requires
     /// every one of them from its mutants.
     pub const LEXER: &[&str] = &[
@@ -82,6 +83,7 @@ pub mod codes {
         EMPTY_STRUCT_BRACES,
         EMPTY_BRACES,
         NOT_A_PLACE,
+        UNIT_TYPE,
     ];
 
     /// Every code this crate reports.

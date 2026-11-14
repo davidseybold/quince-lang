@@ -45,9 +45,29 @@ fn messages(text: &str) -> Vec<String> {
 #[test]
 fn unit_and_tuples() {
     assert_eq!(ty("Unit"), "TypePath\n  Ident \"Unit\"\n");
-    assert_eq!(errors("fn f(a: ()) {}"), ["E0016 9..10"]);
-    assert_eq!(messages("fn f() -> () {}"), ["expected a type, found `)`"]);
-    assert_eq!(errors("fn f(a: Result<(), E>) {}"), ["E0016 16..17"]);
+    assert_eq!(
+        errors("fn f(a: ()) {}"),
+        [r#"E0027 8..10 => "fn f(a: Unit) {}""#]
+    );
+    assert_eq!(
+        messages("fn f() -> () {}"),
+        ["`()` is the unit value; the unit type is written `Unit`"]
+    );
+    assert_eq!(
+        errors("fn f(a: Result<(), E>) {}"),
+        [r#"E0027 15..17 => "fn f(a: Result<Unit, E>) {}""#]
+    );
+    // What follows is parsed as usual.
+    assert_eq!(
+        errors("fn f() -> () uses Log {}"),
+        [r#"E0027 10..12 => "fn f() -> Unit uses Log {}""#]
+    );
+    assert_eq!(
+        errors("fn f(a: ( )) {}"),
+        [r#"E0027 8..11 => "fn f(a: Unit) {}""#]
+    );
+    // Replacing them would delete a comment, so there is no fix.
+    assert_eq!(errors("fn f(a: (\n  // none\n)) {}"), ["E0027 8..21"]);
     assert_eq!(
         ty("(Int, String,)"),
         r#"TupleType

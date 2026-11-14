@@ -3,6 +3,7 @@
 
 use super::{Holds, Marker, Parser, Sync, items};
 use crate::SyntaxKind::{self, *};
+use crate::{SyntaxError, codes};
 use quince_diagnostics::Applicability;
 
 /// Whether a bare function type takes a `uses` after it.
@@ -185,9 +186,12 @@ fn type_item(p: &mut Parser) {
 }
 
 /// A tuple of two or more types, or one function type in parentheses, which ends it
-/// (`r[type.fn-parens]`). Any other type in parentheses is an E0016 whose fix removes them,
-/// and `()` is an E0016 at the `)`: the unit type is `Unit` (`r[type.unit]`).
+/// (`r[type.fn-parens]`). Any other type in parentheses is an E0016 whose fix removes them.
 fn paren_type(p: &mut Parser) -> bool {
+    if p.nth_kind(1) == RParen {
+        unit_type(p);
+        return true;
+    }
     let marker = p.start();
     let open = p.pos;
     p.bump();
@@ -236,6 +240,26 @@ fn paren_type(p: &mut Parser) -> bool {
     p.list_items(RParen, "a type", type_item, starts_type, true);
     p.complete(marker, TupleType);
     true
+}
+
+/// `()` where a type goes: the unit type is written `Unit` (`r[type.unit]`), so it is an
+/// E0027 over the parentheses, in a `ParenType` that holds no type. Its fix writes `Unit`,
+/// unless a comment lies between them, which replacing them would delete. What follows is
+/// parsed as after any type.
+fn unit_type(p: &mut Parser) {
+    let (open, close) = (&p.input.tokens[p.pos], &p.input.tokens[p.pos + 1]);
+    let range = open.range.start..close.range.end;
+    let message = "`()` is the unit value; the unit type is written `Unit`".to_string();
+    let mut error = SyntaxError::new(range.clone(), codes::UNIT_TYPE, message);
+    if p.text[open.range.end..close.range.start].trim().is_empty() {
+        let edit = (range, "Unit".to_string());
+        error = error.with_fix("write `Unit`", Applicability::NeedsReview, vec![edit]);
+    }
+    p.report(error);
+    let marker = p.start();
+    p.bump();
+    p.bump();
+    p.complete(marker, ParenType);
 }
 
 /// `<` generic { `,` generic } `>` after a declaration's name (`grammar.generics`).
