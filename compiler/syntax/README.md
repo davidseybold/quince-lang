@@ -136,7 +136,7 @@ A node holds its tokens and child nodes in source order. A part the code leaves 
 | `IfExpr` | `if`, an expression and a `Block`, then `else` and an `IfExpr` or a `Block` if present. |
 | `Name` | The `Ident` of a name being declared. |
 | `NameRef` | The `Ident`, `self` or `Self` of a name being used, then, in an expression, the `TypeArgs` after an `Ident` when its `<` starts them. |
-| `Literal` | One `Int`, `Float`, `Char`, `true` or `false`; a negative number, its `-` and its `Int` or `Float`, with any trivia between them in a pattern; or a whole string: its `StringStart`, text, `Interp`s and `StringEnd`, which an unclosed string lacks. |
+| `Literal` | One `Int`, `Float`, `Char`, `true` or `false`; a negative number, its `-` and its `Int` or `Float`, with any trivia between them; or a whole string: its `StringStart`, text, `Interp`s and `StringEnd`, which an unclosed string lacks. |
 | `Interp` | An interpolation's `InterpStart`, the tokens of its path, and its `InterpEnd`. |
 | `ListLit` | `[`, expressions and their commas, and `]`. |
 | `Range` | An expression, `..` or `..=`, and an expression. |

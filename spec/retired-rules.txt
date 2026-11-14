@@ -8,3 +8,5 @@ item.attr.test
 test.attr
 item.attr.placement
 lex.continue.signature
+lex.lit.int.neg
+lex.lit.neg-adjacent

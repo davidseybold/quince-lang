@@ -123,7 +123,7 @@ A hard break never joins. `a;` followed by a line `.b()` is an E0002 plus an E00
 ### 5. Tokens the parser joins
 
 - **`>>` and `>=`** are formed from a `>` and the next token when no trivia sits between them (lexer decision 5). The parser checks adjacency, and the builder writes the pair to the tree as one token, `GtGt` or `GtEq`, holding both texts. They are CST-only kinds: the lexer never produces them, which keeps `r[lex.no-shift-token]`. `a > = b` is an "expected expression" error, as `a = = b` is.
-- **A negative literal** (`r[lex.lit.int.neg]`, spec question 5) is a `-` in prefix position followed, with no trivia between, by an `Int` or `Float` that no postfix operator follows. The builder puts both tokens in one `Literal` node, so `-9_223_372_036_854_775_808` is one literal the type checker can range-check. `- 1` is a prefix minus applied to `1`. `-2.pow(2)` is `-(2.pow(2))`, as `r[expr.op.levels]` reads `-x.abs()`. In patterns, `[ "-" ] literal` is one `Literal` whatever lies between the `-` and the number, since a pattern has no prefix minus, so `- 5` is `-5`, as in Rust (decided by David, 2026-11-12). The formatter writes `-5`, and unformatted code compiles (`r[tool.fmt.check]`).
+- **A negative literal** (`r[lex.lit.neg-literal]`, spec question 5 as revised) is a `-` in prefix position followed, with only trivia between, by an `Int` or `Float` that no postfix operator follows. The builder puts both tokens and the trivia in one `Literal` node, so `-9_223_372_036_854_775_808` is one literal the type checker can range-check, and `- 1` is the same literal as `-1`. `-2.pow(2)` is `-(2.pow(2))`, as `r[expr.op.levels]` reads `-x.abs()`. In patterns, `[ "-" ] literal` is one `Literal` the same way, so `- 5` is `-5`, as in Rust (decided by David, 2026-11-12). The formatter writes `-5`, and unformatted code compiles (`r[tool.fmt.check]`).
 
 ### 6. Expressions
 
@@ -350,7 +350,7 @@ Past the limit, E0022 is reported at the token that goes past it, and the parser
 - **Coverage honesty.** A fixture cites a rule only when a parser that broke the rule would fail the fixture, as the lexer doc requires. A `parse` fixture sees only diagnostics, not the tree. So:
   - rules that forbid something are cited by fixtures that expect the error;
   - accepted forms are cited by fixtures that a parser rejecting them would fail;
-  - rules about the tree's shape are unit-tested, and cited by fixtures only where a wrong tree gives a different diagnostic. They are `r[expr.op.levels]`, grouping, where a statement ends, and `r[lex.lit.int.neg]`, whose folding no diagnostic shows until M3 range-checks literals. M3's `check` fixtures and M6's `run` fixtures cite them.
+  - rules about the tree's shape are unit-tested, and cited by fixtures only where a wrong tree gives a different diagnostic. They are `r[expr.op.levels]`, grouping, where a statement ends, and `r[lex.lit.neg-literal]`, whose folding no diagnostic shows until M3 range-checks literals. M3's `check` fixtures and M6's `run` fixtures cite them.
 - **The lexer's handed-over rules** get their fixtures here:
   - `lex.keywords` and `lex.ident-not-keyword`: each keyword where a name goes is an E0016;
   - `lex.no-contextual`: `main`, `limit` and `TaskScope` as ordinary names;
@@ -445,6 +445,8 @@ The grammar's `primary` and `alt` list `name` and `NAME` but no `c_name`, so tod
 
 **5. Negative literals (layer 3).** `r[lex.lit.int.neg]` says the minus is "directly before" the literal, but not whether a space may come between, or what a postfix operator after the literal does. Approved: `r[lex.lit.neg-adjacent]` "Directly before means with nothing between them, not even a space, and the literal isn't followed by a postfix operator. So `- 1` is the prefix minus applied to `1`, and `-2.pow(2)` is `-(2.pow(2))`, as `-x.abs()` is." So `Int.MIN` is written `-9_223_372_036_854_775_808`, and postfix still binds tighter than prefix everywhere.
 
+*Revised by David, 2026-11-13,* for the formatter ([`m1-fmt.md`](m1-fmt.md), question 3). The formatter writes no space after a prefix operator, so it would turn `- 128`, an error as an `Int8`, into the valid `-128`. Both IDs above are retired for `r[lex.lit.neg-literal]`: a minus in prefix position before a number is part of the literal whatever spaces, line breaks or comments lie between them, as in patterns. So `- 1` and `-1` are the same literal.
+
 **6. Type arguments in expressions (layer 3).** `r[expr.op.compare.no-chain]` says `json.decode<Order>(body)` "has only one reading", but not how a parser finds it. Case can't settle it, since a type can be a C name (`Ptr<sqlite3>`). Approved: `r[expr.op.type-args]` "In an expression, `<` after a name or path starts type arguments when what follows parses as type arguments closed by `>`, and the token after the `>` is `(`, `.`, `?`, `,`, `)`, `]`, `}` or a line break, and not a `=` directly after the `>`. Otherwise `<` is less-than."
 
 So `a < b > c` stays a chained comparison with its fix, as the spec's example wants. One case still reads as type arguments: `f(a < b, c > (d))` calls `a<b, c>`. That reading then has to type-check as a generic call, and `f((a < b), c > (d))` gives the other one.
@@ -529,7 +531,7 @@ Revert the stack's PRs. Nothing changes outside `quince_syntax`, the conformance
 - Where comments go in the output. Decision 3 fixes only where they sit in the tree.
 - `lex.source.canonical` (lexer doc), `tool.fmt.*`, and `item.arg.fmt-positional` and `tool.fmt.field-shorthand`, which rewrite code.
 - `fmt` must refuse a lossy text (`Decoded::is_lossy()`) and a file with parse errors, or say what it does with them.
-- Writing a prefix minus with no space after it, which spec question 5 relies on.
+- Dropping the trivia inside a negative `Literal`, and keeping a comment there with its line break ([`m1-fmt.md`](m1-fmt.md), question 3).
 - The `fmt` fixture mode in the fixture README.
 
 ## Tasks

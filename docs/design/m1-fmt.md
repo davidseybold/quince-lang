@@ -421,7 +421,7 @@ Rule IDs in brackets are what each task's fixtures cite.
 - [x] David confirms question 9 as revised after approval (2026-11-13).
 
 **Parser PRs, before layer 0**
-- [ ] `m1/neg-literal-spacing`: question 3, and a bump. The parser's unit tests for `- 1`. The doc comments that cite the retired IDs (`parser/exprs.rs` and `tests/exprs.rs`) cite the new one. [`lex.lit.neg-literal`]
+- [x] `m1/neg-literal-spacing`: question 3, and a bump. The parser's unit tests for `- 1`. The doc comments that cite the retired IDs (`parser/exprs.rs` and `tests/exprs.rs`) cite the new one. [`lex.lit.neg-literal`]
 - [ ] `m1/test-header-lines`: question 4, and a bump. [`lex.continue.test-header`]
 - [ ] `m1/unit-type`: question 8, and a bump. [`type.unit`, `grammar.type`]
 

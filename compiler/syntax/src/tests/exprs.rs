@@ -1,6 +1,6 @@
 //! The parser's trees for operators, and their errors. Each expected dump is written by hand.
 
-use super::cst::dump_tree_without_trivia;
+use super::cst::{dump_tree, dump_tree_without_trivia};
 use super::parser::{checked, stmts};
 use crate::SyntaxKind;
 
@@ -599,8 +599,8 @@ fn less_than_after_parsing_ahead() {
     );
 }
 
-/// `r[lex.lit.int.neg]` and `r[lex.lit.neg-adjacent]`: a `-` in prefix position directly
-/// before a number that no postfix operator follows is part of the literal.
+/// `r[lex.lit.neg-literal]`: a `-` in prefix position before a number that no postfix operator
+/// follows is part of the literal, whatever spaces, line breaks or comments lie between them.
 #[test]
 fn negative_literals() {
     assert_eq!(tree("-1"), "Literal\n  Minus \"-\"\n  Int \"1\"\n");
@@ -609,10 +609,36 @@ fn negative_literals() {
         tree("-9_223_372_036_854_775_808"),
         "Literal\n  Minus \"-\"\n  Int \"9_223_372_036_854_775_808\"\n"
     );
+    // Trivia between them changes nothing, and goes inside the literal.
+    assert_eq!(tree("- 1"), tree("-1"));
+    assert_eq!(tree("- 1.5"), tree("-1.5"));
+    assert_eq!(tree("-\n    1"), tree("-1"));
+    let parse = checked("fn f() {\n  let x = - // c\n    1\n}\n");
+    assert_eq!(parse.errors(), []);
+    let literal = parse
+        .syntax()
+        .descendants()
+        .find(|node| node.kind() == SyntaxKind::Literal)
+        .unwrap();
     assert_eq!(
-        tree("- 1"),
-        "Prefix\n  Minus \"-\"\n  Literal\n    Int \"1\"\n"
+        dump_tree(&literal),
+        r#"Literal
+  Minus "-"
+  Whitespace " "
+  Comment "// c"
+  Newline "\n"
+  Whitespace "    "
+  Int "1"
+"#
     );
+    // A `;` ends the statement, so nothing follows the `-`.
+    assert_eq!(errors("-;1"), ["E0002 1..2"]);
+    // Only a minus joins a number: `!` and `~` apply to it, and a line break after them ends
+    // the statement.
+    assert!(tree("!1").starts_with("Prefix\n"));
+    assert!(tree("~ 1").starts_with("Prefix\n"));
+    assert_eq!(errors("!\n1"), ["E0016 1..2"]);
+    assert_eq!(errors("~\n1"), ["E0016 1..2"]);
     assert_eq!(
         tree("--1"),
         "Prefix\n  Minus \"-\"\n  Literal\n    Minus \"-\"\n    Int \"1\"\n"
@@ -642,7 +668,9 @@ fn negative_literals() {
       RParen ")"
 "#
     );
+    assert_eq!(tree("- 2.pow(2)"), tree("-2.pow(2)"));
     assert!(tree("-2\n    .pow(2)").starts_with("Prefix\n"));
+    assert!(tree("- 2\n    .pow(2)").starts_with("Prefix\n"));
     // After a `;`, a `.` starts a statement, so it isn't a postfix operator.
     let parse = checked("fn f() {\n  -2;\n  .x\n}\n");
     let block = parse

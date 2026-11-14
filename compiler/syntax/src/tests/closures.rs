@@ -219,10 +219,9 @@ fn contracts() {
         Ident "x"
       RParen ")"
       Binary
-        Prefix
+        Literal
           Minus "-"
-          Literal
-            Int "1"
+          Int "1"
         Gt ">"
         Literal
           Int "0"
