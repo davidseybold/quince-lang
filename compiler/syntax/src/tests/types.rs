@@ -66,10 +66,15 @@ fn unit_and_tuples() {
         errors("fn f(a: ( )) {}"),
         [r#"E0027 8..11 => "fn f(a: Unit) {}""#]
     );
-    // A word right after the `)` stays a word of its own.
+    // A word right after the `)` or right before the `(` stays a word of its own.
     assert_eq!(
         errors("fn f() -> ()uses Log {}"),
         [r#"E0027 10..12 => "fn f() -> Unit uses Log {}""#]
+    );
+    assert_eq!(errors("impl() {}"), [r#"E0027 4..6 => "impl Unit {}""#]);
+    assert_eq!(
+        errors("impl Show for() {}"),
+        [r#"E0027 13..15 => "impl Show for Unit {}""#]
     );
     // After an `Error` token, its E0001 is the one error.
     let codes =

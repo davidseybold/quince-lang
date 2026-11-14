@@ -238,7 +238,7 @@ The parser reads the significant tokens: every token but the trivia and the doc 
 
 | Code | Reported for | Fix |
 | --- | --- | --- |
-| E0016 | A token that can't go here: "expected X, found Y", where Y can be a line break or the end of the file. A keyword where a name goes is one, which the message names | Insert the missing `,` between list items on separate lines (`needs-review`), or after a match's last arm (`safe`). Remove the parentheses around one type that isn't a function type (`safe`), leaving a space where one sits between two words, as in `impl(Int)`, unless anything but spaces lies inside them, such as a line break or a comment. Move what follows an attribute on its line to the next line (`safe`). Insert ` {` after an `impl`, `interface`, `effect` or `foreign` header whose `{` is missing, when its body's `}` comes with no slip in the body (`safe`). Otherwise none |
+| E0016 | A token that can't go here: "expected X, found Y", where Y can be a line break or the end of the file. A keyword where a name goes is one, which the message names | Insert the missing `,` between list items on separate lines (`needs-review`), or after a match's last arm (`safe`). Remove the parentheses around one type that isn't a function type (`safe`), leaving a space when a parenthesis sits between two words, as in `impl(Int)`, unless anything but spaces or tabs lies inside them, such as a line break or a comment. Move what follows an attribute on its line to the next line (`safe`). Insert ` {` after an `impl`, `interface`, `effect` or `foreign` header whose `{` is missing, when its body's `}` comes with no slip in the body (`safe`). Otherwise none |
 | E0017 | An opening bracket with no closing one, at the opener | None |
 | E0018 | A line break that ends a construct before a token that continues it, at the break | Replace everything between the two tokens with a space (`safe`), unless a comment lies between them, or the token before the break is the `>` of type arguments that joining would make less-than |
 | E0019 | An operand that needs parentheses: `&&` mixed with `||`, a bit operator or a shift as an operand of another operator or with an arithmetic operand, `&`, `|` or `^` mixed, a shift of a shift, or a range as an operand | Add the parentheses of the usual reading (`needs-review`) |
@@ -249,7 +249,7 @@ The parser reads the significant tokens: every token but the trivia and the doc 
 | E0024 | A struct with no fields written with braces, at the braces | Remove them (`safe`), unless a `requires` follows or a comment lies before or between them |
 | E0025 | `{}` where an expression is expected, over the braces | Insert `:` after the `{` (`needs-review`) |
 | E0026 | An assignment whose left side isn't a place, over the left side. Not reported when the left side holds a syntax error | None |
-| E0027 | `()` where a type goes, over the parentheses | Write `Unit` (`needs-review`), with a space after it when a word follows the `)` directly, unless anything but spaces lies between them. Not reported after an `Error` token between them |
+| E0027 | `()` where a type goes, over the parentheses | Write `Unit` (`needs-review`), with a space before it when a word comes right before the `(`, and after it when a word follows the `)` directly, unless anything but spaces lies between them. Not reported after an `Error` token between them |
 
 ## Naming case
 
