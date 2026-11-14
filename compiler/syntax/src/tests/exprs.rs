@@ -338,6 +338,7 @@ fn chains() {
         ("a != b != c", "E0020 7..9"),
         ("a < b < c > d", "E0020 6..7"),
         ("g<1>(x)", "E0020 3..4"),
+        ("g<()>(x)", "E0020 4..5"),
     ] {
         assert_eq!(errors(chain), [error], "{chain}");
     }

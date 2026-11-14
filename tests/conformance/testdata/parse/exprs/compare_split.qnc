@@ -1,7 +1,7 @@
 // rule: expr.op.compare.split
 // mode: parse
 // A chain whose operators point the same way gets a fix that repeats each middle operand.
-// A chain that mixes them gets none, which compare_split.fixed pins by leaving it as it is.
+// A chain that mixes them gets none, which the .fixed file pins by leaving it as it is.
 fn f(a: Int, b: Int, c: Int) {
   let up = a < b < c //~ E0020
   let inside = 0 <= a < c //~ E0020
@@ -12,5 +12,7 @@ fn f(a: Int, b: Int, c: Int) {
   let mixed_eq = a < b >= c //~ E0020
   let not_equal = a != b != c //~ E0020
   let equal_then_not = a == b != c //~ E0020
+  let long_mixed = a < b < c > 10 //~ E0020
   let call = g<1>(a) //~ E0020
+  let unit_call = g<()>(a) //~ E0020
 }
