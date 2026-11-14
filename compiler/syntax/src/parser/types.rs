@@ -5,6 +5,7 @@ use super::{Holds, Marker, Parser, Sync, items};
 use crate::SyntaxKind::{self, *};
 use crate::{SyntaxError, codes};
 use quince_diagnostics::Applicability;
+use std::ops::Range;
 
 /// Whether a bare function type takes a `uses` after it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -219,8 +220,7 @@ fn paren_type(p: &mut Parser) -> bool {
             // removing them wouldn't fix.
             if p.nth_kind(1) != Arrow {
                 let close = p.pos;
-                let edits =
-                    [open, close].map(|at| (p.input.tokens[at].range.clone(), String::new()));
+                let edits = [open, close].map(|at| remove_between_words(p, at));
                 error = error.with_fix("remove the parentheses", Applicability::Safe, edits.into());
             }
             p.report(error);
@@ -273,6 +273,16 @@ fn unit_type(p: &mut Parser) {
     p.bump();
     p.bump();
     p.complete(marker, ParenType);
+}
+
+/// An edit that removes the significant token at `at`, leaving a space when a word character
+/// comes right before it and right after it, so the words on either side stay apart:
+/// `impl(Int)` becomes `impl Int`, not `implInt`.
+fn remove_between_words(p: &Parser, at: usize) -> (Range<usize>, String) {
+    let range = p.input.tokens[at].range.clone();
+    let word = |c: char| c.is_ascii_alphanumeric() || c == '_';
+    let glued = p.text[..range.start].ends_with(word) && p.text[range.end..].starts_with(word);
+    (range, if glued { " " } else { "" }.to_string())
 }
 
 /// `<` generic { `,` generic } `>` after a declaration's name (`grammar.generics`).

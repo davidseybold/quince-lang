@@ -396,6 +396,12 @@ fn errors_in_types() {
         messages("fn f(a: (Int,)) {}"),
         ["expected a second type, found `)`"]
     );
+    // A parenthesis between two words leaves a space, so the words stay apart.
+    assert_eq!(
+        errors("fn f() -> (Int)uses Log {}"),
+        [r#"E0016 14..15 => "fn f() -> Int uses Log {}""#]
+    );
+    assert_eq!(errors("impl(Int) {}"), [r#"E0016 8..9 => "impl Int {}""#]);
     // Before `->`, removing them wouldn't fix it.
     assert_eq!(errors("fn f(a: fn((Int) -> Int)) {}"), ["E0016 15..16"]);
     // A slip inside one pair of parentheses leaves a `ParenType`.
