@@ -8,6 +8,7 @@ use super::{Completed, Holds, Parser, Sync, arms, closures, concurrency, items, 
 use crate::SyntaxKind::{self, *};
 use crate::{SyntaxError, codes};
 use quince_diagnostics::Applicability;
+use std::cmp::Ordering;
 use std::ops::Range;
 
 /// `{` { stmt NEWLINE } [ stmt ] `}` (`grammar.block`). The last statement needs no line break
@@ -552,10 +553,11 @@ fn needs_parens(p: &mut Parser, operand: &Operand, op: SyntaxKind, left: bool) {
 
 /// The chain that `lhs`, a comparison or a range, and `op` after it make
 /// (`r[expr.op.compare.no-chain]`, `r[expr.op.range.no-chain]`). A comparison chain's fix
-/// repeats each middle operand, so `a < b < c` becomes `a < b && b < c`. There is none when a
-/// middle operand holds a comment or a line break, which repeating it would copy, needs
-/// parentheses itself, whose E0019 has its own fix, or is the pattern of an `is`, which isn't
-/// an expression.
+/// repeats each middle operand, so `a < b < c` becomes `a < b && b < c`. There is none when
+/// two of its operators don't point the same way (`r[expr.op.compare.split]`), so `a < b > c`
+/// and `g<()>(x)` get none, nor when a middle operand holds a comment or a line break, which
+/// repeating it would copy, needs parentheses itself, whose E0019 has its own fix, or is the
+/// pattern of an `is`, which isn't an expression.
 fn extend_chain(p: &Parser, lhs: &mut Operand, op: SyntaxKind, op_range: Range<usize>) -> Chain {
     let mut chain = lhs.chain.take().unwrap_or_else(|| match group(op) {
         Group::Compare => Chain {
@@ -577,7 +579,11 @@ fn extend_chain(p: &Parser, lhs: &mut Operand, op: SyntaxKind, op_range: Range<u
         let bare = lhs
             .right_op
             .is_none_or(|op| !matches!(group(op), Group::Bit | Group::Shift | Group::Range));
-        if plain && bare && lhs.op != Some(IsKw) {
+        let same_way = lhs
+            .op
+            .and_then(direction)
+            .is_some_and(|d| direction(op) == Some(d));
+        if plain && bare && same_way {
             let middle = &p.text[first.range.start..last.range.end];
             let end = last.range.end;
             edits.push((end..end, format!(" && {middle}")));
@@ -586,6 +592,17 @@ fn extend_chain(p: &Parser, lhs: &mut Operand, op: SyntaxKind, op_range: Range<u
         }
     }
     chain
+}
+
+/// The way a comparison points, for `r[expr.op.compare.split]`: `<` and `<=` one way, `>`
+/// and `>=` the other, and `==` its own. `None` for any other comparison.
+fn direction(op: SyntaxKind) -> Option<Ordering> {
+    match op {
+        Lt | LtEq => Some(Ordering::Less),
+        Gt | GtEq => Some(Ordering::Greater),
+        EqEq => Some(Ordering::Equal),
+        _ => None,
+    }
 }
 
 /// Reports the E0020 of `chain`, the operand whose tokens are `tokens`, if it is one. As an

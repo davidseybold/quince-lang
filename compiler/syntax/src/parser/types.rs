@@ -5,6 +5,7 @@ use super::{Holds, Marker, Parser, Sync, items};
 use crate::SyntaxKind::{self, *};
 use crate::{SyntaxError, codes};
 use quince_diagnostics::Applicability;
+use std::ops::Range;
 
 /// Whether a bare function type takes a `uses` after it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -216,11 +217,20 @@ fn paren_type(p: &mut Parser) -> bool {
         if ok && !fn_type {
             let mut error = p.unexpected("`,` and a second type", false);
             // Before `->` the parentheses look like a function type missing its `fn`, which
-            // removing them wouldn't fix.
-            if p.nth_kind(1) != Arrow {
-                let close = p.pos;
-                let edits =
-                    [open, close].map(|at| (p.input.tokens[at].range.clone(), String::new()));
+            // removing them wouldn't fix. Anything but spaces inside them, a line break or a
+            // comment, would be left where it ends the type or the line.
+            let close = p.pos;
+            let tokens = &p.input.tokens;
+            let spaces = |gap: Range<usize>| p.text[gap].bytes().all(|b| b == b' ' || b == b'\t');
+            let inside = spaces(tokens[open].range.end..tokens[open + 1].range.start)
+                && spaces(tokens[close - 1].range.end..tokens[close].range.start);
+            if p.nth_kind(1) != Arrow && inside {
+                // Each edit takes the spaces inside, so `( Int )` becomes `Int`.
+                let edits = [
+                    tokens[open].range.start..tokens[open + 1].range.start,
+                    tokens[close - 1].range.end..tokens[close].range.end,
+                ]
+                .map(|range| remove_between_words(p, range));
                 error = error.with_fix("remove the parentheses", Applicability::Safe, edits.into());
             }
             p.report(error);
@@ -248,23 +258,27 @@ fn paren_type(p: &mut Parser) -> bool {
 
 /// `()` where a type goes: the unit type is written `Unit` (`r[type.unit]`), so it is an
 /// E0027 over the parentheses, in a `ParenType` that holds no type. Its fix writes `Unit`,
-/// and a space after it when a word follows the `)` directly. There is none when anything
-/// but spaces lies between them, such as a comment, which replacing them would delete.
-/// Doc comments before the `(` get their E0023 first. What follows is parsed as after any
-/// type.
+/// with a space before it when a word comes right before the `(`, and after it when a word
+/// follows the `)` directly, so `impl()` becomes `impl Unit`. There is none when anything
+/// but spaces lies between them, such as a comment, which replacing them would delete. Doc
+/// comments before the `(` get their E0023 first. What follows is parsed as after any type.
 fn unit_type(p: &mut Parser) {
     let (open, close) = (&p.input.tokens[p.pos], &p.input.tokens[p.pos + 1]);
     let range = open.range.start..close.range.end;
     let message = "`()` is the unit value; the unit type is written `Unit`".to_string();
     let mut error = SyntaxError::new(range.clone(), codes::UNIT_TYPE, message);
     if p.text[open.range.end..close.range.start].trim().is_empty() {
+        let word = |c: char| c.is_ascii_alphanumeric() || c == '_';
+        let before = if p.text[..range.start].ends_with(word) {
+            " "
+        } else {
+            ""
+        };
         let glued = p.input.tokens.get(p.pos + 2).is_some_and(|next| {
-            next.range.start == close.range.end
-                && p.text[next.range.clone()]
-                    .starts_with(|c: char| c.is_ascii_alphanumeric() || c == '_')
+            next.range.start == close.range.end && p.text[next.range.clone()].starts_with(word)
         });
-        let unit = if glued { "Unit " } else { "Unit" };
-        let edit = (range, unit.to_string());
+        let after = if glued { " " } else { "" };
+        let edit = (range, format!("{before}Unit{after}"));
         error = error.with_fix("write `Unit`", Applicability::NeedsReview, vec![edit]);
     }
     p.stray_docs();
@@ -273,6 +287,17 @@ fn unit_type(p: &mut Parser) {
     p.bump();
     p.bump();
     p.complete(marker, ParenType);
+}
+
+/// An edit that removes `range`, leaving a space when a word character comes right before it
+/// and right after it, so the words on either side stay apart: `impl(Int)` becomes
+/// `impl Int`, not `implInt`. It judges by the source, so applied together with E0027's fix
+/// inside, which writes a word where the source has a `(`, `impl(())` still becomes
+/// `implUnit`.
+fn remove_between_words(p: &Parser, range: Range<usize>) -> (Range<usize>, String) {
+    let word = |c: char| c.is_ascii_alphanumeric() || c == '_';
+    let glued = p.text[..range.start].ends_with(word) && p.text[range.end..].starts_with(word);
+    (range, if glued { " " } else { "" }.to_string())
 }
 
 /// `<` generic { `,` generic } `>` after a declaration's name (`grammar.generics`).

@@ -117,7 +117,10 @@ a || b && c              // error: write a || (b && c)
 ```
 
 r[expr.op.compare.no-chain]
-- Comparison operators don't chain: `a < b > c` is a syntax error, and the suggested fix is `a < b && b < c`. So `json.decode<Order>(body)` has only one reading.
+- Comparison operators don't chain: `a < b < c` and `a < b > c` are syntax errors. So `json.decode<Order>(body)` has only one reading.
+
+r[expr.op.compare.split]
+- The suggested fix repeats each middle operand, so `a < b < c` becomes `a < b && b < c`. It is offered only when the chain's operators point the same way: each is `<` or `<=`, each is `>` or `>=`, or each is `==`. A chain that mixes them, such as `a < b > c` or `g<()>(x)`, gets none.
 
 r[expr.op.type-args]
 - In an expression, `<` after a name or path starts type arguments when what follows parses as type arguments closed by `>`, and the token after the `>` is `(`, `.`, `?`, `,`, `)`, `]`, `}` or a line break, and not a `=` directly after the `>`. Otherwise `<` is less-than.

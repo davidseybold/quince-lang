@@ -66,10 +66,15 @@ fn unit_and_tuples() {
         errors("fn f(a: ( )) {}"),
         [r#"E0027 8..11 => "fn f(a: Unit) {}""#]
     );
-    // A word right after the `)` stays a word of its own.
+    // A word right after the `)` or right before the `(` stays a word of its own.
     assert_eq!(
         errors("fn f() -> ()uses Log {}"),
         [r#"E0027 10..12 => "fn f() -> Unit uses Log {}""#]
+    );
+    assert_eq!(errors("impl() {}"), [r#"E0027 4..6 => "impl Unit {}""#]);
+    assert_eq!(
+        errors("impl Show for() {}"),
+        [r#"E0027 13..15 => "impl Show for Unit {}""#]
     );
     // After an `Error` token, its E0001 is the one error.
     let codes =
@@ -395,6 +400,29 @@ fn errors_in_types() {
     assert_eq!(
         messages("fn f(a: (Int,)) {}"),
         ["expected a second type, found `)`"]
+    );
+    // A parenthesis between two words leaves a space, so the words stay apart.
+    assert_eq!(
+        errors("fn f() -> (Int)uses Log {}"),
+        [r#"E0016 14..15 => "fn f() -> Int uses Log {}""#]
+    );
+    assert_eq!(errors("impl(Int) {}"), [r#"E0016 8..9 => "impl Int {}""#]);
+    assert_eq!(
+        errors("fn f() -> (sqlite3)uses Log {}"),
+        [r#"E0016 18..19 => "fn f() -> sqlite3 uses Log {}""#]
+    );
+    assert_eq!(
+        errors("fn f() -> (x_)uses Log {}"),
+        [r#"E0016 13..14 => "fn f() -> x_ uses Log {}""#]
+    );
+    // Removing them would expose a line break inside them, so there is no fix.
+    assert_eq!(errors("fn f(a: (\n  Int\n)) {}"), ["E0016 16..17"]);
+    assert_eq!(errors("fn f(a: (Int // c\n)) {}"), ["E0016 18..19"]);
+    assert_eq!(errors("fn f(a: (\n  Int)) {}"), ["E0016 15..16"]);
+    assert_eq!(errors("impl(_X) {}"), [r#"E0016 7..8 => "impl _X {}""#]);
+    assert_eq!(
+        errors("fn f(a: ( Int )) {}"),
+        [r#"E0016 14..15 => "fn f(a: Int) {}""#]
     );
     // Before `->`, removing them wouldn't fix it.
     assert_eq!(errors("fn f(a: fn((Int) -> Int)) {}"), ["E0016 15..16"]);

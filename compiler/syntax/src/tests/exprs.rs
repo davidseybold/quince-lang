@@ -323,18 +323,32 @@ fn operands_that_need_none() {
 }
 
 /// E0020 (`r[expr.op.compare.no-chain]`, `r[expr.op.range.no-chain]`): at the operator that
-/// chains, one error per chain. A comparison chain's fix repeats each middle operand.
+/// chains, one error per chain. A comparison chain's fix repeats each middle operand, when
+/// its operators point the same way (`r[expr.op.compare.split]`).
 #[test]
 fn chains() {
-    assert_eq!(errors("a < b > c"), ["E0020 6..7 => a < b && b > c"]);
     assert_eq!(errors("0 <= i < n"), ["E0020 7..8 => 0 <= i && i < n"]);
+    assert_eq!(errors("a >= b > c"), ["E0020 7..8 => a >= b && b > c"]);
+    assert_eq!(errors("a == b == c"), ["E0020 7..9 => a == b && b == c"]);
+    // A chain that mixes directions gets no fix, nor does one of another comparison.
+    for (chain, error) in [
+        ("a < b > c", "E0020 6..7"),
+        ("a > b <= c", "E0020 6..8"),
+        ("a < b == c", "E0020 6..8"),
+        ("a != b != c", "E0020 7..9"),
+        ("a < b < c > d", "E0020 6..7"),
+        ("g<1>(x)", "E0020 3..4"),
+        ("g<()>(x)", "E0020 4..5"),
+    ] {
+        assert_eq!(errors(chain), [error], "{chain}");
+    }
     assert_eq!(
         errors("a < b < c < d"),
         ["E0020 6..7 => a < b && b < c && c < d"]
     );
     assert_eq!(
-        errors("a < f(b) + 1 >= c"),
-        ["E0020 13..15 => a < f(b) + 1 && f(b) + 1 >= c"]
+        errors("a < f(b) + 1 <= c"),
+        ["E0020 13..15 => a < f(b) + 1 && f(b) + 1 <= c"]
     );
     // A middle operand with a line break in it isn't repeated.
     assert_eq!(errors("a < (b\n  ) < c"), ["E0020 11..12"]);
@@ -414,7 +428,7 @@ fn is() {
     // `is` never chains. When the middle operand is a pattern, repeating it can't make an
     // expression, so there is no fix.
     assert_eq!(errors("a is A == b"), ["E0020 7..9"]);
-    assert_eq!(errors("a == b is C"), ["E0020 7..9 => a == b && b is C"]);
+    assert_eq!(errors("a == b is C"), ["E0020 7..9"]);
     assert_eq!(errors("a..b is R"), ["E0019 0..4 => (a..b) is R"]);
     assert_eq!(
         messages("b | c is D"),
@@ -583,8 +597,8 @@ fn less_than_after_parsing_ahead() {
     ] {
         assert_eq!(errors(expr), Vec::<String>::new(), "{expr}");
     }
-    assert_eq!(errors("a < b > c"), ["E0020 6..7 => a < b && b > c"]);
-    assert_eq!(errors("x < Y >= z"), ["E0020 6..8 => x < Y && Y >= z"]);
+    assert_eq!(errors("a < b > c"), ["E0020 6..7"]);
+    assert_eq!(errors("x < Y >= z"), ["E0020 6..8"]);
     assert_eq!(errors("a < b >> c"), ["E0019 4..10 => a < (b >> c)"]);
     // A long chain is one error, and is parsed ahead from each `<` once: the first `<` parses
     // ahead through the rest, and records every `<` it meets. Each `<` nests type arguments two
