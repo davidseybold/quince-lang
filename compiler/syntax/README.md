@@ -249,7 +249,7 @@ The parser reads the significant tokens: every token but the trivia and the doc 
 | E0024 | A struct with no fields written with braces, at the braces | Remove them (`safe`), unless a `requires` follows or a comment lies before or between them |
 | E0025 | `{}` where an expression is expected, over the braces | Insert `:` after the `{` (`needs-review`) |
 | E0026 | An assignment whose left side isn't a place, over the left side. Not reported when the left side holds a syntax error | None |
-| E0027 | `()` where a type goes, over the parentheses | Write `Unit` (`needs-review`), unless a comment lies between them |
+| E0027 | `()` where a type goes, over the parentheses | Write `Unit` (`needs-review`), with a space after it when a word follows the `)` directly, unless anything but spaces lies between them. Not reported after an `Error` token between them |
 
 ## Naming case
 

@@ -66,6 +66,17 @@ fn unit_and_tuples() {
         errors("fn f(a: ( )) {}"),
         [r#"E0027 8..11 => "fn f(a: Unit) {}""#]
     );
+    // A word right after the `)` stays a word of its own.
+    assert_eq!(
+        errors("fn f() -> ()uses Log {}"),
+        [r#"E0027 10..12 => "fn f() -> Unit uses Log {}""#]
+    );
+    // After an `Error` token, its E0001 is the one error.
+    let codes =
+        |text: &str| -> Vec<String> { errors(text).iter().map(|e| e[..5].to_string()).collect() };
+    assert_eq!(codes("fn f(a: (é)) {}"), ["E0001"]);
+    // A stray doc comment before the `()` keeps its E0023.
+    assert_eq!(codes("type T =\n  /// d\n  ()\n"), ["E0023", "E0027"]);
     // Replacing them would delete a comment, so there is no fix.
     assert_eq!(errors("fn f(a: (\n  // none\n)) {}"), ["E0027 8..21"]);
     assert_eq!(

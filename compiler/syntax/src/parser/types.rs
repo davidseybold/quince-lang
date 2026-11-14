@@ -188,7 +188,11 @@ fn type_item(p: &mut Parser) {
 /// A tuple of two or more types, or one function type in parentheses, which ends it
 /// (`r[type.fn-parens]`). Any other type in parentheses is an E0016 whose fix removes them.
 fn paren_type(p: &mut Parser) -> bool {
-    if p.nth_kind(1) == RParen {
+    // With an `Error` token between them, its E0001 is the one error, and the usual path
+    // reports nothing more.
+    if p.nth(1)
+        .is_some_and(|close| close.kind == RParen && !close.after_error)
+    {
         unit_type(p);
         return true;
     }
@@ -244,17 +248,26 @@ fn paren_type(p: &mut Parser) -> bool {
 
 /// `()` where a type goes: the unit type is written `Unit` (`r[type.unit]`), so it is an
 /// E0027 over the parentheses, in a `ParenType` that holds no type. Its fix writes `Unit`,
-/// unless a comment lies between them, which replacing them would delete. What follows is
-/// parsed as after any type.
+/// and a space after it when a word follows the `)` directly. There is none when anything
+/// but spaces lies between them, such as a comment, which replacing them would delete.
+/// Doc comments before the `(` get their E0023 first. What follows is parsed as after any
+/// type.
 fn unit_type(p: &mut Parser) {
     let (open, close) = (&p.input.tokens[p.pos], &p.input.tokens[p.pos + 1]);
     let range = open.range.start..close.range.end;
     let message = "`()` is the unit value; the unit type is written `Unit`".to_string();
     let mut error = SyntaxError::new(range.clone(), codes::UNIT_TYPE, message);
     if p.text[open.range.end..close.range.start].trim().is_empty() {
-        let edit = (range, "Unit".to_string());
+        let glued = p.input.tokens.get(p.pos + 2).is_some_and(|next| {
+            next.range.start == close.range.end
+                && p.text[next.range.clone()]
+                    .starts_with(|c: char| c.is_ascii_alphanumeric() || c == '_')
+        });
+        let unit = if glued { "Unit " } else { "Unit" };
+        let edit = (range, unit.to_string());
         error = error.with_fix("write `Unit`", Applicability::NeedsReview, vec![edit]);
     }
+    p.stray_docs();
     p.report(error);
     let marker = p.start();
     p.bump();
