@@ -531,7 +531,7 @@ Revert the stack's PRs. Nothing changes outside `quince_syntax`, the conformance
 - Where comments go in the output. Decision 3 fixes only where they sit in the tree.
 - `lex.source.canonical` (lexer doc), `tool.fmt.*`, and `item.arg.fmt-positional` and `tool.fmt.field-shorthand`, which rewrite code.
 - `fmt` must refuse a lossy text (`Decoded::is_lossy()`) and a file with parse errors, or say what it does with them.
-- Writing a prefix minus with no space after it, which spec question 5 relies on.
+- Dropping the trivia inside a negative `Literal`, and keeping a comment there with its line break ([`m1-fmt.md`](m1-fmt.md), question 3).
 - The `fmt` fixture mode in the fixture README.
 
 ## Tasks

@@ -613,7 +613,8 @@ fn negative_literals() {
     assert_eq!(tree("- 1"), tree("-1"));
     assert_eq!(tree("- 1.5"), tree("-1.5"));
     assert_eq!(tree("-\n    1"), tree("-1"));
-    let parse = checked("fn f() {\n  let x = - /* c */\n    1\n}\n");
+    let parse = checked("fn f() {\n  let x = - // c\n    1\n}\n");
+    assert!(parse.errors().is_empty());
     let literal = parse
         .syntax()
         .descendants()
@@ -624,7 +625,7 @@ fn negative_literals() {
         r#"Literal
   Minus "-"
   Whitespace " "
-  BlockComment "/* c */"
+  Comment "// c"
   Newline "\n"
   Whitespace "    "
   Int "1"
@@ -632,6 +633,12 @@ fn negative_literals() {
     );
     // A `;` ends the statement, so nothing follows the `-`.
     assert_eq!(errors("-;1"), ["E0002 1..2"]);
+    // Only a minus joins a number: `!` and `~` apply to it, and a line break after them ends
+    // the statement.
+    assert!(tree("!1").starts_with("Prefix\n"));
+    assert!(tree("~ 1").starts_with("Prefix\n"));
+    assert_eq!(errors("!\n1"), ["E0016 1..2"]);
+    assert_eq!(errors("~\n1"), ["E0016 1..2"]);
     assert_eq!(
         tree("--1"),
         "Prefix\n  Minus \"-\"\n  Literal\n    Minus \"-\"\n    Int \"1\"\n"
@@ -663,6 +670,7 @@ fn negative_literals() {
     );
     assert_eq!(tree("- 2.pow(2)"), tree("-2.pow(2)"));
     assert!(tree("-2\n    .pow(2)").starts_with("Prefix\n"));
+    assert!(tree("- 2\n    .pow(2)").starts_with("Prefix\n"));
     // After a `;`, a `.` starts a statement, so it isn't a postfix operator.
     let parse = checked("fn f() {\n  -2;\n  .x\n}\n");
     let block = parse
@@ -906,7 +914,7 @@ fn a_bare_block_is_one_error() {
 #[test]
 fn named_attribute_arguments() {
     let parse = checked("@deprecated(\"why\", use: g)\nfn f() {}\n");
-    assert_eq!(parse.errors(), []);
+    assert!(parse.errors().is_empty());
     assert!(
         parse
             .syntax()
