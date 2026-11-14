@@ -8,13 +8,17 @@ pub mod coverage;
 pub mod fixture;
 
 use fixture::{Fixture, Mode};
-use quince_diagnostics::{Diagnostic, LineIndex, Severity};
+use quince_diagnostics::{Applicability, Diagnostic, Fix, LineIndex, Severity};
 use quince_spec::{GRAMMAR_PATH, MOVED_PATH, README_PATH, RETIRED_PATH, Spec};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 pub const FIXTURE_DIR: &str = "tests/conformance/testdata";
+
+/// The extensions of the files that sit beside a fixture: its expected standard output, and
+/// its text once its fixes are applied.
+const SIBLING_EXTENSIONS: [&str; 2] = ["stdout", "fixed"];
 
 /// The section that grammar-production rule IDs are reported under.
 pub const GRAMMAR_SECTION: &str = "Grammar productions";
@@ -163,10 +167,11 @@ pub struct FixtureFile {
     pub path: String,
     pub source: Vec<u8>,
     pub stdout: Option<String>,
+    pub fixed: Option<String>,
 }
 
-/// Every `.qnc` file under `testdata/`, in sorted path order, with its sibling `.stdout`. A
-/// missing folder means no fixtures. A `.stdout` file with no `.qnc` file is an error.
+/// Every `.qnc` file under `testdata/`, in sorted path order, with its sibling `.stdout` and
+/// `.fixed`. A missing folder means no fixtures. A sibling with no `.qnc` file is an error.
 pub fn discover(root: &Path) -> Result<Vec<FixtureFile>, Vec<String>> {
     discover_in(&root.join(FIXTURE_DIR), FIXTURE_DIR)
 }
@@ -196,10 +201,10 @@ fn discover_in(dir: &Path, relative_dir: &str) -> Result<Vec<FixtureFile>, Vec<S
     let mut errors = Vec::new();
     let mut files = Vec::new();
     for path in &paths {
-        if has_ext(path, "stdout") {
+        if let Some(ext) = SIBLING_EXTENSIONS.iter().find(|ext| has_ext(path, ext)) {
             if !fixtures.contains(&path.with_extension("")) {
                 errors.push(format!(
-                    "{relative_dir}/{}.stdout has no matching .qnc fixture; rename or remove it",
+                    "{relative_dir}/{}.{ext} has no matching .qnc fixture; rename or remove it",
                     name_of(path)
                 ));
             }
@@ -213,11 +218,15 @@ fn discover_in(dir: &Path, relative_dir: &str) -> Result<Vec<FixtureFile>, Vec<S
                 continue;
             }
         };
-        let stdout = match std::fs::read_to_string(path.with_extension("stdout")) {
-            Ok(text) => Some(text),
-            Err(e) if e.kind() == ErrorKind::NotFound => None,
-            Err(e) => {
-                errors.push(format!("can't read {relative_dir}/{name}.stdout: {e}"));
+        let read_sibling = |ext: &str| match std::fs::read_to_string(path.with_extension(ext)) {
+            Ok(text) => Ok(Some(text)),
+            Err(e) if e.kind() == ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(format!("can't read {relative_dir}/{name}.{ext}: {e}")),
+        };
+        let (stdout, fixed) = match (read_sibling("stdout"), read_sibling("fixed")) {
+            (Ok(stdout), Ok(fixed)) => (stdout, fixed),
+            (stdout, fixed) => {
+                errors.extend(stdout.err().into_iter().chain(fixed.err()));
                 continue;
             }
         };
@@ -226,6 +235,7 @@ fn discover_in(dir: &Path, relative_dir: &str) -> Result<Vec<FixtureFile>, Vec<S
             name,
             source,
             stdout,
+            fixed,
         });
     }
     if errors.is_empty() {
@@ -235,7 +245,7 @@ fn discover_in(dir: &Path, relative_dir: &str) -> Result<Vec<FixtureFile>, Vec<S
     }
 }
 
-/// Every `.qnc` and `.stdout` file below `dir`.
+/// Every `.qnc` file and every sibling file below `dir`.
 fn collect(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
     let entries =
         std::fs::read_dir(dir).map_err(|e| format!("can't read {}: {e}", dir.display()))?;
@@ -245,7 +255,7 @@ fn collect(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
             collect(&path, out)?;
         } else if path
             .extension()
-            .is_some_and(|ext| ext == "qnc" || ext == "stdout")
+            .is_some_and(|ext| ext == "qnc" || SIBLING_EXTENSIONS.iter().any(|s| ext == *s))
         {
             out.push(path);
         }
@@ -271,7 +281,10 @@ impl FixtureResult {
 /// Parses and runs one fixture file against `backend`.
 pub fn run_file(file: &FixtureFile, rules: &Rules, backend: &dyn Backend) -> FixtureResult {
     match fixture::parse(&file.name, &file.source, file.stdout.clone()) {
-        Ok(fixture) => run_fixture(&fixture, &file.path, rules, backend),
+        Ok(mut fixture) => {
+            fixture.fixed = file.fixed.clone();
+            run_fixture(&fixture, &file.path, rules, backend)
+        }
         Err(failures) => FixtureResult {
             name: file.name.clone(),
             rules: Vec::new(),
@@ -323,10 +336,17 @@ pub fn run_fixture(
             match diagnostics {
                 Some(diagnostics) => {
                     failures.extend(match_diagnostics(fixture, path, &diagnostics));
+                    if let Some(expected) = &fixture.fixed {
+                        failures.extend(compare_fixed(fixture, path, &diagnostics, expected));
+                    }
                 }
                 None => failures.push(no_backend(what)),
             }
         }
+        Mode::Run if fixture.fixed.is_some() => failures.push(format!(
+            "{}.fixed exists, but only `// mode: check` and `// mode: parse` fixtures apply fixes",
+            fixture.name
+        )),
         Mode::Run => match backend.run(path, &fixture.source) {
             Some(Ok(output)) => {
                 if output.exit != fixture.exit {
@@ -425,6 +445,150 @@ fn match_diagnostics(fixture: &Fixture, path: &str, diagnostics: &[Diagnostic]) 
     failures
 }
 
+/// Compares the fixture's text, once every fix in `diagnostics` is applied, with its `.fixed`
+/// file, `expected`.
+fn compare_fixed(
+    fixture: &Fixture,
+    path: &str,
+    diagnostics: &[Diagnostic],
+    expected: &str,
+) -> Vec<String> {
+    let name = &fixture.name;
+    match apply_fixes(&fixture.text, path, diagnostics) {
+        Ok(actual) if actual == expected => Vec::new(),
+        Ok(actual) => {
+            let line_break = if expected.ends_with(['\n', '\r']) {
+                ""
+            } else {
+                "\n"
+            };
+            vec![format!(
+                "applying every fix gives text that differs from {name}.fixed {}:\n--- expected\n{expected}{line_break}--- actual\n{actual}",
+                first_difference(expected, &actual)
+            )]
+        }
+        Err(why) => vec![format!("can't check {name}.fixed: {why}")],
+    }
+}
+
+/// Where `actual` first differs from `expected`, as `at line 3: expected "a\r\n", got "a\n"`,
+/// quoted so that a different line break shows.
+fn first_difference(expected: &str, actual: &str) -> String {
+    let (mut expected_lines, mut actual_lines) = (lines(expected), lines(actual));
+    let mut line = 1;
+    loop {
+        let (e, a) = (expected_lines.next(), actual_lines.next());
+        if e != a || e.is_none() {
+            let show =
+                |l: Option<&str>| l.map_or("the end of the text".to_string(), |l| format!("{l:?}"));
+            return format!("at line {line}: expected {}, got {}", show(e), show(a));
+        }
+        line += 1;
+    }
+}
+
+/// `text`'s lines, each with its line break: LF, CR LF or a lone CR, as positions count them.
+fn lines(text: &str) -> impl Iterator<Item = &str> {
+    let mut rest = text;
+    std::iter::from_fn(move || {
+        if rest.is_empty() {
+            return None;
+        }
+        let end = rest.find(['\n', '\r']).map_or(rest.len(), |i| {
+            if rest[i..].starts_with("\r\n") {
+                i + 2
+            } else {
+                i + 1
+            }
+        });
+        let (line, after) = rest.split_at(end);
+        rest = after;
+        Some(line)
+    })
+}
+
+/// `text`, the fixture `path`, after every fix in `diagnostics` is applied, as if all at once.
+/// Each diagnostic may offer at most one fix, since there is no choosing between them, and a fix
+/// may edit only the fixture. No two fixes may overlap or meet at an insertion, the rule
+/// `Fix::check` applies within one fix. A malformed fix is an error too, and
+/// `match_diagnostics` says why.
+fn apply_fixes(text: &str, path: &str, diagnostics: &[Diagnostic]) -> Result<String, String> {
+    let index = LineIndex::new(text);
+    let mut fixes = Vec::new();
+    for d in diagnostics {
+        let at = format!("{} at line {}", d.code, d.span.start.line());
+        match d.fixes.as_slice() {
+            [] => {}
+            [fix] => fixes.push((format!("the fix \"{}\" on {at}", fix.description), d, fix)),
+            many => {
+                return Err(format!(
+                    "{at} offers {} fixes, and only one can be applied",
+                    many.len()
+                ));
+            }
+        }
+    }
+    for (which, d, fix) in &fixes {
+        let span_file = d.span.file.as_str();
+        let other = fix
+            .edits
+            .iter()
+            .map(|e| e.file.as_deref().unwrap_or(span_file))
+            .find(|file| *file != path);
+        if let Some(file) = other {
+            return Err(format!(
+                "{which} edits `{file}`, and a .fixed file can only show edits to the fixture"
+            ));
+        }
+        let checked = fix
+            .check(span_file)
+            .and_then(|()| fix.check_positions(span_file, |_| Some(&index)));
+        if checked.is_err() {
+            return Err(format!("{which} is malformed, as reported above"));
+        }
+    }
+    for (i, (which, _, fix)) in fixes.iter().enumerate() {
+        for (other_which, _, other) in &fixes[i + 1..] {
+            for a in &fix.edits {
+                for b in &other.edits {
+                    let pair = Fix {
+                        description: String::new(),
+                        applicability: Applicability::NeedsReview,
+                        edits: vec![a.clone(), b.clone()],
+                    };
+                    if pair.check(path).is_err() {
+                        return Err(format!(
+                            "{which} edits {:?}-{:?} and {other_which} edits {:?}-{:?}, which \
+                             overlap or meet at an insertion, so they can't both be applied",
+                            a.start, a.end, b.start, b.end
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    let offset = |position| {
+        index
+            .offset(position)
+            .expect("check_positions found every position in the fixture")
+    };
+    let mut replacements: Vec<_> = fixes
+        .iter()
+        .flat_map(|(_, _, fix)| &fix.edits)
+        .map(|edit| (offset(edit.start), offset(edit.end), edit.text.as_str()))
+        .collect();
+    replacements.sort_by_key(|&(start, end, _)| (start, end));
+    let mut fixed = String::new();
+    let mut at = 0;
+    for (start, end, with) in replacements {
+        fixed.push_str(&text[at..start]);
+        fixed.push_str(with);
+        at = end;
+    }
+    fixed.push_str(&text[at..]);
+    Ok(fixed)
+}
+
 /// `<prefix> error E0100 on line 4: message`.
 fn describe(prefix: &str, d: &Diagnostic) -> String {
     let severity = match d.severity {
@@ -447,7 +611,7 @@ fn describe(prefix: &str, d: &Diagnostic) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use quince_diagnostics::{Code, Position, Span};
+    use quince_diagnostics::{Code, Edit, Position, Span};
 
     /// Returns fixed diagnostics, or fixed run output.
     #[derive(Default)]
@@ -516,11 +680,21 @@ mod tests {
     }
 
     fn run(source: &str, stdout: Option<&str>, backend: &dyn Backend) -> FixtureResult {
+        run_with(source, stdout, None, backend)
+    }
+
+    fn run_with(
+        source: &str,
+        stdout: Option<&str>,
+        fixed: Option<&str>,
+        backend: &dyn Backend,
+    ) -> FixtureResult {
         let file = FixtureFile {
             name: "t".into(),
             path: "tests/conformance/testdata/t.qnc".into(),
             source: source.into(),
             stdout: stdout.map(str::to_string),
+            fixed: fixed.map(str::to_string),
         };
         run_file(&file, &rules(), backend)
     }
@@ -709,6 +883,148 @@ mod tests {
         );
     }
 
+    /// A parse fixture with a `.fixed` file: the parser's real fixes, applied together.
+    #[test]
+    fn fixed_file_holds_the_text_with_every_fix_applied() {
+        let source =
+            "// rule: bind.let-var\n// mode: parse\nstruct S {} //~ E0024\nstruct T {} //~ E0024\n";
+        let fixed =
+            "// rule: bind.let-var\n// mode: parse\nstruct S //~ E0024\nstruct T //~ E0024\n";
+        let r = run_with(source, None, Some(fixed), &SyntaxBackend);
+        assert!(r.passed(), "{:?}", r.failures);
+        let r = run_with(source, None, Some(source), &SyntaxBackend);
+        assert_eq!(r.failures.len(), 1, "{:?}", r.failures);
+        assert!(
+            r.failures[0].starts_with(
+                "applying every fix gives text that differs from t.fixed at line 3: \
+                 expected \"struct S {} //~ E0024\\n\", got \"struct S //~ E0024\\n\":"
+            ),
+            "{:?}",
+            r.failures
+        );
+        // With no fix offered, the `.fixed` file is the fixture itself.
+        let source = "// rule: bind.let-var\n// mode: parse\nfn f(a: List<Int) {} //~ E0017\n";
+        let r = run_with(source, None, Some(source), &SyntaxBackend);
+        assert!(r.passed(), "{:?}", r.failures);
+        assert!(!run_with(source, None, Some(""), &SyntaxBackend).passed());
+    }
+
+    #[test]
+    fn a_run_fixture_cant_have_a_fixed_file() {
+        let source = "// rule: main.signature\n// mode: run\nfn main() {}\n";
+        let r = run_with(source, None, Some(source), &ran(0, ""));
+        assert_eq!(
+            r.failures,
+            ["t.fixed exists, but only `// mode: check` and `// mode: parse` fixtures apply fixes"]
+        );
+    }
+
+    /// Reports `diagnostics` for every file, whatever it holds.
+    struct Canned(Vec<Diagnostic>);
+
+    impl Backend for Canned {
+        fn parse(&self, _path: &str, _source: &[u8]) -> Option<Vec<Diagnostic>> {
+            Some(self.0.clone())
+        }
+
+        fn check(&self, path: &str, source: &[u8]) -> Option<Vec<Diagnostic>> {
+            self.parse(path, source)
+        }
+
+        fn run(&self, _path: &str, _source: &[u8]) -> Option<Result<RunOutput, Vec<Diagnostic>>> {
+            None
+        }
+    }
+
+    /// An E0100 on line 2 of the fixture, with one fix per list of edits, each replacing
+    /// `(file, start column, end column)` on line 2 with `x`.
+    fn with_fixes(fixes: &[&[(Option<&str>, u32, u32)]]) -> Diagnostic {
+        let mut d = diagnostic("tests/conformance/testdata/t.qnc", ("E0100", 2, 1));
+        d.fixes = fixes
+            .iter()
+            .map(|edits| Fix {
+                description: "a fix".to_string(),
+                applicability: Applicability::Safe,
+                edits: edits
+                    .iter()
+                    .map(|&(file, start, end)| Edit {
+                        file: file.map(str::to_string),
+                        start: Position(2, start),
+                        end: Position(2, end),
+                        text: "x".to_string(),
+                    })
+                    .collect(),
+            })
+            .collect();
+        d
+    }
+
+    #[test]
+    fn fixes_that_cant_all_be_applied_fail_a_fixed_file() {
+        let source = "// rule: bind.let-var\nab //~ E0100\n";
+        let failure = |diagnostics: Vec<Diagnostic>| {
+            let r = run_with(source, None, Some(source), &Canned(diagnostics));
+            r.failures.last().cloned().unwrap_or_default()
+        };
+        assert_eq!(
+            failure(vec![with_fixes(&[&[(None, 1, 2)], &[(None, 2, 3)]])]),
+            "can't check t.fixed: E0100 at line 2 offers 2 fixes, and only one can be applied"
+        );
+        assert_eq!(
+            failure(vec![with_fixes(&[&[(Some("src/other.qnc"), 1, 1)]])]),
+            "can't check t.fixed: the fix \"a fix\" on E0100 at line 2 edits `src/other.qnc`, \
+             and a .fixed file can only show edits to the fixture"
+        );
+        let overlapping = vec![
+            with_fixes(&[&[(None, 1, 3)]]),
+            with_fixes(&[&[(None, 2, 3)]]),
+        ];
+        assert_eq!(
+            failure(overlapping),
+            "can't check t.fixed: the fix \"a fix\" on E0100 at line 2 edits \
+             Position(2, 1)-Position(2, 3) and the fix \"a fix\" on E0100 at line 2 edits \
+             Position(2, 2)-Position(2, 3), which overlap or meet at an insertion, so they \
+             can't both be applied"
+        );
+        // A fix that is malformed by itself is reported once, by `match_diagnostics`.
+        let r = run_with(
+            source,
+            None,
+            Some(source),
+            &Canned(vec![with_fixes(&[&[(None, 3, 1)]])]),
+        );
+        assert_eq!(r.failures.len(), 2, "{:?}", r.failures);
+        assert!(
+            r.failures[0].contains("is malformed: edit in"),
+            "{:?}",
+            r.failures
+        );
+        assert_eq!(
+            r.failures[1],
+            "can't check t.fixed: the fix \"a fix\" on E0100 at line 2 is malformed, as reported above"
+        );
+    }
+
+    #[test]
+    fn first_difference_quotes_line_breaks() {
+        let cases = [
+            (
+                "a\r\nb\r\n",
+                "a\r\nb\n",
+                r#"at line 2: expected "b\r\n", got "b\n""#,
+            ),
+            ("a\rb", "a\rb\r", r#"at line 2: expected "b", got "b\r""#),
+            (
+                "a\n",
+                "a\nb\n",
+                r#"at line 2: expected the end of the text, got "b\n""#,
+            ),
+        ];
+        for (expected, actual, difference) in cases {
+            assert_eq!(first_difference(expected, actual), difference);
+        }
+    }
+
     #[test]
     fn run_mode_compares_exit_and_stdout() {
         let source = "// rule: main.signature\n// mode: run\nfn main() {}\n";
@@ -890,22 +1206,28 @@ let x = 1 //~ E0100
         let files = discover_in(&selftest("ok"), "selftest").unwrap();
         let found: Vec<_> = files
             .iter()
-            .map(|f| (f.name.as_str(), f.path.as_str(), f.stdout.as_deref()))
+            .map(|f| {
+                let siblings = (f.stdout.as_deref(), f.fixed.as_deref());
+                (f.name.as_str(), f.path.as_str(), siblings)
+            })
             .collect();
         assert_eq!(
             found,
             [
+                // Discovery only: these files are never run, so the `.fixed` text is a placeholder.
                 (
                     "bindings/shadow_same_scope",
                     "selftest/bindings/shadow_same_scope.qnc",
-                    None
+                    (None, Some("// the fixed text\n"))
                 ),
-                ("hello", "selftest/hello.qnc", Some("hi\n")),
+                ("hello", "selftest/hello.qnc", (Some("hi\n"), None)),
             ]
         );
     }
 
-    /// Reports E0001 at every `$`, at the position `LineIndex` gives, as a lexer would.
+    /// Reports E0001 at every `$`, at the position `LineIndex` gives, as a lexer would, with a
+    /// fix that deletes it. The diagnostics come last `$` first, so applying the fixes has to
+    /// sort them.
     struct DollarBackend;
 
     impl Backend for DollarBackend {
@@ -919,9 +1241,20 @@ let x = 1 //~ E0100
                     end: index.position(offset + 1),
                 };
                 let code = Code::parse("E0001").unwrap();
-                Diagnostic::new(code, Severity::Error, "a `$`", span)
+                let mut d = Diagnostic::new(code, Severity::Error, "a `$`", span.clone());
+                d.fixes.push(Fix {
+                    description: "delete the `$`".to_string(),
+                    applicability: Applicability::Safe,
+                    edits: vec![Edit {
+                        file: None,
+                        start: span.start,
+                        end: span.end,
+                        text: String::new(),
+                    }],
+                });
+                d
             };
-            Some(text.match_indices('$').map(dollar).collect())
+            Some(text.match_indices('$').map(dollar).rev().collect())
         }
 
         fn check(&self, path: &str, source: &[u8]) -> Option<Vec<Diagnostic>> {
@@ -934,7 +1267,8 @@ let x = 1 //~ E0100
     }
 
     /// The `lines/` fixtures hold a byte order mark, each line ending, no final line break and
-    /// invalid UTF-8. The runner's line numbers must agree with the positions a backend reports.
+    /// invalid UTF-8. The runner's line numbers must agree with the positions a backend reports,
+    /// and its fixes must apply at the offsets those positions name.
     #[test]
     fn line_numbers_agree_with_positions() {
         let files = discover_in(&selftest("lines"), "selftest").unwrap();
@@ -948,17 +1282,21 @@ let x = 1 //~ E0100
                 .unwrap()
                 .expectations;
             assert!(expected.len() >= 2, "{}: {expected:?}", file.name);
+            assert!(file.fixed.is_some(), "{} has no .fixed file", file.name);
             let r = run_file(file, &rules(), &DollarBackend);
             assert!(r.passed(), "{}: {:?}", file.name, r.failures);
         }
     }
 
     #[test]
-    fn orphan_stdout_is_an_error() {
+    fn orphan_siblings_are_errors() {
         let errors = discover_in(&selftest("orphan"), "selftest").unwrap_err();
         assert_eq!(
             errors,
-            ["selftest/renamed.stdout has no matching .qnc fixture; rename or remove it"]
+            [
+                "selftest/renamed.fixed has no matching .qnc fixture; rename or remove it",
+                "selftest/renamed.stdout has no matching .qnc fixture; rename or remove it",
+            ]
         );
     }
 

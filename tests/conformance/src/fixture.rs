@@ -43,6 +43,10 @@ pub struct Fixture {
     /// The contents of the sibling `<name>.stdout`, when there is one. A run fixture without
     /// one expects no output.
     pub stdout: Option<String>,
+    /// The contents of the sibling `<name>.fixed`, when there is one: the fixture's text once
+    /// every fix its diagnostics offer is applied. [`parse`] leaves it `None`; the runner sets
+    /// it from the file it found.
+    pub fixed: Option<String>,
     /// The file's bytes, as backends get them.
     pub source: Vec<u8>,
     /// The file as text, from [`decode`]. The header and expectations are read from it, and the
@@ -162,6 +166,7 @@ pub fn parse(name: &str, source: &[u8], stdout: Option<String>) -> Result<Fixtur
         exit: exit.unwrap_or(0),
         expectations,
         stdout,
+        fixed: None,
         source: source.to_vec(),
         text,
     })
