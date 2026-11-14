@@ -116,7 +116,7 @@ syntax_kinds! {
         TypePath, TypeArgs,
         /// A bound's type argument that names an associated type: `Item = Int`.
         NamedTypeArg,
-        /// `()`, or a tuple of two or more types.
+        /// A tuple of two or more types.
         TupleType,
         /// One type in parentheses: a function type, or an error.
         ParenType,

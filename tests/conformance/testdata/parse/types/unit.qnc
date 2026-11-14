@@ -13,3 +13,4 @@ fn save() -> Result<Unit, String> {
 fn returns_unit() -> () {} //~ E0016
 fn takes_unit(u: ()) {} //~ E0016
 const NOTHING: Result<(), String> = Ok(()) //~ E0016
+fn takes_callback(done: fn() -> ()) {} //~ E0016

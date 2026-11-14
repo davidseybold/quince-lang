@@ -540,6 +540,8 @@ fn what_may_follow_type_arguments() {
         "fn f() {\n  a < b > -c\n}\n",
         "fn f() {\n  a < b > [c]\n}\n",
         "fn f() {\n  g(a < b, c > d)\n}\n",
+        // `()` isn't a type (`r[type.unit]`), so what follows the `<` isn't type arguments.
+        "fn f() {\n  h(a < (), b > (x))\n}\n",
     ] {
         assert!(!has_type_args(text), "{text:?}");
     }
