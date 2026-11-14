@@ -217,9 +217,14 @@ fn paren_type(p: &mut Parser) -> bool {
         if ok && !fn_type {
             let mut error = p.unexpected("`,` and a second type", false);
             // Before `->` the parentheses look like a function type missing its `fn`, which
-            // removing them wouldn't fix.
-            if p.nth_kind(1) != Arrow {
-                let close = p.pos;
+            // removing them wouldn't fix. Anything but spaces inside them, a line break or a
+            // comment, would be left where it ends the type or the line.
+            let close = p.pos;
+            let tokens = &p.input.tokens;
+            let spaces = |gap: Range<usize>| p.text[gap].bytes().all(|b| b == b' ' || b == b'\t');
+            let inside = spaces(tokens[open].range.end..tokens[open + 1].range.start)
+                && spaces(tokens[close - 1].range.end..tokens[close].range.start);
+            if p.nth_kind(1) != Arrow && inside {
                 let edits = [open, close].map(|at| remove_between_words(p, at));
                 error = error.with_fix("remove the parentheses", Applicability::Safe, edits.into());
             }
