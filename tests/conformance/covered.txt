@@ -18,6 +18,7 @@ expr.match.guard
 expr.op.bits.chain
 expr.op.bits.parens
 expr.op.compare.no-chain
+expr.op.compare.split
 expr.op.excluded
 expr.op.keyword-forms
 expr.op.logic.no-mix
