@@ -4,7 +4,9 @@
 //! `background`, `select` and `with` are in `concurrency`.
 
 use super::input::Break;
-use super::{Completed, Holds, Parser, Sync, arms, closures, concurrency, items, patterns, types};
+use super::{
+    Completed, Header, Holds, Parser, Sync, arms, closures, concurrency, items, patterns, types,
+};
 use crate::SyntaxKind::{self, *};
 use crate::{SyntaxError, codes};
 use quince_diagnostics::Applicability;
@@ -19,10 +21,10 @@ pub(super) fn block(p: &mut Parser) {
         return;
     }
     let marker = p.start();
-    let header = std::mem::replace(&mut p.in_fn_header, false);
+    let header = std::mem::replace(&mut p.header, Header::None);
     p.bump();
     p.lines(Holds::Block, Some(RBrace), stmt);
-    p.in_fn_header = header;
+    p.header = header;
     p.complete(marker, Block);
 }
 

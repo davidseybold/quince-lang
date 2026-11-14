@@ -403,7 +403,6 @@ fn a_line_break_too_early() {
         ),
         ("impl T\n{}", "impl T {}", 6..7),
         ("enum E\n{ A }", "enum E { A }", 6..7),
-        ("test \"t\"\n{}", "test \"t\" {}", 8..9),
         ("const NS: Int\n  = 1", "const NS: Int = 1", 13..14),
         ("type T\n  = Int", "type T = Int", 6..7),
         (

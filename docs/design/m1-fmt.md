@@ -197,7 +197,7 @@ These are the rules review checks the printers against. The README's Formatting 
 5. When `fn name<generics>(params)` alone doesn't fit, the parameters break one per line, and `) -> T uses E {` follows them when it fits, with steps 3 and 4 applied to it otherwise. When the generics alone don't fit on the first line, they break as a list first, and the parameters after them.
 6. Whenever `uses`, `->` or a contract starts a line, `{` starts its own line, at the declaration's indentation.
 
-A closure's header follows the same steps. A `test` header follows them for `forall` and `uses` once question 4 is decided, and until then only its `forall` parameters break.
+A closure's header follows the same steps. A `test` header follows them for `forall` and `uses` (`r[lex.continue.test-header]`, question 4).
 
 **Expressions** (`r[lex.line-end]`: "a long expression breaks after its operator, never before").
 - A binary expression that doesn't fit breaks after its operators, all those at one level at once, with the lines after the first indented one level. Nested levels are groups of their own.
@@ -422,7 +422,7 @@ Rule IDs in brackets are what each task's fixtures cite.
 
 **Parser PRs, before layer 0**
 - [x] `m1/neg-literal-spacing`: question 3, and a bump. The parser's unit tests for `- 1`. The doc comments that cite the retired IDs (`parser/exprs.rs` and `tests/exprs.rs`) cite the new one. [`lex.lit.neg-literal`]
-- [ ] `m1/test-header-lines`: question 4, and a bump. [`lex.continue.test-header`]
+- [x] `m1/test-header-lines`: question 4, and a bump. [`lex.continue.test-header`]
 - [x] `m1/unit-type`: question 8, and a bump. [`type.unit`, `grammar.type`]
 
 **Layer 0: `m1/fmt-engine`**

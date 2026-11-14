@@ -18,6 +18,9 @@ r[lex.else-same-line]
 r[lex.continue.fn-header]
 Inside any `fn` header, whether a declaration's signature, a closure's or a function type, a line that starts with `->`, `uses`, `requires`, `ensures` or `{` continues the header. So `quince` `fmt` breaks a long signature before those words, as in [Effects](effects.md) and [Contracts](contracts.md).
 
+r[lex.continue.test-header]
+Inside a `test` header, a line that starts with `forall`, `uses` or `{` continues the header, so `quince` `fmt` breaks a long test header as it does a signature.
+
 r[lex.continue.lists]
 Inside parentheses, square brackets, angle brackets and the braces of a comma-separated list, such as fields, variants, map entries and match arms, a line break before a `,` or the closing bracket is only spacing. Elsewhere in them the rules above apply, so a line that starts with `-` or `(` starts a new item, which needs a `,` before it. A block inside them is a line context again. `else` still goes on the line of the closing `}`.
 

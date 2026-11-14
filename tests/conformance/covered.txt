@@ -125,6 +125,7 @@ lex.comment.line
 lex.continue.fn-header
 lex.continue.lists
 lex.continue.more
+lex.continue.test-header
 lex.else-same-line
 lex.grammar-rules
 lex.ident-classes

@@ -1,8 +1,7 @@
 // rule: grammar.test_decl
 // mode: parse
 // A test is `test` and its name, a string, then `forall` and its parameters in parentheses if
-// it has them, then `uses` and effects if it has them, in that order, and a block. A test's
-// header isn't a function's, so a line that starts with `forall` or `uses` doesn't continue it.
+// it has them, then `uses` and effects if it has them, in that order, and a block.
 fn add(a: Int, b: Int) -> Int { a + b }
 
 test "adds" {
@@ -24,7 +23,3 @@ test "no parameters" forall () {} //~ E0016
 test "no parentheses" forall page: Int {} //~ E0016
 test "no effects" uses {} //~ E0016
 test "out of order" uses Net forall (page: Int) {} //~ E0016
-test "wrapped"
-  forall (page: Int) {} //~^ E0018
-test "wrapped effects" forall (page: Int)
-  uses Net {} //~^ E0018
