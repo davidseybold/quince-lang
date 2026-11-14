@@ -614,7 +614,7 @@ fn negative_literals() {
     assert_eq!(tree("- 1.5"), tree("-1.5"));
     assert_eq!(tree("-\n    1"), tree("-1"));
     let parse = checked("fn f() {\n  let x = - // c\n    1\n}\n");
-    assert!(parse.errors().is_empty());
+    assert_eq!(parse.errors(), []);
     let literal = parse
         .syntax()
         .descendants()
@@ -914,7 +914,7 @@ fn a_bare_block_is_one_error() {
 #[test]
 fn named_attribute_arguments() {
     let parse = checked("@deprecated(\"why\", use: g)\nfn f() {}\n");
-    assert!(parse.errors().is_empty());
+    assert_eq!(parse.errors(), []);
     assert!(
         parse
             .syntax()
