@@ -555,7 +555,7 @@ fn needs_parens(p: &mut Parser, operand: &Operand, op: SyntaxKind, left: bool) {
 /// (`r[expr.op.compare.no-chain]`, `r[expr.op.range.no-chain]`). A comparison chain's fix
 /// repeats each middle operand, so `a < b < c` becomes `a < b && b < c`. There is none when
 /// two of its operators don't point the same way (`r[expr.op.compare.split]`), so `a < b > c`
-/// and `g<()>(x)` get none, nor when a middle operand holds a comment or a line break, which
+/// and `g<1>(x)` get none, nor when a middle operand holds a comment or a line break, which
 /// repeating it would copy, needs parentheses itself, whose E0019 has its own fix, or is the
 /// pattern of an `is`, which isn't an expression.
 fn extend_chain(p: &Parser, lhs: &mut Operand, op: SyntaxKind, op_range: Range<usize>) -> Chain {

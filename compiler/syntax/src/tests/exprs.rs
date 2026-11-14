@@ -331,20 +331,15 @@ fn chains() {
     assert_eq!(errors("a >= b > c"), ["E0020 7..8 => a >= b && b > c"]);
     assert_eq!(errors("a == b == c"), ["E0020 7..9 => a == b && b == c"]);
     // A chain that mixes directions gets no fix, nor does one of another comparison.
-    for chain in [
-        "a < b > c",
-        "a > b <= c",
-        "a < b == c",
-        "a != b != c",
-        "a < b < c > d",
-        "g<1>(x)",
+    for (chain, error) in [
+        ("a < b > c", "E0020 6..7"),
+        ("a > b <= c", "E0020 6..8"),
+        ("a < b == c", "E0020 6..8"),
+        ("a != b != c", "E0020 7..9"),
+        ("a < b < c > d", "E0020 6..7"),
+        ("g<1>(x)", "E0020 3..4"),
     ] {
-        let fixes: Vec<_> = errors(chain)
-            .into_iter()
-            .filter(|e| e.contains("=>"))
-            .collect();
-        assert_eq!(fixes, Vec::<String>::new(), "{chain}");
-        assert_eq!(messages(chain), ["comparisons don't chain"], "{chain}");
+        assert_eq!(errors(chain), [error], "{chain}");
     }
     assert_eq!(
         errors("a < b < c < d"),

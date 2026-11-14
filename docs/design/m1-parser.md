@@ -146,7 +146,7 @@ What it reports:
 
 **When `<` opens type arguments** (spec question 6). After a name or a path in an expression, the parser parses ahead to see whether type arguments closed by `>` follow. If they do, it checks the token after the `>`. `<` opens type arguments only when that token is `(`, `.`, `?`, `,`, `)`, `]`, `}` or a break. A `>` doesn't count, and neither does a `=` directly after the `>`. Otherwise `<` is less-than.
 - So `json.decode<Order>(body)` and `Channel<Job>.new(16)` take type arguments.
-- `a < b > c` and `x < Y >= z` are chained comparisons, E0020 with its fix.
+- `a < b > c` and `x < Y >= z` are chained comparisons, E0020 with its fix. (Revised by David, 2026-11-13: `r[expr.op.compare.split]` offers the fix only when the operators point the same way, so these two get none.)
 - `a < b >> c` is a comparison with a shift as its operand, E0019, not type arguments followed by `> c`.
 - Case can't decide this, since a type can be a C name such as `sqlite3` (`grammar.type_path`, as in `CBuf.new<Ptr<sqlite3>>()`).
 
@@ -449,7 +449,7 @@ The grammar's `primary` and `alt` list `name` and `NAME` but no `c_name`, so tod
 
 **6. Type arguments in expressions (layer 3).** `r[expr.op.compare.no-chain]` says `json.decode<Order>(body)` "has only one reading", but not how a parser finds it. Case can't settle it, since a type can be a C name (`Ptr<sqlite3>`). Approved: `r[expr.op.type-args]` "In an expression, `<` after a name or path starts type arguments when what follows parses as type arguments closed by `>`, and the token after the `>` is `(`, `.`, `?`, `,`, `)`, `]`, `}` or a line break, and not a `=` directly after the `>`. Otherwise `<` is less-than."
 
-So `a < b > c` stays a chained comparison with its fix, as the spec's example wants. One case still reads as type arguments: `f(a < b, c > (d))` calls `a<b, c>`. That reading then has to type-check as a generic call, and `f((a < b), c > (d))` gives the other one.
+So `a < b > c` stays a chained comparison, as the spec's example wants (with no fix since `r[expr.op.compare.split]`). One case still reads as type arguments: `f(a < b, c > (d))` calls `a<b, c>`. That reading then has to type-check as a generic call, and `f((a < b), c > (d))` gives the other one.
 
 **7. The `ensures` binder (layer 6).** `contract = "requires" expr | "ensures" [ "(" name ")" ] expr` can read `ensures (x) - 1 > 0` two ways: as a condition on `x`, or as naming the result `x` with the condition `-1 > 0`. Approved: `r[contract.ensures-binder]` "`ensures` followed by a name in parentheses always names the return value. A condition that starts with a parenthesized name is written without the parentheses."
 
