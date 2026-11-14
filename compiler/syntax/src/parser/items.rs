@@ -516,20 +516,20 @@ fn test_header(p: &mut Parser) {
     }
     exprs::literal(p);
     let mut what = "`forall`, `uses` or `{`";
-    if p.at_or_join(ForallKw) {
+    if p.at(ForallKw) {
         p.bump();
         if !forall_params(p) {
             return;
         }
         what = "`uses` or `{`";
     }
-    if p.at_or_join(UsesKw) {
+    if p.at(UsesKw) {
         if !types::effects(p) {
             return;
         }
         what = "`{`";
     }
-    if !p.at_or_join(LBrace) {
+    if !p.at(LBrace) {
         return p.expected(what);
     }
     exprs::block(p);

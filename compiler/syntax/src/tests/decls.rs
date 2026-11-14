@@ -505,10 +505,13 @@ fn a_test_header_errors() {
     ] {
         assert_eq!(valid(broken), one_line, "{broken:?}");
     }
-    assert_eq!(
-        messages("test \"t\"\n  requires true {}\n"),
-        ["expected `forall`, `uses` or `{`, found a line break"]
-    );
+    for word in ["requires", "ensures"] {
+        assert_eq!(
+            messages(&format!("test \"t\"\n  {word} true {{}}\n")),
+            ["expected `forall`, `uses` or `{`, found a line break"],
+            "{word}"
+        );
+    }
     // A function type in the parameters has a `fn` header of its own.
     valid("test \"t\" forall (f: fn(Int)\n  -> Int) {}\n");
     // An unclosed parameter list closes at the next declaration.

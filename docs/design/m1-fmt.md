@@ -197,7 +197,7 @@ These are the rules review checks the printers against. The README's Formatting 
 5. When `fn name<generics>(params)` alone doesn't fit, the parameters break one per line, and `) -> T uses E {` follows them when it fits, with steps 3 and 4 applied to it otherwise. When the generics alone don't fit on the first line, they break as a list first, and the parameters after them.
 6. Whenever `uses`, `->` or a contract starts a line, `{` starts its own line, at the declaration's indentation.
 
-A closure's header follows the same steps. A `test` header follows them for `forall` and `uses` once question 4 is decided, and until then only its `forall` parameters break.
+A closure's header follows the same steps. A `test` header follows them for `forall` and `uses` (`r[lex.continue.test-header]`, question 4).
 
 **Expressions** (`r[lex.line-end]`: "a long expression breaks after its operator, never before").
 - A binary expression that doesn't fit breaks after its operators, all those at one level at once, with the lines after the first indented one level. Nested levels are groups of their own.
