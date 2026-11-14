@@ -225,7 +225,12 @@ fn paren_type(p: &mut Parser) -> bool {
             let inside = spaces(tokens[open].range.end..tokens[open + 1].range.start)
                 && spaces(tokens[close - 1].range.end..tokens[close].range.start);
             if p.nth_kind(1) != Arrow && inside {
-                let edits = [open, close].map(|at| remove_between_words(p, at));
+                // Each edit takes the spaces inside, so `( Int )` becomes `Int`.
+                let edits = [
+                    tokens[open].range.start..tokens[open + 1].range.start,
+                    tokens[close - 1].range.end..tokens[close].range.end,
+                ]
+                .map(|range| remove_between_words(p, range));
                 error = error.with_fix("remove the parentheses", Applicability::Safe, edits.into());
             }
             p.report(error);
@@ -280,11 +285,10 @@ fn unit_type(p: &mut Parser) {
     p.complete(marker, ParenType);
 }
 
-/// An edit that removes the significant token at `at`, leaving a space when a word character
-/// comes right before it and right after it, so the words on either side stay apart:
-/// `impl(Int)` becomes `impl Int`, not `implInt`.
-fn remove_between_words(p: &Parser, at: usize) -> (Range<usize>, String) {
-    let range = p.input.tokens[at].range.clone();
+/// An edit that removes `range`, leaving a space when a word character comes right before it
+/// and right after it, so the words on either side stay apart: `impl(Int)` becomes
+/// `impl Int`, not `implInt`.
+fn remove_between_words(p: &Parser, range: Range<usize>) -> (Range<usize>, String) {
     let word = |c: char| c.is_ascii_alphanumeric() || c == '_';
     let glued = p.text[..range.start].ends_with(word) && p.text[range.end..].starts_with(word);
     (range, if glued { " " } else { "" }.to_string())

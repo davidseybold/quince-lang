@@ -407,12 +407,18 @@ fn errors_in_types() {
         [r#"E0016 18..19 => "fn f() -> sqlite3 uses Log {}""#]
     );
     assert_eq!(
-        errors("fn f() -> (_x)uses Log {}"),
-        [r#"E0016 13..14 => "fn f() -> _x uses Log {}""#]
+        errors("fn f() -> (x_)uses Log {}"),
+        [r#"E0016 13..14 => "fn f() -> x_ uses Log {}""#]
     );
     // Removing them would expose a line break inside them, so there is no fix.
     assert_eq!(errors("fn f(a: (\n  Int\n)) {}"), ["E0016 16..17"]);
     assert_eq!(errors("fn f(a: (Int // c\n)) {}"), ["E0016 18..19"]);
+    assert_eq!(errors("fn f(a: (\n  Int)) {}"), ["E0016 15..16"]);
+    assert_eq!(errors("impl(_X) {}"), [r#"E0016 7..8 => "impl _X {}""#]);
+    assert_eq!(
+        errors("fn f(a: ( Int )) {}"),
+        [r#"E0016 14..15 => "fn f(a: Int) {}""#]
+    );
     // Before `->`, removing them wouldn't fix it.
     assert_eq!(errors("fn f(a: fn((Int) -> Int)) {}"), ["E0016 15..16"]);
     // A slip inside one pair of parentheses leaves a `ParenType`.
