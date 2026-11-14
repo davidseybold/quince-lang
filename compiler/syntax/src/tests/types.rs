@@ -40,9 +40,45 @@ fn messages(text: &str) -> Vec<String> {
     parse.errors().iter().map(|e| e.message.clone()).collect()
 }
 
+/// The unit type is `Unit`, and `()` is only its value (`r[type.unit]`), so `()` where a type
+/// goes is an E0016 at the `)`.
 #[test]
 fn unit_and_tuples() {
-    assert_eq!(ty("()"), "TupleType\n  LParen \"(\"\n  RParen \")\"\n");
+    assert_eq!(ty("Unit"), "TypePath\n  Ident \"Unit\"\n");
+    assert_eq!(
+        errors("fn f(a: ()) {}"),
+        [r#"E0027 8..10 => "fn f(a: Unit) {}""#]
+    );
+    assert_eq!(
+        messages("fn f() -> () {}"),
+        ["`()` is the unit value; the unit type is written `Unit`"]
+    );
+    assert_eq!(
+        errors("fn f(a: Result<(), E>) {}"),
+        [r#"E0027 15..17 => "fn f(a: Result<Unit, E>) {}""#]
+    );
+    // What follows is parsed as usual.
+    assert_eq!(
+        errors("fn f() -> () uses Log {}"),
+        [r#"E0027 10..12 => "fn f() -> Unit uses Log {}""#]
+    );
+    assert_eq!(
+        errors("fn f(a: ( )) {}"),
+        [r#"E0027 8..11 => "fn f(a: Unit) {}""#]
+    );
+    // A word right after the `)` stays a word of its own.
+    assert_eq!(
+        errors("fn f() -> ()uses Log {}"),
+        [r#"E0027 10..12 => "fn f() -> Unit uses Log {}""#]
+    );
+    // After an `Error` token, its E0001 is the one error.
+    let codes =
+        |text: &str| -> Vec<String> { errors(text).iter().map(|e| e[..5].to_string()).collect() };
+    assert_eq!(codes("fn f(a: (é)) {}"), ["E0001"]);
+    // A stray doc comment before the `()` keeps its E0023.
+    assert_eq!(codes("type T =\n  /// d\n  ()\n"), ["E0023", "E0027"]);
+    // Replacing them would delete a comment, so there is no fix.
+    assert_eq!(errors("fn f(a: (\n  // none\n)) {}"), ["E0027 8..21"]);
     assert_eq!(
         ty("(Int, String,)"),
         r#"TupleType

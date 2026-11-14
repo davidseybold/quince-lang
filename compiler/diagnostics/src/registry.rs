@@ -150,6 +150,11 @@ pub const REGISTRY: &[CodeInfo] = &[
         "an assignment whose left side isn't a place",
         include_str!("../explain/E0026.md"),
     ),
+    error(
+        "E0027",
+        "`()` where a type is expected",
+        include_str!("../explain/E0027.md"),
+    ),
 ];
 
 const fn error(code: &'static str, title: &'static str, explain: &'static str) -> CodeInfo {

@@ -1,0 +1,16 @@
+// rule: type.unit
+// mode: parse
+// `Unit` is the type with exactly one value, `()`. The type is written `Unit`, never `()`, so
+// `()` where a type goes is an error.
+fn done() -> Unit {
+  ()
+}
+
+fn save() -> Result<Unit, String> {
+  Ok(())
+}
+
+fn returns_unit() -> () {} //~ E0027
+fn takes_unit(u: ()) {} //~ E0027
+const NOTHING: Result<(), String> = Ok(()) //~ E0027
+fn takes_callback(done: fn() -> ()) {} //~ E0027

@@ -187,3 +187,4 @@ stmt.loop.stmt
 test.name
 test.name-escapes
 type.fn-parens
+type.unit

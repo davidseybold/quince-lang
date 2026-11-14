@@ -7,7 +7,7 @@ r[type.no-any]
 There is no `any` type and no unchecked cast.
 
 ```ebnf
-type         = type_path [ type_args ] | "(" ")" | "(" type "," type { "," type } [ "," ] ")"
+type         = type_path [ type_args ] | "(" type "," type { "," type } [ "," ] ")"
              | fn_type | "(" fn_type ")"
 fn_type      = "fn" "(" [ type { "," type } [ "," ] ] ")" [ "->" type ] [ "uses" effects ]   // a trailing uses after a bare fn_type return belongs to the outer fn
 type_args    = "<" type_arg { "," type_arg } [ "," ] ">"
@@ -54,7 +54,7 @@ r[type.result]
 - `Result<T, E>`: `Ok(value)` or `Err(error)`
 
 r[type.unit]
-- `Unit`: The empty value, written `()`
+- `Unit`: The type with exactly one value, `()`. The type is written `Unit`, never `()`.
 
 r[type.never]
 - `Never`: The type of an expression that never produces a value: return, break, continue, unreachable, todo and Process.exit. It has no values and fits wherever any type is expected (see [Inference rules](#inference-rules))

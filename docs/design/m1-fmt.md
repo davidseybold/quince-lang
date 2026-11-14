@@ -367,7 +367,7 @@ Proposed: retire both `lex.lit.int.neg` and `lex.lit.neg-adjacent`, since the fi
 
 *Alternative:* keep them in `fmt`, which then needs the project and the type checker, and formats a file differently when another file has a type error. It would also need a ruling on shadowing for `-> Unit`, which the first draft proposed (prelude names reserved), and which still missed generic parameters.
 
-**8. The unit type has two spellings (parser PR, before layer 0).** Found while writing question 7. The grammar's `type` takes `"(" ")"` as the unit type, and the prelude names it `Unit`, so `Result<(), E>` and `Result<Unit, E>` are two forms. The spec's examples write `Unit`, and none writes `()` as a type. Proposed: remove `"(" ")"` from `type`, so `()` is only the value, as `r[type.unit]` ("`Unit`: The empty value, written `()`") already reads, and add to it, keeping its ID since the type's name doesn't change: "The type is written `Unit`, and its one value `()`." A `()` where a type goes is an E0016. No fixture uses it.
+**8. The unit type has two spellings (parser PR, before layer 0).** Found while writing question 7. The grammar's `type` takes `"(" ")"` as the unit type, and the prelude names it `Unit`, so `Result<(), E>` and `Result<Unit, E>` are two forms. The spec's examples write `Unit`, and none writes `()` as a type. Proposed: remove `"(" ")"` from `type`, so `()` is only the value, as `r[type.unit]` ("`Unit`: The empty value, written `()`") already reads, and add to it, keeping its ID since the type's name doesn't change: "The type is written `Unit`, and its one value `()`." A `()` where a type goes is an E0016. No fixture uses it. (Revised after approval, by David, 2026-11-13, while building it: `r[type.unit]` reads "`Unit`: The type with exactly one value, `()`. The type is written `Unit`, never `()`.", so it no longer calls the type a value. A `()` where a type goes is its own E0027, whose `needs-review` fix writes `Unit`, as E0024 handles a struct's empty braces. And `parse/types/type.qnc` did use it, as a parameter's type.)
 
 *Precedent:* Kotlin writes the type `Unit` and has no `()`; Rust has only `()`; Swift has both, `Void` and `()`, and swift-format has a rule to pick one (reported). Quince's examples already follow Kotlin.
 
@@ -423,7 +423,7 @@ Rule IDs in brackets are what each task's fixtures cite.
 **Parser PRs, before layer 0**
 - [x] `m1/neg-literal-spacing`: question 3, and a bump. The parser's unit tests for `- 1`. The doc comments that cite the retired IDs (`parser/exprs.rs` and `tests/exprs.rs`) cite the new one. [`lex.lit.neg-literal`]
 - [ ] `m1/test-header-lines`: question 4, and a bump. [`lex.continue.test-header`]
-- [ ] `m1/unit-type`: question 8, and a bump. [`type.unit`, `grammar.type`]
+- [x] `m1/unit-type`: question 8, and a bump. [`type.unit`, `grammar.type`]
 
 **Layer 0: `m1/fmt-engine`**
 - [ ] The document type and the iterative engine: groups, the three line kinds, `indent`, `if_break`, `line_suffix`, `choice`, shared documents; width in `char`s; unit tests at small widths.
